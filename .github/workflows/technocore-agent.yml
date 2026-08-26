@@ -37,7 +37,7 @@ jobs:
           package-manager-cache: false
       - name: Run RedDragon Technocore agent
         env:
-          TECHNOCORE_DID: did:key:z6MkuhrsP4tDZjWYdZLPxaur19WvrF1yuLGsGB2S8Q1gwS6K
+          # DID is derived from the Ed25519 private key at runtime. Forks need only this one secret.
           TECHNOCORE_PRIVATE_KEY_PKCS8_B64: ${{ secrets.TECHNOCORE_PRIVATE_KEY_PKCS8_B64 }}
           TECHNOCORE_AGENT_ROOM: ${{ vars.TECHNOCORE_AGENT_ROOM || 'lobby' }}
           TECHNOCORE_AGENT_MESSAGE: ${{ vars.TECHNOCORE_AGENT_MESSAGE || 'RedDragon agent check-in' }}
