@@ -11,6 +11,11 @@ function currentDid() {
 
 function keyFor(did) { return PREFIX + did; }
 
+function numericSeq(value) {
+  const s = String(value ?? "").trim();
+  return /^\d+$/.test(s) && Number.isSafeInteger(Number(s)) && Number(s) > 0;
+}
+
 function hasSensitiveMaterial(value, key = "") {
   const k = String(key).toLowerCase().replace(/[^a-z0-9]/g, "");
   const blocked = new Set([
@@ -65,6 +70,12 @@ function readStored(did) {
   try {
     const v = JSON.parse(localStorage.getItem(keyFor(did)) || "null");
     if (!v || v.did !== did || hasSensitiveMaterial(v)) return null;
+    const seq = v?.proof?.contribution?.record?.seq;
+    if (seq != null && !numericSeq(seq)) {
+      v.proof.contribution.record = null;
+      v.done = Array.isArray(v.done) ? v.done.filter((n) => n !== 9 && n !== 10) : [];
+      localStorage.setItem(keyFor(did), JSON.stringify(v));
+    }
     return v;
   } catch { return null; }
 }
@@ -74,8 +85,11 @@ function renderDone(done) {
   for (let i = 1; i <= 10; i++) {
     const yes = set.has(i);
     const st = $("#s" + i);
-    if (st && yes) { st.textContent = "Tamam"; st.classList.add("done"); }
-    if (yes) document.querySelector(`[data-stepchip="${i}"]`)?.classList.add("done");
+    if (st) {
+      st.textContent = yes ? "Tamam" : "Bekliyor";
+      st.classList.toggle("done", yes);
+    }
+    document.querySelector(`[data-stepchip="${i}"]`)?.classList.toggle("done", yes);
   }
   const count = [...set].filter((n) => n >= 1 && n <= 10).length;
   const pct = Math.round(count / 10 * 100);
@@ -98,7 +112,7 @@ function restoreStored(did) {
     const box = $("#proofText");
     if (box) box.value = JSON.stringify(s.proof, null, 2);
     const r = s.proof?.contribution?.record;
-    if (r?.seq) {
+    if (r && numericSeq(r.seq)) {
       if ($("#vaultContrib")) $("#vaultContrib").textContent = String(r.seq);
       if ($("#contribOut")) $("#contribOut").textContent = `Restored signed contribution · ${r.room || "technocore"} · seq ${r.seq}`;
       for (const id of ["copyProof","downloadProof","xShare"]) if ($("#" + id)) $("#" + id).disabled = false;
@@ -110,7 +124,9 @@ function restoreStored(did) {
 function persistCurrent(did) {
   const previous = readStored(did);
   const proof = mergeProof(previous?.proof || null, parseProof());
-  const done = [...new Set([...(previous?.done || []), ...doneSteps()])].sort((a,b)=>a-b);
+  let done = [...new Set([...(previous?.done || []), ...doneSteps()])].sort((a,b)=>a-b);
+  const seq = proof?.contribution?.record?.seq;
+  if (seq != null && !numericSeq(seq)) done = done.filter((n) => n !== 9 && n !== 10);
   const payload = { version: 1, did, updatedAt: new Date().toISOString(), done, form: { ...(previous?.form || {}), ...publicForm() }, proof };
   if (hasSensitiveMaterial(payload)) return;
   const serialized = JSON.stringify(payload);
@@ -120,8 +136,15 @@ function persistCurrent(did) {
 }
 
 function parseSeq(text) {
-  const m = String(text || "").match(/(?:seq|sequence|#)\s*[:=]?\s*(\d+)/i) || String(text || "").match(/\b(\d{3,})\b/);
-  return m ? m[1] : "";
+  const raw = String(text || "");
+  try {
+    const data = JSON.parse(raw);
+    for (const candidate of [data?.seq, data?.posted?.seq, data?.sequence, data?.posted?.sequence]) {
+      if (numericSeq(candidate)) return String(candidate);
+    }
+  } catch {}
+  const m = raw.match(/"(?:seq|sequence)"\s*:\s*(\d+)/i) || raw.match(/(?:seq|sequence)\s*[:=]\s*(\d+)/i);
+  return m && numericSeq(m[1]) ? m[1] : "";
 }
 
 function installFetchReceiptCapture() {
@@ -141,8 +164,7 @@ function installFetchReceiptCapture() {
     const response = await nativeFetch(...args);
     if (signed && response.ok) {
       try {
-        const copy = response.clone();
-        const text = await copy.text();
+        const text = await response.clone().text();
         const seq = parseSeq(text);
         if (seq) setTimeout(() => {
           const did = currentDid();
@@ -160,10 +182,12 @@ function installFetchReceiptCapture() {
             sig: signed.sig,
             nonce: String(signed.nonce),
             text: signed.text,
-            signedReceipt: true
+            signedReceipt: true,
+            capturedAt: new Date().toISOString()
           };
           box.value = JSON.stringify(p, null, 2);
           renderDone([...new Set([...doneSteps(), 9, 10])]);
+          if ($("#vaultContrib")) $("#vaultContrib").textContent = String(seq);
           persistCurrent(did);
         }, 250);
       } catch {}
