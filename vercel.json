@@ -1,0 +1,7 @@
+{
+  "version": 2,
+  "rewrites": [
+    { "source": "/api/relay", "destination": "/api/relay.js" },
+    { "source": "/(.*)", "destination": "/public/$1" }
+  ]
+}

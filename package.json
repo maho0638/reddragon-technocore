@@ -1,0 +1,14 @@
+{
+  "name": "reddragon-technocore-agent-lab",
+  "version": "3.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vercel dev",
+    "start": "vercel dev",
+    "agent": "node scripts/technocore-agent.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
