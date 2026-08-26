@@ -3,14 +3,21 @@ name: RedDragon Technocore Agent
 on:
   workflow_dispatch:
   schedule:
-    - cron: "*/30 * * * *"
+    # Frequent read/heartbeat run. Offset from :00/:30 to reduce GitHub cron congestion.
+    - cron: "17,47 * * * *"
+    # Exactly two signed activity windows per day (UTC), kept separate from heartbeat runs.
+    - cron: "23 0,12 * * *"
 
 permissions:
   contents: read
 
+concurrency:
+  group: reddragon-technocore-agent
+  cancel-in-progress: false
+
 jobs:
   agent:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - name: Checkout
@@ -27,5 +34,6 @@ jobs:
           TECHNOCORE_AGENT_ROOM: ${{ vars.TECHNOCORE_AGENT_ROOM || 'lobby' }}
           TECHNOCORE_AGENT_MESSAGE: ${{ vars.TECHNOCORE_AGENT_MESSAGE || 'RedDragon agent check-in' }}
           TECHNOCORE_MIN_POST_HOURS: ${{ vars.TECHNOCORE_MIN_POST_HOURS || '12' }}
-          TECHNOCORE_POST_ENABLED: ${{ vars.TECHNOCORE_POST_ENABLED || 'true' }}
+          # Manual and heartbeat runs are read/heartbeat-only. Signed posting occurs only on the dedicated cron.
+          TECHNOCORE_POST_ENABLED: ${{ vars.TECHNOCORE_POST_ENABLED != 'false' && github.event.schedule == '23 0,12 * * *' && 'true' || 'false' }}
         run: node scripts/technocore-agent.mjs
