@@ -1,7 +1,29 @@
 {
   "version": 2,
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "Content-Security-Policy", "value": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'; upgrade-insecure-requests" },
+        { "key": "Referrer-Policy", "value": "no-referrer" },
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "X-Frame-Options", "value": "DENY" },
+        { "key": "Cross-Origin-Opener-Policy", "value": "same-origin-allow-popups" },
+        { "key": "Permissions-Policy", "value": "camera=(), microphone=(), geolocation=(), payment=(), usb=()" },
+        { "key": "Strict-Transport-Security", "value": "max-age=31536000; includeSubDomains" }
+      ]
+    }
+  ],
   "rewrites": [
     { "source": "/api/relay", "destination": "/api/relay.js" },
-    { "source": "/(.*)", "destination": "/public/$1" }
+    { "source": "/", "destination": "/public/index.html" },
+    { "source": "/styles.css", "destination": "/public/styles.css" },
+    { "source": "/enhancements.css", "destination": "/public/enhancements.css" },
+    { "source": "/config.js", "destination": "/public/config.js" },
+    { "source": "/app.js", "destination": "/public/app.js" },
+    { "source": "/enhancements.js", "destination": "/public/enhancements.js" },
+    { "source": "/assets/:path*", "destination": "/public/assets/:path*" },
+    { "source": "/404.html", "destination": "/public/404.html" },
+    { "source": "/:path*", "destination": "/public/404.html" }
   ]
 }
