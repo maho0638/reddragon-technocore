@@ -32,7 +32,8 @@ window.APP_CONFIG = {
     "/patches.js",
     "/proof-import.js",
     "/activity-proof.js",
-    "/language-safe.js"
+    "/language-safe.js",
+    "/language-final.js"
   ]) {
     const script = document.createElement("script");
     script.type = "module";
