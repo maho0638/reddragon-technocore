@@ -1,9 +1,9 @@
 window.APP_CONFIG = {
   brandName: "RedDragon",
   productName: "Technocore Agent Lab",
-  byline: "by @joannawalker",
-  xHandle: "@joannawalker",
-  xUrl: "https://x.com/joannawalker",
+  byline: "by @joannawolker",
+  xHandle: "@joannawolker",
+  xUrl: "https://x.com/joannawolker",
   githubRepoUrl: "https://github.com/maho0638/reddragon-technocore",
   githubOwnerUrl: "https://github.com/maho0638",
   mediumUrl: "https://medium.com/@ayazunal450",
