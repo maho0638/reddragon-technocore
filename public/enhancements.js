@@ -59,8 +59,14 @@ function currentContribution() {
 
 function recordText() {
   const r = currentProof()?.contribution?.record;
-  if (!r?.seq) return "";
-  return `${r.room || "technocore"} #${r.seq}`;
+  if (r?.seq) return `${r.room || "technocore"} #${r.seq}`;
+
+  const vaultSeq = $("#vaultContrib")?.textContent?.trim();
+  if (vaultSeq && vaultSeq !== "—" && /^\d+$/.test(vaultSeq)) return `technocore #${vaultSeq}`;
+
+  const out = $("#contribOut")?.textContent || "";
+  const m = out.match(/seq\s+(\d+)/i);
+  return m ? `technocore #${m[1]}` : "";
 }
 
 function siteShareText() {
@@ -71,7 +77,7 @@ function proofShareText() {
   const did = currentDid();
   const record = recordText();
   if (!did) return siteShareText();
-  return `Built my Technocore identity with RedDragon Agent Lab 🐉\n\nDID: ${did}${record ? `\nSigned record: ${record}` : ""}\n\n${SITE_URL}\n\n${X_HANDLE} @flop_labs #Technocore`;
+  return `Built my Technocore identity with RedDragon Agent Lab 🐉\n\nDID: ${did}${record ? `\nSigned contribution: ${record}` : ""}\n\n${SITE_URL}\n\n${X_HANDLE} @flop_labs #Technocore`;
 }
 
 function threadText() {
@@ -80,7 +86,7 @@ function threadText() {
   const record = recordText() || "pending";
   const t1 = `1/3 Built my Technocore identity with RedDragon Agent Lab 🐉\n\nBrowser-local DID + signed activity + secure GitHub Actions setup.\n\n${SITE_URL}\n\n${X_HANDLE} @flop_labs #Technocore`;
   const t2 = `2/3 My public Technocore DID:\n\n${did}\n\nThe private key stays local and is never included in public proof.`;
-  const t3 = `3/3 Signed record: ${record}${c?.title ? `\nContribution: ${c.title}` : ""}${c?.url ? `\n${c.url}` : ""}\n\nBuilt with RedDragon Agent Lab · ${X_HANDLE}`;
+  const t3 = `3/3 Signed contribution: ${record}${c?.title ? `\nContribution: ${c.title}` : ""}${c?.url ? `\n${c.url}` : ""}\n\nBuilt with RedDragon Agent Lab · ${X_HANDLE}`;
   return [t1, t2, t3].join("\n\n---\n\n");
 }
 
@@ -88,7 +94,7 @@ function mediumDraft() {
   const did = currentDid() || "YOUR_DID";
   const c = currentContribution();
   const record = recordText() || "pending";
-  return `RedDragon Technocore Agent Lab — my signed agent identity\n\nI used RedDragon Technocore Agent Lab to create a separate Ed25519 did:key identity in the browser, keep an encrypted local backup, and publish signed Technocore activity.\n\nPublic DID\n${did}\n\nSigned record\n${record}\n\n${c?.title ? `Contribution\n${c.title}\n` : ""}${c?.url ? `${c.url}\n\n` : ""}Tool\n${SITE_URL}\n\nSource code\n${REPO_URL}\n\nProject account\n${X_HANDLE}\n\nSecurity note: the wallet seed phrase is never required. The Technocore private key is not included in this article or in public proof.`;
+  return `RedDragon Technocore Agent Lab — my signed agent identity\n\nI used RedDragon Technocore Agent Lab to create a separate Ed25519 did:key identity in the browser, keep an encrypted local backup, and publish signed Technocore activity.\n\nPublic DID\n${did}\n\nSigned contribution\n${record}\n\n${c?.title ? `Contribution\n${c.title}\n` : ""}${c?.url ? `${c.url}\n\n` : ""}Tool\n${SITE_URL}\n\nSource code\n${REPO_URL}\n\nProject account\n${X_HANDLE}\n\nSecurity note: the wallet seed phrase is never required. The Technocore private key is not included in this article or in public proof.`;
 }
 
 function addTopLinks() {
@@ -232,7 +238,7 @@ function upgradeAgentSetup() {
       <button type="button" id="rdCopyPrivate">3 · Private key'i kopyala</button>
       <button type="button" id="rdOpenActions">4 · Actions'ı aç / test et</button>
     </div>
-    <div class="rd-security-note"><b>Güvenlik kuralı</b>Gerçek “tek tıkla Secret yazma” için GitHub OAuth/App yetkisi gerekir. Bunu bilerek yapmıyoruz: ziyaretçiden GitHub tokeni/şifresi istemek ve private key'i backend'e taşımak yerine secret'i kullanıcı GitHub'a kendisi yapıştırır. Bu, güvenli tarafta kalan tek manuel adımdır.</div>`;
+    <div class="rd-security-note"><b>Güvenlik kuralı</b>RedDragon GitHub şifreni, tokenini veya wallet seed phrase'ini istemez. Private key'i yalnızca kendi GitHub repondaki <b>Actions Secret</b> alanına sen yapıştırırsın. Private key RedDragon sunucusuna gönderilmez ve public GitHub dosyalarına yazılmaz.</div>`;
   card.appendChild(panel);
 
   $("#rdGithubUser").value = localStorage.getItem("rd-github-user") || "";
