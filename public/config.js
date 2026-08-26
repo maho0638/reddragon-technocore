@@ -16,16 +16,17 @@ window.APP_CONFIG = {
   heroImage: "/assets/reddragon.jpg"
 };
 
-// Enhancements are separate from the core onboarding code so a UI upgrade cannot
-// silently alter key generation/signing logic. They run only after the page is loaded.
+// Enhancements stay separate from core key generation/signing code.
 (() => {
   const css = document.createElement("link");
   css.rel = "stylesheet";
   css.href = "/enhancements.css";
   document.head.appendChild(css);
 
-  const script = document.createElement("script");
-  script.type = "module";
-  script.src = "/enhancements.js";
-  document.head.appendChild(script);
+  for (const src of ["/enhancements.js", "/patches.js"]) {
+    const script = document.createElement("script");
+    script.type = "module";
+    script.src = src;
+    document.head.appendChild(script);
+  }
 })();
