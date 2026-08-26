@@ -18,8 +18,24 @@ function activeDid() {
 }
 
 function hasSensitiveMaterial(value, key = "") {
-  const k = String(key).toLowerCase();
-  if (/private|pkcs8|seed|secret|ciphertext|saltb64u|ivb64u/.test(k)) return true;
+  const canonical = String(key).toLowerCase().replace(/[^a-z0-9]/g, "");
+  const sensitiveKeys = new Set([
+    "privatekey",
+    "privatekeypkcs8",
+    "privatekeyraw",
+    "pkcs8",
+    "seed",
+    "seedphrase",
+    "walletseed",
+    "mnemonic",
+    "secret",
+    "secretkey",
+    "ciphertext",
+    "ciphertextb64u",
+    "saltb64u",
+    "ivb64u"
+  ]);
+  if (sensitiveKeys.has(canonical)) return true;
   if (!value || typeof value !== "object") return false;
   if (Array.isArray(value)) return value.some((v) => hasSensitiveMaterial(v));
   return Object.entries(value).some(([childKey, childValue]) => hasSensitiveMaterial(childValue, childKey));
