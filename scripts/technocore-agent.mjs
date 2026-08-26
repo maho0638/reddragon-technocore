@@ -1,26 +1,55 @@
-import { createHash, createPrivateKey, sign as nodeSign } from "node:crypto";
+import { createHash, createPrivateKey, createPublicKey, sign as nodeSign } from "node:crypto";
 
 const BASE = "https://technocore.chat";
-const did = process.env.TECHNOCORE_DID || "";
-const keyB64 = process.env.TECHNOCORE_PRIVATE_KEY_PKCS8_B64 || "";
+const configuredDid = (process.env.TECHNOCORE_DID || "").trim();
+const keyB64 = (process.env.TECHNOCORE_PRIVATE_KEY_PKCS8_B64 || "").trim();
 const room = (process.env.TECHNOCORE_AGENT_ROOM || "lobby").trim();
 const message = clean(process.env.TECHNOCORE_AGENT_MESSAGE || "RedDragon agent check-in");
 const postEnabled = String(process.env.TECHNOCORE_POST_ENABLED || "false").toLowerCase() === "true";
 const minPostHours = Math.max(0.5, Number(process.env.TECHNOCORE_MIN_POST_HOURS || "12"));
 
-if (!/^did:key:z6Mk/.test(did)) throw new Error("Missing/invalid TECHNOCORE_DID");
 if (!keyB64) throw new Error("Missing TECHNOCORE_PRIVATE_KEY_PKCS8_B64");
 if (!/^[a-z0-9][a-z0-9_-]{0,47}$/.test(room)) throw new Error("Invalid TECHNOCORE_AGENT_ROOM");
 if (!message) throw new Error("Missing TECHNOCORE_AGENT_MESSAGE");
+if (message.length > 4096) throw new Error("TECHNOCORE_AGENT_MESSAGE is too long");
 
 const privateKey = createPrivateKey({ key: Buffer.from(keyB64, "base64"), format: "der", type: "pkcs8" });
+const did = deriveDid(privateKey);
+if (configuredDid && configuredDid !== did) {
+  throw new Error("Configured TECHNOCORE_DID does not match the private key");
+}
 const fingerprint = createHash("sha256").update(did, "utf8").digest("hex").slice(0, 16);
+console.log(`Agent identity: ${did} (${fingerprint})`);
 
 function clean(text) {
   return String(text || "")
     .replace(/[\u0000-\u001F\u007F-\u009F\u200B-\u200F\u202A-\u202E\u2060\u2066-\u2069]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function base58(bytes) {
+  const alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+  let x = 0n;
+  for (const b of bytes) x = (x << 8n) + BigInt(b);
+  let out = "";
+  while (x > 0n) {
+    out = alphabet[Number(x % 58n)] + out;
+    x /= 58n;
+  }
+  for (const b of bytes) {
+    if (b === 0) out = "1" + out;
+    else break;
+  }
+  return out || "1";
+}
+
+function deriveDid(key) {
+  const spki = createPublicKey(key).export({ format: "der", type: "spki" });
+  if (!Buffer.isBuffer(spki) || spki.length < 32) throw new Error("Could not derive Ed25519 public key");
+  const raw = spki.subarray(spki.length - 32);
+  const prefixed = Buffer.concat([Buffer.from([0xed, 0x01]), raw]);
+  return `did:key:z${base58(prefixed)}`;
 }
 
 function sleep(ms) {
@@ -87,7 +116,6 @@ async function heartbeat(seq) {
     if (!r.ok) console.warn(`Heartbeat note failed ${r.status}: ${text}`);
     else console.log(`Heartbeat updated: ${room}/${key} -> ${seq || 0}`);
   } catch (error) {
-    // Presence is useful but must not turn a healthy signed-post agent into a false failure.
     console.warn(`Heartbeat request failed: ${error?.message || error}`);
   }
 }
@@ -116,8 +144,8 @@ if (!postEnabled) {
   process.exit(0);
 }
 
-// Normal production posting is gated by a dedicated twice-daily GitHub cron. This tail check
-// is an extra guard against an accidental immediate re-run, not the primary scheduler.
+// Production signed posting is primarily gated by the dedicated twice-daily cron.
+// This visible-tail check is a second guard against an accidental immediate duplicate.
 const last = recentOwnMessage(messages);
 if (last?.tsMs) {
   const ageHours = (Date.now() - last.tsMs) / 3_600_000;
