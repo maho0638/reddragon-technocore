@@ -2,6 +2,7 @@ const NAME_RE = /^[a-z0-9][a-z0-9_-]{0,47}$/;
 const DID_RE = /^did:key:z6Mk[1-9A-HJ-NP-Za-km-z]+$/;
 const SIG_RE = /^[A-Za-z0-9_-]{86}$/;
 const NONCE_RE = /^\d{1,19}$/;
+const FP_RE = /^[0-9a-f]{16}$/;
 const BASE = "https://technocore.chat";
 const MAX_JSON_BYTES = 32 * 1024;
 
@@ -39,6 +40,13 @@ async function pass(res, r) {
 function bodySizeOk(body) {
   try { return Buffer.byteLength(JSON.stringify(body || {}), "utf8") <= MAX_JSON_BYTES; }
   catch { return false; }
+}
+
+function didNotePath(ns, key) {
+  if (ns === "did" && FP_RE.test(String(key || ""))) {
+    return { ns: `did-${key.slice(0, 2)}`, key: key.slice(2), legacy: true };
+  }
+  return { ns, key, legacy: false };
 }
 
 export default async function handler(req, res) {
@@ -85,22 +93,30 @@ export default async function handler(req, res) {
     }
 
     if (action === "kvSet") {
-      if (!NAME_RE.test(String(ns || ""))) return bad(res, 400, "Invalid namespace");
-      if (!NAME_RE.test(String(key || ""))) return bad(res, 400, "Invalid key");
+      const path = didNotePath(String(ns || ""), String(key || ""));
+      if (!NAME_RE.test(path.ns)) return bad(res, 400, "Invalid namespace");
+      if (!NAME_RE.test(path.key)) return bad(res, 400, "Invalid key");
       const v = cleanSingleLine(value);
       if (!v || v.length > 8192) return bad(res, 400, "Value must be 1-8192 chars");
-      const r = await upstream(`${BASE}/kv/${encodeURIComponent(ns)}/${encodeURIComponent(key)}/set/${encodeURIComponent(v)}`, {
+      const r = await upstream(`${BASE}/kv/${encodeURIComponent(path.ns)}/${encodeURIComponent(path.key)}/set/${encodeURIComponent(v)}`, {
         headers: { accept: "text/plain,application/json" }
       });
       return pass(res, r);
     }
 
     if (action === "kvGet") {
-      if (!NAME_RE.test(String(ns || ""))) return bad(res, 400, "Invalid namespace");
-      if (!NAME_RE.test(String(key || ""))) return bad(res, 400, "Invalid key");
-      const r = await upstream(`${BASE}/kv/${encodeURIComponent(ns)}/${encodeURIComponent(key)}`, {
+      const path = didNotePath(String(ns || ""), String(key || ""));
+      if (!NAME_RE.test(path.ns)) return bad(res, 400, "Invalid namespace");
+      if (!NAME_RE.test(path.key)) return bad(res, 400, "Invalid key");
+      let r = await upstream(`${BASE}/kv/${encodeURIComponent(path.ns)}/${encodeURIComponent(path.key)}`, {
         headers: { accept: "text/plain,application/json" }
       });
+      // Current Technocore readers use the sharded DID path first, then the legacy path.
+      if (path.legacy && r.status === 404) {
+        r = await upstream(`${BASE}/kv/did/${encodeURIComponent(String(key))}`, {
+          headers: { accept: "text/plain,application/json" }
+        });
+      }
       return pass(res, r);
     }
 
