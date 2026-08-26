@@ -37,6 +37,29 @@ async function pass(res, r) {
   return res.send(body);
 }
 
+async function passSigned(res, r) {
+  const body = await r.text();
+  harden(res);
+  const retryAfter = r.headers.get("retry-after");
+  if (retryAfter) res.setHeader("retry-after", retryAfter);
+
+  if (!r.ok) {
+    res.status(r.status).setHeader("content-type", r.headers.get("content-type") || "text/plain; charset=utf-8");
+    return res.send(body);
+  }
+
+  try {
+    const data = JSON.parse(body);
+    const seq = Number(data?.posted?.seq ?? data?.seq);
+    if (!Number.isSafeInteger(seq) || seq <= 0) {
+      return bad(res, 502, "Technocore signed response missing numeric seq");
+    }
+    return res.status(r.status).json({ ...data, seq });
+  } catch {
+    return bad(res, 502, "Technocore signed response was not valid JSON");
+  }
+}
+
 function bodySizeOk(body) {
   try { return Buffer.byteLength(JSON.stringify(body || {}), "utf8") <= MAX_JSON_BYTES; }
   catch { return false; }
@@ -72,7 +95,7 @@ export default async function handler(req, res) {
       const q = new URLSearchParams({ format: "json", limit: "50" });
       if (since != null && since !== "") q.set("since", String(since));
       const r = await upstream(`${BASE}/r/${encodeURIComponent(room)}?${q.toString()}`, {
-        headers: { accept: "application/json,text/plain" }
+        headers: { accept: "application/json" }
       });
       return pass(res, r);
     }
@@ -84,12 +107,12 @@ export default async function handler(req, res) {
       if (!SIG_RE.test(String(sig || ""))) return bad(res, 400, "Invalid signature");
       if (!NONCE_RE.test(String(nonce || ""))) return bad(res, 400, "Invalid nonce");
       if (!clean || clean.length > 4096) return bad(res, 400, "Message must be 1-4096 chars");
-      const r = await upstream(`${BASE}/r/${encodeURIComponent(room)}`, {
+      const r = await upstream(`${BASE}/r/${encodeURIComponent(room)}?format=json`, {
         method: "POST",
-        headers: { "content-type": "application/json", accept: "application/json,text/plain" },
+        headers: { "content-type": "application/json", accept: "application/json" },
         body: JSON.stringify({ did, sig, nonce: String(nonce), text: clean })
       });
-      return pass(res, r);
+      return passSigned(res, r);
     }
 
     if (action === "kvSet") {
@@ -111,7 +134,6 @@ export default async function handler(req, res) {
       let r = await upstream(`${BASE}/kv/${encodeURIComponent(path.ns)}/${encodeURIComponent(path.key)}`, {
         headers: { accept: "text/plain,application/json" }
       });
-      // Current Technocore readers use the sharded DID path first, then the legacy path.
       if (path.legacy && r.status === 404) {
         r = await upstream(`${BASE}/kv/did/${encodeURIComponent(String(key))}`, {
           headers: { accept: "text/plain,application/json" }
