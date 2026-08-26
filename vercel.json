@@ -13,36 +13,12 @@
         { "key": "Strict-Transport-Security", "value": "max-age=31536000; includeSubDomains" }
       ]
     },
-    {
-      "source": "/config.js",
-      "headers": [
-        { "key": "Cache-Control", "value": "no-store, max-age=0" }
-      ]
-    },
-    {
-      "source": "/app.js",
-      "headers": [
-        { "key": "Cache-Control", "value": "no-store, max-age=0" }
-      ]
-    },
-    {
-      "source": "/enhancements.js",
-      "headers": [
-        { "key": "Cache-Control", "value": "no-store, max-age=0" }
-      ]
-    },
-    {
-      "source": "/patches.js",
-      "headers": [
-        { "key": "Cache-Control", "value": "no-store, max-age=0" }
-      ]
-    },
-    {
-      "source": "/enhancements.css",
-      "headers": [
-        { "key": "Cache-Control", "value": "no-store, max-age=0" }
-      ]
-    }
+    { "source": "/config.js", "headers": [{ "key": "Cache-Control", "value": "no-store, max-age=0" }] },
+    { "source": "/app.js", "headers": [{ "key": "Cache-Control", "value": "no-store, max-age=0" }] },
+    { "source": "/enhancements.js", "headers": [{ "key": "Cache-Control", "value": "no-store, max-age=0" }] },
+    { "source": "/patches.js", "headers": [{ "key": "Cache-Control", "value": "no-store, max-age=0" }] },
+    { "source": "/proof-import.js", "headers": [{ "key": "Cache-Control", "value": "no-store, max-age=0" }] },
+    { "source": "/enhancements.css", "headers": [{ "key": "Cache-Control", "value": "no-store, max-age=0" }] }
   ],
   "rewrites": [
     { "source": "/api/relay", "destination": "/api/relay.js" },
@@ -53,6 +29,7 @@
     { "source": "/app.js", "destination": "/public/app.js" },
     { "source": "/enhancements.js", "destination": "/public/enhancements.js" },
     { "source": "/patches.js", "destination": "/public/patches.js" },
+    { "source": "/proof-import.js", "destination": "/public/proof-import.js" },
     { "source": "/assets/:path*", "destination": "/public/assets/:path*" },
     { "source": "/404.html", "destination": "/public/404.html" },
     { "source": "/:path*", "destination": "/public/404.html" }
