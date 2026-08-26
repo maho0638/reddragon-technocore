@@ -16,10 +16,7 @@ window.APP_CONFIG = {
   heroImage: "/assets/reddragon.jpg"
 };
 
-// Progress is session-bound because private keys and signed-record state are intentionally
-// not persisted in localStorage. Carrying old green steps into a fresh page load would be
-// misleading, so clear the legacy progress marker before the core app restores state.
-try { localStorage.removeItem("reddragon-progress"); } catch {}
+// Public onboarding state may be kept locally per DID. Private key material is never persisted here.
 
 // Enhancements stay separate from core key generation/signing code.
 (() => {
@@ -28,7 +25,7 @@ try { localStorage.removeItem("reddragon-progress"); } catch {}
   css.href = "/enhancements.css";
   document.head.appendChild(css);
 
-  for (const src of ["/enhancements.js", "/patches.js", "/proof-import.js"]) {
+  for (const src of ["/public-state.js", "/enhancements.js", "/patches.js", "/proof-import.js"]) {
     const script = document.createElement("script");
     script.type = "module";
     script.src = src;
