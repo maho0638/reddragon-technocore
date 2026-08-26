@@ -39,6 +39,34 @@ function patchDidNoteDisplay() {
   apply();
 }
 
+function patchIdentityReadyMessages() {
+  const vaultDid = $("#vaultDid");
+  if (!vaultDid) return;
+
+  const apply = () => {
+    const did = (vaultDid.textContent || "").trim();
+    if (!/^did:key:z6Mk/.test(did)) return;
+
+    const replacements = [
+      ["#didNoteOut", /^Önce DID oluştur\.?$/i, "DID hazır · yayınlamaya hazır."],
+      ["#helloOut", /^DID gerekli\.?$/i, "DID hazır · signed hello gönderebilirsin."],
+      ["#introOut", /^DID gerekli\.?$/i, "DID hazır · lobby tanışmasını gönderebilirsin."],
+      ["#publicRoomOut", /^DID gerekli\.?$/i, "DID hazır · oda kapasitesi uygunsa public room açabilirsin."],
+      ["#styleOut", /^DID gerekli\.?$/i, "DID hazır · profil metadata'sını yayınlayabilirsin."],
+      ["#contribOut", /^DID ve katkı linki gerekli\.?$/i, "DID hazır · katkı linki, başlık ve özeti doldur."]
+    ];
+
+    for (const [selector, pattern, text] of replacements) {
+      const node = $(selector);
+      if (node && pattern.test((node.textContent || "").trim())) node.textContent = text;
+    }
+  };
+
+  new MutationObserver(apply).observe(vaultDid, { childList: true, subtree: true, characterData: true });
+  document.addEventListener("click", () => setTimeout(apply, 0), true);
+  apply();
+}
+
 async function copyText(text) {
   try { await navigator.clipboard.writeText(text); }
   catch {
@@ -147,7 +175,7 @@ function patchRestoreFlow() {
     if (card2 && !card2.querySelector(".rd-restore-ok")) {
       const note = document.createElement("div");
       note.className = "result rd-restore-ok";
-      note.textContent = "Şifreli kimlik yedeği doğrulandı ve başarıyla geri yüklendi.";
+      note.textContent = "Şifreli kimlik yedeği doğrulandı ve başarıyla geri yüklendi. Geçmiş public kayıtlar bu kimlik yedeğine gömülmez; daha önce indirdiğin proof JSON ayrı kanıttır.";
       card2.appendChild(note);
     }
 
@@ -221,6 +249,7 @@ async function reliableRelayStatus() {
 
 window.addEventListener("load", () => {
   patchDidNoteDisplay();
+  patchIdentityReadyMessages();
   patchProofButtons();
   patchRestoreFlow();
   patchSecurityNote();
