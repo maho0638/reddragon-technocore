@@ -25,7 +25,15 @@ window.APP_CONFIG = {
   css.href = "/enhancements.css";
   document.head.appendChild(css);
 
-  for (const src of ["/repair.js", "/public-state.js", "/enhancements.js", "/patches.js", "/proof-import.js"]) {
+  for (const src of [
+    "/repair.js",
+    "/public-state.js",
+    "/enhancements.js",
+    "/patches.js",
+    "/proof-import.js",
+    "/activity-proof.js",
+    "/language.js"
+  ]) {
     const script = document.createElement("script");
     script.type = "module";
     script.src = src;
