@@ -22,6 +22,7 @@
     { "source": "/config.js", "destination": "/public/config.js" },
     { "source": "/app.js", "destination": "/public/app.js" },
     { "source": "/enhancements.js", "destination": "/public/enhancements.js" },
+    { "source": "/patches.js", "destination": "/public/patches.js" },
     { "source": "/assets/:path*", "destination": "/public/assets/:path*" },
     { "source": "/404.html", "destination": "/public/404.html" },
     { "source": "/:path*", "destination": "/public/404.html" }
