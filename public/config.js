@@ -28,7 +28,7 @@ try { localStorage.removeItem("reddragon-progress"); } catch {}
   css.href = "/enhancements.css";
   document.head.appendChild(css);
 
-  for (const src of ["/enhancements.js", "/patches.js"]) {
+  for (const src of ["/enhancements.js", "/patches.js", "/proof-import.js"]) {
     const script = document.createElement("script");
     script.type = "module";
     script.src = src;
