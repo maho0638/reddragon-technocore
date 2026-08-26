@@ -7,13 +7,16 @@ const room = (process.env.TECHNOCORE_AGENT_ROOM || "lobby").trim();
 const message = clean(process.env.TECHNOCORE_AGENT_MESSAGE || "RedDragon agent check-in");
 const postEnabled = String(process.env.TECHNOCORE_POST_ENABLED || "true").toLowerCase() === "true";
 const minPostHours = Math.max(0.5, Number(process.env.TECHNOCORE_MIN_POST_HOURS || "12"));
+const stateNs = (process.env.TECHNOCORE_AGENT_STATE_NS || "agent-state").trim();
 
 if (!/^did:key:z6Mk/.test(did)) throw new Error("Missing/invalid TECHNOCORE_DID");
 if (!keyB64) throw new Error("Missing TECHNOCORE_PRIVATE_KEY_PKCS8_B64");
 if (!/^[a-z0-9][a-z0-9_-]{0,47}$/.test(room)) throw new Error("Invalid TECHNOCORE_AGENT_ROOM");
+if (!/^[a-z0-9][a-z0-9_-]{0,47}$/.test(stateNs)) throw new Error("Invalid TECHNOCORE_AGENT_STATE_NS");
 
 const privateKey = createPrivateKey({ key: Buffer.from(keyB64, "base64"), format: "der", type: "pkcs8" });
 const fingerprint = createHash("sha256").update(did, "utf8").digest("hex").slice(0, 16);
+const stateKey = `last-${fingerprint}-${room}`.slice(0, 48);
 
 function clean(text) {
   return String(text || "")
@@ -22,9 +25,27 @@ function clean(text) {
     .trim();
 }
 
+async function fetchText(url, options = {}, attempts = 3) {
+  let lastError;
+  for (let i = 1; i <= attempts; i++) {
+    try {
+      const r = await fetch(url, { signal: AbortSignal.timeout(15_000), ...options });
+      const text = await r.text();
+      if (r.ok) return { r, text };
+      if (r.status < 500 && r.status !== 429) return { r, text };
+      lastError = new Error(`HTTP ${r.status}: ${text.slice(0, 300)}`);
+    } catch (e) {
+      lastError = e;
+    }
+    if (i < attempts) await new Promise((resolve) => setTimeout(resolve, i * 1500));
+  }
+  throw lastError || new Error("Request failed");
+}
+
 async function getRoom() {
-  const r = await fetch(`${BASE}/r/${encodeURIComponent(room)}?format=json&limit=200`, { headers: { accept: "application/json" } });
-  const text = await r.text();
+  const { r, text } = await fetchText(`${BASE}/r/${encodeURIComponent(room)}?format=json&limit=200`, {
+    headers: { accept: "application/json" }
+  });
   if (!r.ok) throw new Error(`Read failed ${r.status}: ${text}`);
   try { return JSON.parse(text); } catch { return []; }
 }
@@ -49,30 +70,56 @@ function recentOwnMessage(messages) {
 }
 
 async function heartbeat(seq) {
-  // Technocore documents /kv/<room>/hb-<nick> as a presence convention.
   const key = `hb-${fingerprint}`;
-  const r = await fetch(`${BASE}/kv/${encodeURIComponent(room)}/${encodeURIComponent(key)}`, {
+  const { r, text } = await fetchText(`${BASE}/kv/${encodeURIComponent(room)}/${encodeURIComponent(key)}`, {
     method: "POST",
     headers: { "content-type": "application/json", accept: "text/plain,application/json" },
     body: JSON.stringify({ value: String(seq || 0) })
   });
-  const text = await r.text();
   if (!r.ok) console.warn(`Heartbeat note failed ${r.status}: ${text}`);
   else console.log(`Heartbeat updated: ${room}/${key} -> ${seq || 0}`);
+}
+
+async function readLastPostMs() {
+  try {
+    const { r, text } = await fetchText(`${BASE}/kv/${encodeURIComponent(stateNs)}/${encodeURIComponent(stateKey)}`, {
+      headers: { accept: "text/plain,application/json" }
+    }, 2);
+    if (!r.ok) return null;
+    const match = text.match(/\b(\d{13})\b/);
+    if (!match) return null;
+    const n = Number(match[1]);
+    return Number.isFinite(n) ? n : null;
+  } catch {
+    return null;
+  }
+}
+
+async function writeLastPostMs(ms) {
+  try {
+    const { r, text } = await fetchText(`${BASE}/kv/${encodeURIComponent(stateNs)}/${encodeURIComponent(stateKey)}`, {
+      method: "POST",
+      headers: { "content-type": "application/json", accept: "text/plain,application/json" },
+      body: JSON.stringify({ value: String(ms) })
+    }, 2);
+    if (!r.ok) console.warn(`State note failed ${r.status}: ${text}`);
+  } catch (e) {
+    console.warn(`State note failed: ${e?.message || e}`);
+  }
 }
 
 async function signedPost(text) {
   const nonce = String(Date.now());
   const payload = Buffer.from(`${room}|${nonce}|${clean(text)}`, "utf8");
   const sig = nodeSign(null, payload, privateKey).toString("base64url");
-  const r = await fetch(`${BASE}/r/${encodeURIComponent(room)}`, {
+  const { r, text: body } = await fetchText(`${BASE}/r/${encodeURIComponent(room)}`, {
     method: "POST",
     headers: { "content-type": "application/json", accept: "text/plain,application/json" },
     body: JSON.stringify({ did, sig, nonce, text: clean(text) })
   });
-  const body = await r.text();
   if (!r.ok) throw new Error(`Signed post failed ${r.status}: ${body}`);
   console.log(`Signed post accepted: ${body.slice(0, 500)}`);
+  return Date.now();
 }
 
 const data = await getRoom();
@@ -85,13 +132,17 @@ if (!postEnabled) {
   process.exit(0);
 }
 
-const last = recentOwnMessage(messages);
-if (last?.tsMs) {
-  const ageHours = (Date.now() - last.tsMs) / 3_600_000;
+const lastRoom = recentOwnMessage(messages)?.tsMs || null;
+const lastState = await readLastPostMs();
+const lastPostMs = Math.max(lastRoom || 0, lastState || 0) || null;
+
+if (lastPostMs) {
+  const ageHours = (Date.now() - lastPostMs) / 3_600_000;
   if (ageHours < minPostHours) {
-    console.log(`Skip signed post: last DID message is ${ageHours.toFixed(2)}h old; minimum is ${minPostHours}h.`);
+    console.log(`Skip signed post: last known post is ${ageHours.toFixed(2)}h old; minimum is ${minPostHours}h.`);
     process.exit(0);
   }
 }
 
-await signedPost(message);
+const postedAt = await signedPost(message);
+await writeLastPostMs(postedAt);
