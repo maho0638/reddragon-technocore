@@ -9,7 +9,7 @@ function toast(msg) {
   t.textContent = msg;
   t.classList.add("show");
   clearTimeout(toast.t);
-  toast.t = setTimeout(() => t.classList.remove("show"), 3200);
+  toast.t = setTimeout(() => t.classList.remove("show"), 4200);
 }
 
 function activeDid() {
@@ -17,23 +17,16 @@ function activeDid() {
   return did === "—" ? "" : did;
 }
 
+function cleanText(value) {
+  return String(value || "").replace(/\s+/g, " ").trim();
+}
+
 function hasSensitiveMaterial(value, key = "") {
   const canonical = String(key).toLowerCase().replace(/[^a-z0-9]/g, "");
   const sensitiveKeys = new Set([
-    "privatekey",
-    "privatekeypkcs8",
-    "privatekeyraw",
-    "pkcs8",
-    "seed",
-    "seedphrase",
-    "walletseed",
-    "mnemonic",
-    "secret",
-    "secretkey",
-    "ciphertext",
-    "ciphertextb64u",
-    "saltb64u",
-    "ivb64u"
+    "privatekey", "privatekeypkcs8", "privatekeyraw", "pkcs8",
+    "seed", "seedphrase", "walletseed", "mnemonic",
+    "secret", "secretkey", "ciphertext", "ciphertextb64u", "saltb64u", "ivb64u"
   ]);
   if (sensitiveKeys.has(canonical)) return true;
   if (!value || typeof value !== "object") return false;
@@ -55,6 +48,7 @@ function validateProof(proof) {
   if (!/^[a-z0-9][a-z0-9_-]{0,47}$/.test(room) || !Number.isSafeInteger(seq) || seq <= 0) {
     throw new Error("Proof içinde doğrulanabilir contribution record bulunamadı.");
   }
+  if (!cleanText(record?.text)) throw new Error("Proof contribution metni eksik; güvenli doğrulama yapılamıyor.");
   return { proof, record, room, seq };
 }
 
@@ -62,32 +56,84 @@ function messagesFrom(data) {
   if (Array.isArray(data)) return data;
   if (Array.isArray(data?.messages)) return data.messages;
   if (Array.isArray(data?.items)) return data.items;
+  if (Array.isArray(data?.results)) return data.results;
   return [];
 }
 
-async function verifyContribution({ proof, record, room, seq }) {
+function messageSeq(m) {
+  const n = Number(m?.seq ?? m?.sequence ?? m?.id);
+  return Number.isSafeInteger(n) && n > 0 ? n : 0;
+}
+
+function messageDid(m) {
+  return String(m?.did || m?.from || m?.author || "");
+}
+
+function messageText(m) {
+  return cleanText(m?.text ?? m?.message ?? m?.body ?? "");
+}
+
+async function readRoom(room, since) {
+  const body = { action: "read", room };
+  if (since != null) body.since = String(since);
   const response = await fetch("/api/relay", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ action: "read", room, since: String(Math.max(0, seq - 1)) })
+    body: JSON.stringify(body)
   });
   const text = await response.text();
   if (!response.ok) throw new Error(`Technocore doğrulaması başarısız (${response.status}).`);
-
-  let data;
-  try { data = JSON.parse(text); }
+  try { return JSON.parse(text); }
   catch { throw new Error("Technocore doğrulama yanıtı JSON değildi."); }
+}
 
-  const message = messagesFrom(data).find((m) => Number(m?.seq) === seq);
-  if (!message) throw new Error(`Contribution #${seq} Technocore yanıtında bulunamadı.`);
+function verifyMessage(message, proof, record) {
+  if (!message) return false;
+  if (messageDid(message) !== proof.did) return false;
+  return messageText(message) === cleanText(record.text);
+}
 
-  const messageDid = String(message?.did || message?.from || "");
-  if (messageDid !== proof.did) throw new Error("Contribution DID'i bu proof DID'i ile eşleşmiyor.");
+function upgradedProof(original, record, matchedSeq) {
+  const proof = JSON.parse(JSON.stringify(original));
+  proof.contribution = proof.contribution || {};
+  proof.contribution.record = {
+    ...record,
+    seq: String(matchedSeq),
+    recoveredFromSeq: String(record.seq),
+    verifiedAt: new Date().toISOString()
+  };
+  proof.generatedAt = new Date().toISOString();
+  return proof;
+}
 
-  if (record?.text && message?.text && String(record.text).trim() !== String(message.text).trim()) {
-    throw new Error("Contribution metni public proof ile eşleşmiyor.");
+async function verifyContribution({ proof, record, room, seq }) {
+  // Önce proof'taki sequence'i doğrudan doğrula.
+  const aroundOld = messagesFrom(await readRoom(room, Math.max(0, seq - 1)));
+  const exact = aroundOld.find((m) => messageSeq(m) === seq);
+  if (exact) {
+    if (!verifyMessage(exact, proof, record)) throw new Error("Contribution kaydı var ama DID/metin bu proof ile eşleşmiyor.");
+    return { proof, seq, recovered: false };
   }
-  return true;
+
+  // Ring buffer eski sequence'i düşürdüyse, odanın güncel penceresinde aynı DID + aynı imzalı contribution metnini ara.
+  const recent = messagesFrom(await readRoom(room));
+  const matches = recent
+    .filter((m) => verifyMessage(m, proof, record))
+    .map((m) => ({ message: m, seq: messageSeq(m) }))
+    .filter((x) => x.seq > 0)
+    .sort((a, b) => b.seq - a.seq);
+
+  if (!matches.length) {
+    throw new Error(`Eski contribution #${seq} artık görünmüyor ve aynı DID + metinle daha yeni eşleşen kayıt bulunamadı.`);
+  }
+
+  const latest = matches[0];
+  return {
+    proof: upgradedProof(proof, record, latest.seq),
+    seq: latest.seq,
+    recovered: true,
+    oldSeq: seq
+  };
 }
 
 function readDone() {
@@ -97,6 +143,17 @@ function readDone() {
   } catch {
     return new Set();
   }
+}
+
+function addProofProgress(done, proof) {
+  if (proof.didNote) done.add(3);
+  if (proof.lobbyHello) done.add(4);
+  if (proof.lobbyIntro) done.add(5);
+  if (proof.publicRoom) done.add(6);
+  if (proof.privateRoomCreated) done.add(7);
+  if (proof.profileStyle) done.add(8);
+  done.add(9);
+  done.add(10);
 }
 
 function renderProgress(done) {
@@ -133,8 +190,7 @@ function applyProof(proof, { persist = true } = {}) {
   if ($("#contribOut")) $("#contribOut").textContent = `Imported + verified contribution · ${r.room || "technocore"} · seq ${r.seq}`;
 
   const done = readDone();
-  done.add(9);
-  done.add(10);
+  addProofProgress(done, proof);
   localStorage.setItem(PROGRESS_KEY, JSON.stringify([...done]));
   renderProgress(done);
 
@@ -158,9 +214,13 @@ async function importFile(file) {
     if (activeDid() !== validated.proof.did) throw new Error("Seçtiğin proof mevcut DID ile eşleşmiyor.");
 
     toast("Proof Technocore üzerinde doğrulanıyor...");
-    await verifyContribution(validated);
-    applyProof(validated.proof);
-    toast(`Public proof doğrulandı · contribution #${validated.seq} · 09/10 geri yüklendi`);
+    const verified = await verifyContribution(validated);
+    applyProof(verified.proof);
+    if (verified.recovered) {
+      toast(`Eski proof güncellendi · #${verified.oldSeq} yerine doğrulanmış #${verified.seq} bulundu · 09/10 geri yüklendi`);
+    } else {
+      toast(`Public proof doğrulandı · contribution #${verified.seq} · 09/10 geri yüklendi`);
+    }
   } catch (error) {
     console.error(error);
     toast(error?.message || "Proof içe aktarılamadı.");
@@ -178,7 +238,7 @@ function installUi() {
   const title = document.createElement("b");
   title.textContent = "Eski public proof'u geri yükle";
   const desc = document.createElement("span");
-  desc.textContent = " Yalnızca public proof JSON kabul edilir. DID eşleşir ve contribution Technocore'da doğrulanırsa 09 + 10 yeniden Tamam olur. Private key/key yedeği kabul edilmez.";
+  desc.textContent = " Public proof eski bir sequence içeriyorsa, site aynı DID ve aynı contribution metninin güncel Technocore kaydını güvenli biçimde arar. Private key/key yedeği kabul edilmez.";
   const button = document.createElement("button");
   button.type = "button";
   button.textContent = "Public Proof JSON içe aktar";
@@ -189,7 +249,10 @@ function installUi() {
   input.accept = ".json,application/json";
   input.hidden = true;
   input.addEventListener("change", () => importFile(input.files?.[0]));
-  button.addEventListener("click", () => input.click());
+  button.addEventListener("click", () => {
+    input.value = "";
+    input.click();
+  });
 
   box.append(title, desc, document.createElement("br"), button, input);
   card.appendChild(box);
