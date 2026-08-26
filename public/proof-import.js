@@ -1,5 +1,6 @@
 const $ = (s) => document.querySelector(s);
 const SESSION_KEY = "reddragon-imported-public-proof";
+const PENDING_KEY = "reddragon-pending-public-proof";
 const PROGRESS_KEY = "reddragon-progress";
 const MAX_PROOF_BYTES = 256 * 1024;
 
@@ -9,7 +10,7 @@ function toast(msg) {
   t.textContent = msg;
   t.classList.add("show");
   clearTimeout(toast.t);
-  toast.t = setTimeout(() => t.classList.remove("show"), 4200);
+  toast.t = setTimeout(() => t.classList.remove("show"), 5200);
 }
 
 function activeDid() {
@@ -93,12 +94,25 @@ function verifyMessage(message, proof, record) {
   return messageText(message) === cleanText(record.text);
 }
 
-function upgradedProof(original, record, matchedSeq) {
+function verifyContributionFields(message, proof) {
+  if (!message || messageDid(message) !== proof.did) return false;
+  const text = messageText(message);
+  const c = proof?.contribution || {};
+  const required = [c.url, c.title, c.summary]
+    .map(cleanText)
+    .filter(Boolean);
+  if (!text.startsWith("Contribution |")) return false;
+  if (!text.includes(`DID ${proof.did}`)) return false;
+  return required.every((part) => text.includes(part));
+}
+
+function upgradedProof(original, record, matchedSeq, matchedText = "") {
   const proof = JSON.parse(JSON.stringify(original));
   proof.contribution = proof.contribution || {};
   proof.contribution.record = {
     ...record,
     seq: String(matchedSeq),
+    text: matchedText || record.text,
     recoveredFromSeq: String(record.seq),
     verifiedAt: new Date().toISOString()
   };
@@ -107,7 +121,6 @@ function upgradedProof(original, record, matchedSeq) {
 }
 
 async function verifyContribution({ proof, record, room, seq }) {
-  // Önce proof'taki sequence'i doğrudan doğrula.
   const aroundOld = messagesFrom(await readRoom(room, Math.max(0, seq - 1)));
   const exact = aroundOld.find((m) => messageSeq(m) === seq);
   if (exact) {
@@ -115,25 +128,37 @@ async function verifyContribution({ proof, record, room, seq }) {
     return { proof, seq, recovered: false };
   }
 
-  // Ring buffer eski sequence'i düşürdüyse, odanın güncel penceresinde aynı DID + aynı imzalı contribution metnini ara.
   const recent = messagesFrom(await readRoom(room));
   const matches = recent
-    .filter((m) => verifyMessage(m, proof, record))
+    .filter((m) => verifyMessage(m, proof, record) || verifyContributionFields(m, proof))
     .map((m) => ({ message: m, seq: messageSeq(m) }))
     .filter((x) => x.seq > 0)
     .sort((a, b) => b.seq - a.seq);
 
   if (!matches.length) {
-    throw new Error(`Eski contribution #${seq} artık görünmüyor ve aynı DID + metinle daha yeni eşleşen kayıt bulunamadı.`);
+    throw new Error(`Eski contribution #${seq} artık görünmüyor. Yeni sequence'i biliyorsan alttaki alana yazıp doğrudan doğrula.`);
   }
 
   const latest = matches[0];
   return {
-    proof: upgradedProof(proof, record, latest.seq),
+    proof: upgradedProof(proof, record, latest.seq, messageText(latest.message)),
     seq: latest.seq,
     recovered: true,
     oldSeq: seq
   };
+}
+
+async function verifyKnownSeq(proof, targetSeq) {
+  const validated = validateProof(proof);
+  const seq = Number(targetSeq);
+  if (!Number.isSafeInteger(seq) || seq <= 0) throw new Error("Geçerli bir contribution sequence gir.");
+  const rows = messagesFrom(await readRoom(validated.room, Math.max(0, seq - 1)));
+  const hit = rows.find((m) => messageSeq(m) === seq);
+  if (!hit) throw new Error(`Contribution #${seq} Technocore yanıtında bulunamadı.`);
+  if (!(verifyMessage(hit, validated.proof, validated.record) || verifyContributionFields(hit, validated.proof))) {
+    throw new Error(`Contribution #${seq} bulundu ama DID/katkı bilgileri bu proof ile eşleşmiyor.`);
+  }
+  return upgradedProof(validated.proof, validated.record, seq, messageText(hit));
 }
 
 function readDone() {
@@ -212,10 +237,12 @@ async function importFile(file) {
     const validated = validateProof(parsed);
     if (!activeDid()) throw new Error("Önce DID oluştur veya yedeği geri yükle, sonra proof'u içe aktar.");
     if (activeDid() !== validated.proof.did) throw new Error("Seçtiğin proof mevcut DID ile eşleşmiyor.");
+    try { sessionStorage.setItem(PENDING_KEY, JSON.stringify(validated.proof)); } catch {}
 
     toast("Proof Technocore üzerinde doğrulanıyor...");
     const verified = await verifyContribution(validated);
     applyProof(verified.proof);
+    try { sessionStorage.removeItem(PENDING_KEY); } catch {}
     if (verified.recovered) {
       toast(`Eski proof güncellendi · #${verified.oldSeq} yerine doğrulanmış #${verified.seq} bulundu · 09/10 geri yüklendi`);
     } else {
@@ -224,6 +251,24 @@ async function importFile(file) {
   } catch (error) {
     console.error(error);
     toast(error?.message || "Proof içe aktarılamadı.");
+  }
+}
+
+async function verifyManualSeq() {
+  try {
+    const seq = $("#rdKnownSeq")?.value?.trim();
+    let proof;
+    try { proof = JSON.parse(sessionStorage.getItem(PENDING_KEY) || sessionStorage.getItem(SESSION_KEY) || "null"); } catch {}
+    if (!proof) throw new Error("Önce yukarıdaki butondan eski Public Proof JSON dosyanı seç.");
+    if (proof.did !== activeDid()) throw new Error("Proof DID'i açık kimlikle eşleşmiyor.");
+    toast(`#${seq} Technocore üzerinde doğrulanıyor...`);
+    const upgraded = await verifyKnownSeq(proof, seq);
+    applyProof(upgraded);
+    try { sessionStorage.removeItem(PENDING_KEY); } catch {}
+    toast(`Contribution #${seq} doğrulandı · 09/10 geri yüklendi`);
+  } catch (error) {
+    console.error(error);
+    toast(error?.message || "Sequence doğrulanamadı.");
   }
 }
 
@@ -238,7 +283,7 @@ function installUi() {
   const title = document.createElement("b");
   title.textContent = "Eski public proof'u geri yükle";
   const desc = document.createElement("span");
-  desc.textContent = " Public proof eski bir sequence içeriyorsa, site aynı DID ve aynı contribution metninin güncel Technocore kaydını güvenli biçimde arar. Private key/key yedeği kabul edilmez.";
+  desc.textContent = " Public proof eski bir sequence içeriyorsa site aynı DID ve katkı bilgilerini Technocore'da doğrular. Private key/key yedeği kabul edilmez.";
   const button = document.createElement("button");
   button.type = "button";
   button.textContent = "Public Proof JSON içe aktar";
@@ -254,7 +299,22 @@ function installUi() {
     input.click();
   });
 
-  box.append(title, desc, document.createElement("br"), button, input);
+  const manual = document.createElement("div");
+  manual.style.cssText = "display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:12px";
+  const seqInput = document.createElement("input");
+  seqInput.id = "rdKnownSeq";
+  seqInput.type = "text";
+  seqInput.inputMode = "numeric";
+  seqInput.autocomplete = "off";
+  seqInput.placeholder = "Bilinen contribution seq (örn. 391880)";
+  seqInput.style.cssText = "min-width:260px;flex:1";
+  const seqButton = document.createElement("button");
+  seqButton.type = "button";
+  seqButton.textContent = "Seq ile doğrula";
+  seqButton.addEventListener("click", verifyManualSeq);
+  manual.append(seqInput, seqButton);
+
+  box.append(title, desc, document.createElement("br"), button, input, manual);
   card.appendChild(box);
 }
 
