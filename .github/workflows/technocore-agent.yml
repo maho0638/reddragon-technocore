@@ -21,7 +21,7 @@ jobs:
           node-version: "20"
       - name: Run RedDragon Technocore agent
         env:
-          TECHNOCORE_DID: ${{ secrets.TECHNOCORE_DID }}
+          TECHNOCORE_DID: did:key:z6MkuhrsP4tDZjWYdZLPxaur19WvrF1yuLGsGB2S8Q1gwS6K
           TECHNOCORE_PRIVATE_KEY_PKCS8_B64: ${{ secrets.TECHNOCORE_PRIVATE_KEY_PKCS8_B64 }}
           TECHNOCORE_AGENT_ROOM: ${{ vars.TECHNOCORE_AGENT_ROOM || 'lobby' }}
           TECHNOCORE_AGENT_MESSAGE: ${{ vars.TECHNOCORE_AGENT_MESSAGE || 'RedDragon agent check-in' }}
