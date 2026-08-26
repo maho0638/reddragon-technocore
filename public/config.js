@@ -4,7 +4,7 @@ window.APP_CONFIG = {
   byline: "by @joannawalker",
   xHandle: "@joannawalker",
   xUrl: "https://x.com/joannawalker",
-  githubRepoUrl: "",
+  githubRepoUrl: "https://github.com/maho0638/reddragon-technocore",
   technocoreBase: "https://technocore.chat",
   technocoreHumanUrl: "https://technocore.chat/humans",
   flopUrl: "https://flop.finance",
