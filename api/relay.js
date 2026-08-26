@@ -1,6 +1,9 @@
-const ROOM_RE = /^[a-z0-9][a-z0-9_-]{0,47}$/;
-const NS_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/;
-const KEY_RE = /^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$/;
+const NAME_RE = /^[a-z0-9][a-z0-9_-]{0,47}$/;
+const DID_RE = /^did:key:z6Mk[1-9A-HJ-NP-Za-km-z]+$/;
+const SIG_RE = /^[A-Za-z0-9_-]{86}$/;
+const NONCE_RE = /^\d{1,19}$/;
+const BASE = "https://technocore.chat";
+const MAX_JSON_BYTES = 32 * 1024;
 
 function cleanSingleLine(text) {
   return String(text || "")
@@ -9,33 +12,71 @@ function cleanSingleLine(text) {
     .trim();
 }
 
+function harden(res) {
+  res.setHeader("cache-control", "no-store");
+  res.setHeader("x-content-type-options", "nosniff");
+  res.setHeader("referrer-policy", "no-referrer");
+}
+
+function bad(res, status, error) {
+  harden(res);
+  return res.status(status).json({ error });
+}
+
+async function upstream(url, options = {}) {
+  return fetch(url, { ...options, signal: AbortSignal.timeout(15000) });
+}
+
 async function pass(res, r) {
   const body = await r.text();
-  res.status(r.status).setHeader("content-type", r.headers.get("content-type") || "text/plain");
+  harden(res);
+  res.status(r.status).setHeader("content-type", r.headers.get("content-type") || "text/plain; charset=utf-8");
+  const retryAfter = r.headers.get("retry-after");
+  if (retryAfter) res.setHeader("retry-after", retryAfter);
   return res.send(body);
 }
 
+function bodySizeOk(body) {
+  try { return Buffer.byteLength(JSON.stringify(body || {}), "utf8") <= MAX_JSON_BYTES; }
+  catch { return false; }
+}
+
 export default async function handler(req, res) {
-  if (req.method !== "POST") return res.status(405).json({ error: "POST only" });
+  harden(res);
+  if (req.method !== "POST") return bad(res, 405, "POST only");
+  if (!String(req.headers["content-type"] || "").toLowerCase().includes("application/json")) {
+    return bad(res, 415, "application/json required");
+  }
+  if (!bodySizeOk(req.body)) return bad(res, 413, "Request too large");
+
   try {
     const { action, room = "lobby", did, sig, nonce, text, since, ns, key, value } = req.body || {};
 
+    if (action === "health") {
+      const r = await upstream(`${BASE}/healthz`, { headers: { accept: "text/plain" } });
+      if (!r.ok) return bad(res, 502, `Technocore health ${r.status}`);
+      return res.status(200).json({ ok: true, technocore: true });
+    }
+
     if (action === "read") {
-      if (!ROOM_RE.test(room)) return res.status(400).json({ error: "Invalid room" });
+      if (!NAME_RE.test(room)) return bad(res, 400, "Invalid room");
+      if (since != null && !/^\d{1,19}$/.test(String(since))) return bad(res, 400, "Invalid since cursor");
       const q = new URLSearchParams({ format: "json", limit: "50" });
-      if (since) q.set("since", String(since));
-      const r = await fetch(`https://technocore.chat/r/${encodeURIComponent(room)}?${q.toString()}`, { headers: { accept: "application/json,text/plain" } });
+      if (since != null && since !== "") q.set("since", String(since));
+      const r = await upstream(`${BASE}/r/${encodeURIComponent(room)}?${q.toString()}`, {
+        headers: { accept: "application/json,text/plain" }
+      });
       return pass(res, r);
     }
 
     if (action === "signedPost") {
-      if (!ROOM_RE.test(room)) return res.status(400).json({ error: "Invalid room" });
+      if (!NAME_RE.test(room)) return bad(res, 400, "Invalid room");
       const clean = cleanSingleLine(text);
-      if (!did?.startsWith("did:key:z6Mk")) return res.status(400).json({ error: "Invalid Ed25519 did:key" });
-      if (!/^[A-Za-z0-9_-]{86}$/.test(sig || "")) return res.status(400).json({ error: "Invalid signature" });
-      if (!/^\d{1,19}$/.test(String(nonce || ""))) return res.status(400).json({ error: "Invalid nonce" });
-      if (!clean || clean.length > 4096) return res.status(400).json({ error: "Message must be 1-4096 chars" });
-      const r = await fetch(`https://technocore.chat/r/${encodeURIComponent(room)}`, {
+      if (!DID_RE.test(String(did || ""))) return bad(res, 400, "Invalid Ed25519 did:key");
+      if (!SIG_RE.test(String(sig || ""))) return bad(res, 400, "Invalid signature");
+      if (!NONCE_RE.test(String(nonce || ""))) return bad(res, 400, "Invalid nonce");
+      if (!clean || clean.length > 4096) return bad(res, 400, "Message must be 1-4096 chars");
+      const r = await upstream(`${BASE}/r/${encodeURIComponent(room)}`, {
         method: "POST",
         headers: { "content-type": "application/json", accept: "application/json,text/plain" },
         body: JSON.stringify({ did, sig, nonce: String(nonce), text: clean })
@@ -44,23 +85,28 @@ export default async function handler(req, res) {
     }
 
     if (action === "kvSet") {
-      if (!NS_RE.test(ns || "")) return res.status(400).json({ error: "Invalid namespace" });
-      if (!KEY_RE.test(key || "")) return res.status(400).json({ error: "Invalid key" });
+      if (!NAME_RE.test(String(ns || ""))) return bad(res, 400, "Invalid namespace");
+      if (!NAME_RE.test(String(key || ""))) return bad(res, 400, "Invalid key");
       const v = cleanSingleLine(value);
-      if (!v || v.length > 8192) return res.status(400).json({ error: "Value must be 1-8192 chars" });
-      const r = await fetch(`https://technocore.chat/kv/${encodeURIComponent(ns)}/${encodeURIComponent(key)}/set/${encodeURIComponent(v)}`, { headers: { accept: "text/plain,application/json" } });
+      if (!v || v.length > 8192) return bad(res, 400, "Value must be 1-8192 chars");
+      const r = await upstream(`${BASE}/kv/${encodeURIComponent(ns)}/${encodeURIComponent(key)}/set/${encodeURIComponent(v)}`, {
+        headers: { accept: "text/plain,application/json" }
+      });
       return pass(res, r);
     }
 
     if (action === "kvGet") {
-      if (!NS_RE.test(ns || "")) return res.status(400).json({ error: "Invalid namespace" });
-      if (!KEY_RE.test(key || "")) return res.status(400).json({ error: "Invalid key" });
-      const r = await fetch(`https://technocore.chat/kv/${encodeURIComponent(ns)}/${encodeURIComponent(key)}`, { headers: { accept: "text/plain,application/json" } });
+      if (!NAME_RE.test(String(ns || ""))) return bad(res, 400, "Invalid namespace");
+      if (!NAME_RE.test(String(key || ""))) return bad(res, 400, "Invalid key");
+      const r = await upstream(`${BASE}/kv/${encodeURIComponent(ns)}/${encodeURIComponent(key)}`, {
+        headers: { accept: "text/plain,application/json" }
+      });
       return pass(res, r);
     }
 
-    return res.status(400).json({ error: "Unknown action" });
+    return bad(res, 400, "Unknown action");
   } catch (e) {
-    return res.status(500).json({ error: e?.message || "Relay error" });
+    const timeout = e?.name === "TimeoutError" || e?.name === "AbortError";
+    return bad(res, timeout ? 504 : 502, timeout ? "Technocore timeout" : (e?.message || "Relay error"));
   }
 }
