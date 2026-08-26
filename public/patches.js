@@ -166,7 +166,6 @@ function patchRestoreFlow() {
     const text = identityOut.textContent || "";
     if (!/did:key:z6Mk/.test(text)) return;
 
-    // Password fields should never remain populated after a usable identity exists.
     const p1 = $("#pass1");
     const p2 = $("#pass2");
     if (p1) p1.value = "";
@@ -181,13 +180,18 @@ function patchRestoreFlow() {
   });
   identityObserver.observe(identityOut, { childList: true, subtree: true, characterData: true });
 
-  // Core UI refreshes can redraw completion state; keep step 2 consistent for this live restored session.
   new MutationObserver(() => queueMicrotask(syncRestoredBackupUi))
     .observe(steps, { subtree: true, attributes: true, attributeFilter: ["class"] });
 
   document.addEventListener("click", () => {
     if (restoredBackupVerified) setTimeout(syncRestoredBackupUi, 0);
   }, true);
+}
+
+function patchSecurityNote() {
+  const note = document.querySelector(".rd-security-note");
+  if (!note) return;
+  note.innerHTML = "<b>Güvenlik kuralı</b>RedDragon GitHub şifreni, tokenini veya wallet seed phrase'ini istemez. Private key'i yalnızca kendi GitHub repondaki <b>Actions Secret</b> alanına sen yapıştırırsın. Private key RedDragon sunucusuna gönderilmez ve public GitHub dosyalarına yazılmaz.";
 }
 
 async function reliableRelayStatus() {
@@ -219,5 +223,6 @@ window.addEventListener("load", () => {
   patchDidNoteDisplay();
   patchProofButtons();
   patchRestoreFlow();
+  patchSecurityNote();
   setTimeout(reliableRelayStatus, 500);
 });
