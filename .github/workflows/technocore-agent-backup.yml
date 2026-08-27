@@ -1,0 +1,42 @@
+name: RedDragon Technocore Agent Backup
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/technocore-agent-backup.yml"
+  schedule:
+    # Independent staggered schedule. If the primary scheduler is delayed or
+    # drops a run, this workflow gives the agent another chance 15 minutes later.
+    - cron: "2,32 * * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: reddragon-technocore-agent
+  cancel-in-progress: false
+
+jobs:
+  agent:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+          package-manager-cache: false
+      - name: Run RedDragon Technocore agent
+        env:
+          TECHNOCORE_PRIVATE_KEY_PKCS8_B64: ${{ secrets.TECHNOCORE_PRIVATE_KEY_PKCS8_B64 }}
+          TECHNOCORE_AGENT_ROOM: ${{ vars.TECHNOCORE_AGENT_ROOM || 'lobby' }}
+          TECHNOCORE_AGENT_MESSAGE: ${{ vars.TECHNOCORE_AGENT_MESSAGE || 'RedDragon agent check-in' }}
+          TECHNOCORE_MIN_POST_HOURS: ${{ vars.TECHNOCORE_MIN_POST_HOURS || '12' }}
+          TECHNOCORE_POST_ENABLED: ${{ vars.TECHNOCORE_POST_ENABLED != 'false' && 'true' || 'false' }}
+        run: node scripts/technocore-agent.mjs
