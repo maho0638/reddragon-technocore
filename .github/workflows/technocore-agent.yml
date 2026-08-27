@@ -6,12 +6,13 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/technocore-agent.yml"
+      - ".github/workflows/technocore-agent-backup.yml"
       - "scripts/technocore-agent.mjs"
       - "package.json"
   schedule:
-    # Multiple off-minute chances make the heartbeat resilient to delayed/dropped
-    # GitHub schedule events. Durable Technocore state still limits signed posts to >=12h.
-    - cron: "11,26,41,56 * * * *"
+    # Primary off-minute cadence. GitHub scheduled runs can be delayed, so a
+    # separate backup workflow runs on the alternating quarter-hour slots.
+    - cron: "17,47 * * * *"
 
 permissions:
   contents: read
@@ -36,12 +37,9 @@ jobs:
           package-manager-cache: false
       - name: Run RedDragon Technocore agent
         env:
-          # DID is derived from the Ed25519 private key at runtime. Forks need only this one secret.
           TECHNOCORE_PRIVATE_KEY_PKCS8_B64: ${{ secrets.TECHNOCORE_PRIVATE_KEY_PKCS8_B64 }}
           TECHNOCORE_AGENT_ROOM: ${{ vars.TECHNOCORE_AGENT_ROOM || 'lobby' }}
           TECHNOCORE_AGENT_MESSAGE: ${{ vars.TECHNOCORE_AGENT_MESSAGE || 'RedDragon agent check-in' }}
           TECHNOCORE_MIN_POST_HOURS: ${{ vars.TECHNOCORE_MIN_POST_HOURS || '12' }}
-          # Any successful run may repair activity. Durable Technocore state and the
-          # pre-post lock enforce >=12h between signed posts, so retries cannot spam.
           TECHNOCORE_POST_ENABLED: ${{ vars.TECHNOCORE_POST_ENABLED != 'false' && 'true' || 'false' }}
         run: node scripts/technocore-agent.mjs
