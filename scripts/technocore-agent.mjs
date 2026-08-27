@@ -19,6 +19,7 @@ if (configuredDid && configuredDid !== did) {
   throw new Error("Configured TECHNOCORE_DID does not match the private key");
 }
 const fingerprint = createHash("sha256").update(did, "utf8").digest("hex").slice(0, 16);
+const heartbeatKey = `hb-${fingerprint}`;
 console.log(`Agent identity: ${did} (${fingerprint})`);
 
 function clean(text) {
@@ -101,23 +102,78 @@ function recentOwnMessage(messages) {
   const own = messages.filter((m) => m?.from === did || m?.did === did);
   if (!own.length) return null;
   const latest = own[own.length - 1];
-  const ts = Date.parse(latest?.ts || latest?.timestamp || "");
+  const rawTs = latest?.ts || latest?.timestamp || latest?.createdAt || latest?.time || "";
+  const ts = Date.parse(rawTs);
   return Number.isFinite(ts) ? { ...latest, tsMs: ts } : latest;
 }
 
-async function heartbeat(seq) {
-  const key = `hb-${fingerprint}`;
-  try {
-    const { r, text } = await request(`${BASE}/kv/${encodeURIComponent(room)}/${encodeURIComponent(key)}`, {
-      method: "POST",
-      headers: { "content-type": "application/json", accept: "text/plain,application/json" },
-      body: JSON.stringify({ value: String(seq || 0) })
-    });
-    if (!r.ok) console.warn(`Heartbeat note failed ${r.status}: ${text}`);
-    else console.log(`Heartbeat updated: ${room}/${key} -> ${seq || 0}`);
-  } catch (error) {
-    console.warn(`Heartbeat request failed: ${error?.message || error}`);
+function parseMaybeJson(value) {
+  if (typeof value !== "string") return value;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  try { return JSON.parse(trimmed); } catch { return trimmed; }
+}
+
+function normalizeHeartbeatState(raw) {
+  let value = parseMaybeJson(raw);
+  if (value && typeof value === "object" && !Array.isArray(value) && "value" in value) {
+    value = parseMaybeJson(value.value);
   }
+  value = parseMaybeJson(value);
+
+  if (typeof value === "number" || (typeof value === "string" && /^\d+$/.test(value))) {
+    return { version: 2, lastRoomSeq: Number(value) || 0 };
+  }
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return { version: 2, lastRoomSeq: 0 };
+  }
+
+  return {
+    version: 2,
+    lastRoomSeq: Number(value.lastRoomSeq || value.seq || 0) || 0,
+    lastHeartbeatAt: typeof value.lastHeartbeatAt === "string" ? value.lastHeartbeatAt : null,
+    lastSignedAt: typeof value.lastSignedAt === "string" ? value.lastSignedAt : null,
+    lastSignedSeq: Number(value.lastSignedSeq || 0) || null,
+    postLockUntil: typeof value.postLockUntil === "string" ? value.postLockUntil : null
+  };
+}
+
+async function readHeartbeatState() {
+  const { r, text } = await request(`${BASE}/kv/${encodeURIComponent(room)}/${encodeURIComponent(heartbeatKey)}`, {
+    headers: { accept: "application/json,text/plain" }
+  });
+  if (r.status === 404) return { version: 2, lastRoomSeq: 0 };
+  if (!r.ok) throw new Error(`Heartbeat state read failed ${r.status}: ${text}`);
+  return normalizeHeartbeatState(text);
+}
+
+async function writeHeartbeatState(state) {
+  const safeState = {
+    version: 2,
+    lastRoomSeq: Number(state.lastRoomSeq || 0) || 0,
+    lastHeartbeatAt: state.lastHeartbeatAt || new Date().toISOString(),
+    lastSignedAt: state.lastSignedAt || null,
+    lastSignedSeq: Number(state.lastSignedSeq || 0) || null,
+    postLockUntil: state.postLockUntil || null
+  };
+  const { r, text } = await request(`${BASE}/kv/${encodeURIComponent(room)}/${encodeURIComponent(heartbeatKey)}`, {
+    method: "POST",
+    headers: { "content-type": "application/json", accept: "text/plain,application/json" },
+    body: JSON.stringify({ value: JSON.stringify(safeState) })
+  });
+  if (!r.ok) throw new Error(`Heartbeat note failed ${r.status}: ${text}`);
+  return safeState;
+}
+
+function ageHours(iso) {
+  const ts = Date.parse(String(iso || ""));
+  if (!Number.isFinite(ts)) return Infinity;
+  return (Date.now() - ts) / 3_600_000;
+}
+
+function futureMs(iso) {
+  const ts = Date.parse(String(iso || ""));
+  return Number.isFinite(ts) ? ts - Date.now() : -1;
 }
 
 async function signedPost(text) {
@@ -125,34 +181,89 @@ async function signedPost(text) {
   const nonce = String(Date.now());
   const payload = Buffer.from(`${room}|${nonce}|${normalized}`, "utf8");
   const sig = nodeSign(null, payload, privateKey).toString("base64url");
-  const { r, text: body } = await request(`${BASE}/r/${encodeURIComponent(room)}`, {
+  const { r, text: body } = await request(`${BASE}/r/${encodeURIComponent(room)}?format=json`, {
     method: "POST",
-    headers: { "content-type": "application/json", accept: "text/plain,application/json" },
+    headers: { "content-type": "application/json", accept: "application/json,text/plain" },
     body: JSON.stringify({ did, sig, nonce, text: normalized })
   });
   if (!r.ok) throw new Error(`Signed post failed ${r.status}: ${body}`);
-  console.log(`Signed post accepted: ${body.slice(0, 500)}`);
+
+  let acceptedSeq = null;
+  try {
+    const parsed = JSON.parse(body);
+    acceptedSeq = Number(parsed?.posted?.seq || parsed?.seq || 0) || null;
+  } catch {
+    const match = body.match(/\bseq\D+(\d+)\b/i);
+    acceptedSeq = match ? Number(match[1]) : null;
+  }
+  console.log(`Signed post accepted${acceptedSeq ? `: seq ${acceptedSeq}` : ""}.`);
+  return { seq: acceptedSeq, nonce };
 }
 
 const data = await getRoom();
 const messages = messagesFrom(data);
 const seq = lastSeq(messages);
-await heartbeat(seq);
+let state = await readHeartbeatState();
+state.lastRoomSeq = seq;
+state.lastHeartbeatAt = new Date().toISOString();
+state = await writeHeartbeatState(state);
+console.log(`Heartbeat updated: ${room}/${heartbeatKey} -> ${seq || 0}`);
 
 if (!postEnabled) {
   console.log("Read/heartbeat run complete; signed posting disabled for this run.");
   process.exit(0);
 }
 
-// Production signed posting is primarily gated by the dedicated twice-daily cron.
-// This visible-tail check is a second guard against an accidental immediate duplicate.
+const lockMs = futureMs(state.postLockUntil);
+if (lockMs > 0) {
+  console.log(`Skip signed post: durable post lock remains for ${(lockMs / 3_600_000).toFixed(2)}h.`);
+  process.exit(0);
+}
+
+const durableAge = ageHours(state.lastSignedAt);
+if (durableAge < minPostHours) {
+  console.log(`Skip signed post: durable last-signed state is ${durableAge.toFixed(2)}h old; minimum is ${minPostHours}h.`);
+  process.exit(0);
+}
+
+// Secondary guard: if a recent message is still visible in the room tail, use it to
+// repair durable state and prevent a duplicate even if an earlier state write failed.
 const last = recentOwnMessage(messages);
 if (last?.tsMs) {
-  const ageHours = (Date.now() - last.tsMs) / 3_600_000;
-  if (ageHours < minPostHours) {
-    console.log(`Skip signed post: last visible DID message is ${ageHours.toFixed(2)}h old; minimum is ${minPostHours}h.`);
+  const visibleAge = (Date.now() - last.tsMs) / 3_600_000;
+  if (visibleAge < minPostHours) {
+    state.lastSignedAt = new Date(last.tsMs).toISOString();
+    state.postLockUntil = new Date(last.tsMs + minPostHours * 3_600_000).toISOString();
+    await writeHeartbeatState(state);
+    console.log(`Skip signed post: last visible DID message is ${visibleAge.toFixed(2)}h old; minimum is ${minPostHours}h.`);
     process.exit(0);
   }
 }
 
-await signedPost(message);
+// Acquire a durable public lock before posting. If the post succeeds but the final
+// state write fails, the lock still prevents an immediate duplicate on the next run.
+const now = Date.now();
+state.postLockUntil = new Date(now + minPostHours * 3_600_000).toISOString();
+state = await writeHeartbeatState(state);
+console.log(`Signed-post lock acquired until ${state.postLockUntil}.`);
+
+try {
+  const posted = await signedPost(message);
+  state.lastSignedAt = new Date(now).toISOString();
+  state.lastSignedSeq = posted.seq;
+  state.lastHeartbeatAt = new Date().toISOString();
+  try {
+    await writeHeartbeatState(state);
+    console.log(`Durable signed state saved${posted.seq ? `: seq ${posted.seq}` : ""}.`);
+  } catch (error) {
+    // Do not fail/retry the workflow after a successful signed post: the pre-post
+    // durable lock is already in place and is safer than risking a duplicate.
+    console.warn(`Signed post succeeded but final state update failed: ${error?.message || error}`);
+  }
+} catch (error) {
+  // A failed post may be retried later. Shorten the lock to 30 minutes when possible;
+  // if this cleanup itself fails, the original 12h lock fails safely by suppressing spam.
+  state.postLockUntil = new Date(Date.now() + 30 * 60_000).toISOString();
+  try { await writeHeartbeatState(state); } catch {}
+  throw error;
+}
