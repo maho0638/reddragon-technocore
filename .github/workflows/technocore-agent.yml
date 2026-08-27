@@ -9,10 +9,9 @@ on:
       - "scripts/technocore-agent.mjs"
       - "package.json"
   schedule:
-    # Frequent read/heartbeat run. Offset from :00/:30 to reduce GitHub cron congestion.
-    - cron: "17,47 * * * *"
-    # Exactly two signed activity windows per day (UTC), kept separate from heartbeat runs.
-    - cron: "23 0,12 * * *"
+    # Multiple off-minute chances make the heartbeat resilient to delayed/dropped
+    # GitHub schedule events. Durable Technocore state still limits signed posts to >=12h.
+    - cron: "11,26,41,56 * * * *"
 
 permissions:
   contents: read
@@ -42,6 +41,7 @@ jobs:
           TECHNOCORE_AGENT_ROOM: ${{ vars.TECHNOCORE_AGENT_ROOM || 'lobby' }}
           TECHNOCORE_AGENT_MESSAGE: ${{ vars.TECHNOCORE_AGENT_MESSAGE || 'RedDragon agent check-in' }}
           TECHNOCORE_MIN_POST_HOURS: ${{ vars.TECHNOCORE_MIN_POST_HOURS || '12' }}
-          # Push/manual/heartbeat runs are read/heartbeat-only. Signed posting occurs only on the dedicated cron.
-          TECHNOCORE_POST_ENABLED: ${{ vars.TECHNOCORE_POST_ENABLED != 'false' && github.event.schedule == '23 0,12 * * *' && 'true' || 'false' }}
+          # Every automatic schedule run is eligible; the agent's durable Technocore
+          # state enforces the minimum interval. Push/manual tests never send signed posts.
+          TECHNOCORE_POST_ENABLED: ${{ vars.TECHNOCORE_POST_ENABLED != 'false' && github.event_name == 'schedule' && 'true' || 'false' }}
         run: node scripts/technocore-agent.mjs
