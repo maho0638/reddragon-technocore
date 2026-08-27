@@ -25,38 +25,8 @@ function fixProofImportCopy() {
   }
 }
 
-function fixSecurityNoteCopy() {
-  const isEn = currentLang() === "en";
-  document.querySelectorAll(".rd-security-note").forEach((note) => {
-    const text = note.textContent || "";
-    if (!/RedDragon GitHub şifreni|RedDragon never asks for your GitHub password/i.test(text)) return;
-
-    const bold = note.querySelector(":scope > b");
-    const span = note.querySelector(":scope > span");
-    const copy = isEn
-      ? "RedDragon never asks for your GitHub password, token, or wallet seed phrase. You paste the private key yourself only into the Actions Secret area of your own repository. The private key is never sent to a RedDragon server or written to public GitHub files."
-      : "RedDragon GitHub şifreni, tokenini veya wallet seed phrase'ini istemez. Private key'i yalnızca kendi GitHub repondaki Actions Secret alanına sen yapıştırırsın. Private key RedDragon sunucusuna gönderilmez ve public GitHub dosyalarına yazılmaz.";
-
-    if (bold && !note.id.includes("ProofImport")) {
-      bold.textContent = isEn ? "Security rule" : "Güvenlik kuralı";
-    }
-
-    if (span) {
-      span.textContent = ` ${copy}`;
-      return;
-    }
-
-    [...note.childNodes]
-      .filter((node) => node.nodeType === Node.TEXT_NODE)
-      .forEach((node) => {
-        if (/RedDragon GitHub şifreni|RedDragon never asks for your GitHub password/i.test(node.nodeValue || "")) {
-          node.nodeValue = ` ${copy}`;
-        }
-      });
-  });
-}
-
 function applyFinalFixes() {
+  const isEn = currentLang() === "en";
   const handle = cfg.xHandle || "@joannawolker";
   const url = cfg.xUrl || "https://x.com/joannawolker";
 
@@ -82,14 +52,20 @@ function applyFinalFixes() {
 
   const secretTitle = [...document.querySelectorAll('[data-step="11"] h3')]
     .find((h) => /Repository Secret/i.test(h.textContent || ""));
-  if (secretTitle && /Secrets$/i.test(secretTitle.textContent.trim())) {
-    secretTitle.textContent = currentLang() === "en"
+  if (secretTitle) {
+    secretTitle.textContent = isEn
       ? "Repository Secret · only one required"
       : "Repository Secret · sadece 1 tane";
   }
 
+  const securityNote = document.querySelector("#rdQuickSetup .rd-security-note");
+  if (securityNote) {
+    securityNote.innerHTML = isEn
+      ? '<b>Security rule</b> RedDragon never asks for your GitHub password, token, or wallet seed phrase. You paste the private key yourself only into the <b>Actions Secret</b> area of your own repository. The private key is never sent to a RedDragon server or written to public GitHub files.'
+      : '<b>Güvenlik kuralı</b> RedDragon GitHub şifreni, tokenini veya wallet seed phrase\'ini istemez. Private key\'i yalnızca kendi GitHub repondaki <b>Actions Secret</b> alanına sen yapıştırırsın. Private key RedDragon sunucusuna gönderilmez ve public GitHub dosyalarına yazılmaz.';
+  }
+
   fixProofImportCopy();
-  fixSecurityNoteCopy();
 
   const card = document.querySelector('[data-step="11"]');
   if (card) {
@@ -101,11 +77,9 @@ function applyFinalFixes() {
       const quick = document.querySelector("#rdQuickSetup");
       if (quick) quick.before(note); else card.appendChild(note);
     }
-    if (currentLang() === "en") {
-      note.innerHTML = "<b>GitHub schedule note</b> Scheduled workflows are disabled by default on public forks until you enable Actions. GitHub can also disable scheduled workflows in a public repository after 60 days with no repository activity.";
-    } else {
-      note.innerHTML = "<b>GitHub zamanlama notu</b> Public fork'larda scheduled workflow, Actions'tan etkinleştirene kadar varsayılan olarak kapalıdır. Ayrıca GitHub, public bir repoda 60 gün repo aktivitesi olmazsa scheduled workflow'u otomatik devre dışı bırakabilir.";
-    }
+    note.innerHTML = isEn
+      ? "<b>GitHub schedule note</b> Scheduled workflows are disabled by default on public forks until you enable Actions. GitHub can also disable scheduled workflows in a public repository after 60 days with no repository activity."
+      : "<b>GitHub zamanlama notu</b> Public fork'larda scheduled workflow, Actions'tan etkinleştirene kadar varsayılan olarak kapalıdır. Ayrıca GitHub, public bir repoda 60 gün repo aktivitesi olmazsa scheduled workflow'u otomatik devre dışı bırakabilir.";
   }
 }
 
@@ -113,5 +87,4 @@ window.addEventListener("load", () => {
   applyFinalFixes();
   setTimeout(applyFinalFixes, 300);
   setTimeout(applyFinalFixes, 1500);
-  setInterval(applyFinalFixes, 1200);
 });
