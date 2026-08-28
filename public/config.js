@@ -2,6 +2,19 @@
 // Per-DID public state remains stored separately and is restored by the dedicated modules below.
 try { localStorage.removeItem("reddragon-progress"); } catch {}
 
+// All UI modules must agree on the language from their first execution. Older modules
+// default to Turkish when no choice exists, while the stable language layer can detect
+// the browser language. Persist one decision up front so those two rules never diverge.
+try {
+  const savedLang = localStorage.getItem("reddragon-lang");
+  if (savedLang !== "tr" && savedLang !== "en") {
+    localStorage.setItem(
+      "reddragon-lang",
+      String(navigator.language || "").toLowerCase().startsWith("tr") ? "tr" : "en"
+    );
+  }
+} catch {}
+
 window.APP_CONFIG = {
   brandName: "RedDragon",
   productName: "Technocore Agent Lab",
