@@ -24,10 +24,12 @@ window.APP_CONFIG = {
 
 // Enhancements stay separate from core key generation/signing code.
 (() => {
-  const css = document.createElement("link");
-  css.rel = "stylesheet";
-  css.href = "/enhancements.css";
-  document.head.appendChild(css);
+  for (const href of ["/enhancements.css", "/live-observatory.css"]) {
+    const css = document.createElement("link");
+    css.rel = "stylesheet";
+    css.href = href;
+    document.head.appendChild(css);
+  }
 
   for (const src of [
     "/public-state.js",
@@ -38,7 +40,8 @@ window.APP_CONFIG = {
     "/activity-proof.js",
     "/language-final.js",
     "/final-fixes.js",
-    "/progress-scope-fix.js"
+    "/progress-scope-fix.js",
+    "/live-observatory.js"
   ]) {
     const script = document.createElement("script");
     script.type = "module";
