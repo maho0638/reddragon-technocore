@@ -21,31 +21,45 @@ window.APP_CONFIG = {
 };
 
 // Public onboarding state may be kept locally per DID. Private key material is never persisted here.
-
-// Enhancements stay separate from core key generation/signing code.
+// Add-on files are intentionally isolated from the core key/signing implementation.
 (() => {
-  for (const href of ["/enhancements.css", "/live-observatory.css"]) {
+  for (const href of ["/enhancements.css", "/live-observatory.css", "/language-stable.css"]) {
     const css = document.createElement("link");
     css.rel = "stylesheet";
     css.href = href;
     document.head.appendChild(css);
   }
 
-  for (const src of [
+  // Dynamic module scripts used to be appended all at once. Module execution order could
+  // then vary by fetch timing, allowing translation/final-fix code to race each other.
+  // Load add-ons one-by-one. No MutationObserver and no recurring translation interval.
+  const sources = [
     "/public-state.js",
     "/enhancements.js",
     "/patches.js",
     "/proof-import.js",
     "/contribution-edit-fix.js",
     "/activity-proof.js",
-    "/language-final.js",
     "/final-fixes.js",
     "/progress-scope-fix.js",
-    "/live-observatory.js"
-  ]) {
+    "/live-observatory.js",
+    "/language-stable.js"
+  ];
+
+  let index = 0;
+  const loadNext = () => {
+    if (index >= sources.length) return;
+    const src = sources[index++];
     const script = document.createElement("script");
     script.type = "module";
+    script.async = false;
     script.src = src;
+    script.onload = loadNext;
+    script.onerror = () => {
+      console.error(`RedDragon add-on failed to load: ${src}`);
+      loadNext();
+    };
     document.head.appendChild(script);
-  }
+  };
+  loadNext();
 })();
