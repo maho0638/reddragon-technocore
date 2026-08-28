@@ -31,6 +31,7 @@ window.APP_CONFIG = {
     "/enhancements.js",
     "/patches.js",
     "/proof-import.js",
+    "/contribution-edit-fix.js",
     "/activity-proof.js",
     "/language-final.js",
     "/final-fixes.js"
