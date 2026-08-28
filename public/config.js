@@ -26,7 +26,6 @@ window.APP_CONFIG = {
   document.head.appendChild(css);
 
   for (const src of [
-    "/repair.js",
     "/public-state.js",
     "/enhancements.js",
     "/patches.js",
