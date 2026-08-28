@@ -24,11 +24,13 @@
     { "source": "/activity-proof.js", "headers": [{ "key": "Cache-Control", "value": "no-store, max-age=0" }] },
     { "source": "/language-safe.js", "headers": [{ "key": "Cache-Control", "value": "no-store, max-age=0" }] },
     { "source": "/language-final.js", "headers": [{ "key": "Cache-Control", "value": "no-store, max-age=0" }] },
+    { "source": "/language-stable.js", "headers": [{ "key": "Cache-Control", "value": "no-store, max-age=0" }] },
     { "source": "/final-fixes.js", "headers": [{ "key": "Cache-Control", "value": "no-store, max-age=0" }] },
     { "source": "/progress-scope-fix.js", "headers": [{ "key": "Cache-Control", "value": "no-store, max-age=0" }] },
     { "source": "/live-observatory.js", "headers": [{ "key": "Cache-Control", "value": "no-store, max-age=0" }] },
     { "source": "/enhancements.css", "headers": [{ "key": "Cache-Control", "value": "no-store, max-age=0" }] },
-    { "source": "/live-observatory.css", "headers": [{ "key": "Cache-Control", "value": "no-store, max-age=0" }] }
+    { "source": "/live-observatory.css", "headers": [{ "key": "Cache-Control", "value": "no-store, max-age=0" }] },
+    { "source": "/language-stable.css", "headers": [{ "key": "Cache-Control", "value": "no-store, max-age=0" }] }
   ],
   "rewrites": [
     { "source": "/api/relay", "destination": "/api/relay.js" },
@@ -36,6 +38,7 @@
     { "source": "/styles.css", "destination": "/public/styles.css" },
     { "source": "/enhancements.css", "destination": "/public/enhancements.css" },
     { "source": "/live-observatory.css", "destination": "/public/live-observatory.css" },
+    { "source": "/language-stable.css", "destination": "/public/language-stable.css" },
     { "source": "/config.js", "destination": "/public/config.js" },
     { "source": "/app.js", "destination": "/public/app.js" },
     { "source": "/repair.js", "destination": "/public/repair.js" },
@@ -47,6 +50,7 @@
     { "source": "/activity-proof.js", "destination": "/public/activity-proof.js" },
     { "source": "/language-safe.js", "destination": "/public/language-safe.js" },
     { "source": "/language-final.js", "destination": "/public/language-final.js" },
+    { "source": "/language-stable.js", "destination": "/public/language-stable.js" },
     { "source": "/final-fixes.js", "destination": "/public/final-fixes.js" },
     { "source": "/progress-scope-fix.js", "destination": "/public/progress-scope-fix.js" },
     { "source": "/live-observatory.js", "destination": "/public/live-observatory.js" },
