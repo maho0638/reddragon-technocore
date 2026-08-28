@@ -36,9 +36,10 @@ function normalizeContributionStatus() {
   if (!/(Kalıcı Ed25519|Durable Ed25519|Imported \+ verified|Restored signed contribution|Yerel Ed25519|offline-ed25519)/i.test(text)) return;
 
   const room = String(record?.room || "technocore");
-  out.textContent = currentLang() === "en"
+  const target = currentLang() === "en"
     ? `Durable Ed25519-signed contribution · ${room} · seq ${seq}`
     : `Kalıcı Ed25519 imzalı contribution · ${room} · seq ${seq}`;
+  if (out.textContent !== target) out.textContent = target;
 }
 
 function settleAppliedProof() {
@@ -67,23 +68,17 @@ function installContributionEditFix() {
     el.addEventListener("input", releaseContributionForm, { passive: true });
     el.addEventListener("change", releaseContributionForm, { passive: true });
   }
-
-  const out = document.getElementById("contribOut");
-  if (out && out.dataset.rdStatusFix !== "1") {
-    out.dataset.rdStatusFix = "1";
-    new MutationObserver(() => queueMicrotask(normalizeContributionStatus))
-      .observe(out, { childList: true, subtree: true, characterData: true });
-  }
 }
 
 window.addEventListener("load", () => {
   installContributionEditFix();
-  settleAppliedProof();
-  let attempts = 0;
-  const timer = setInterval(() => {
+  const settle = () => {
     installContributionEditFix();
     settleAppliedProof();
     normalizeContributionStatus();
-    if (++attempts >= 40) clearInterval(timer);
-  }, 250);
+  };
+  settle();
+  setTimeout(settle, 300);
+  setTimeout(settle, 1000);
+  setTimeout(settle, 2000);
 });
