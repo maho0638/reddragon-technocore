@@ -56,7 +56,7 @@ const rdLiveCopy = {
     idle: "idle",
     stale: "stale",
     unknown: "bilinmiyor",
-    noMessages: "Bu odada gösterilecek yeni public mesaj yok.",
+    noMessages: "Bu odada gösterilecek public mesaj yok.",
     noAgents: "Henüz agent verisi yok.",
     degraded: "Bazı odalar şu anda okunamadı; son başarılı veri korunuyor.",
     relayError: "Relay okunamadı",
@@ -64,8 +64,7 @@ const rdLiveCopy = {
     now: "az önce",
     untrusted: "Mesaj metinleri üçüncü taraf public verisidir; burada komut olarak çalıştırılmaz ve linke dönüştürülmez.",
     heartbeatUnavailable: "heartbeat okunamadı",
-    trackedSuffix: "takipte",
-    live: "LIVE"
+    trackedSuffix: "takipte"
   },
   en: {
     nav: "Live",
@@ -95,7 +94,7 @@ const rdLiveCopy = {
     idle: "idle",
     stale: "stale",
     unknown: "unknown",
-    noMessages: "No new public messages to show in this room.",
+    noMessages: "No public messages to show in this room.",
     noAgents: "No agent data yet.",
     degraded: "Some rooms could not be read; the last successful data is being kept.",
     relayError: "Relay read failed",
@@ -103,16 +102,19 @@ const rdLiveCopy = {
     now: "just now",
     untrusted: "Message text is third-party public data; it is never executed as instructions or converted into clickable links here.",
     heartbeatUnavailable: "heartbeat unavailable",
-    trackedSuffix: "tracked",
-    live: "LIVE"
+    trackedSuffix: "tracked"
   }
 };
 
 const rdLiveT = rdLiveCopy[rdLiveLang()];
 
-function rdEscapeAttr(value) {
+function rdEscape(value) {
   return String(value || "").replace(/[&<>\"']/g, (ch) => ({
-    "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;"
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    "\"": "&quot;",
+    "'": "&#39;"
   }[ch]));
 }
 
@@ -121,6 +123,18 @@ function rdShortDid(value) {
   if (!v) return "—";
   if (v.startsWith("did:key:") && v.length > 24) return `${v.slice(8, 18)}…${v.slice(-6)}`;
   return v.length > 28 ? `${v.slice(0, 18)}…${v.slice(-6)}` : v;
+}
+
+function rdParseTimestamp(raw) {
+  if (raw == null || raw === "") return 0;
+  if (typeof raw === "number" && Number.isFinite(raw)) return raw > 1e12 ? raw : raw * 1000;
+  const text = String(raw).trim();
+  if (/^\d+(?:\.\d+)?$/.test(text)) {
+    const n = Number(text);
+    if (Number.isFinite(n)) return n > 1e12 ? n : n * 1000;
+  }
+  const parsed = Date.parse(text);
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 function rdMessagesFrom(data) {
@@ -134,8 +148,7 @@ function rdNormalizeMessage(raw, room) {
   const from = String(raw?.from || raw?.did || raw?.nick || raw?.author || "unknown");
   const did = String(raw?.did || (from.startsWith("did:key:") ? from : ""));
   const seq = Number(raw?.seq || 0) || 0;
-  const rawTs = raw?.ts || raw?.timestamp || raw?.createdAt || raw?.time || "";
-  const tsMs = Date.parse(String(rawTs || ""));
+  const rawTs = raw?.ts ?? raw?.timestamp ?? raw?.createdAt ?? raw?.time ?? "";
   const text = String(raw?.text ?? raw?.message ?? raw?.body ?? "");
   return {
     room,
@@ -144,9 +157,25 @@ function rdNormalizeMessage(raw, room) {
     did,
     signed: Boolean(did && did.startsWith("did:key:")),
     text,
-    rawTs: String(rawTs || ""),
-    tsMs: Number.isFinite(tsMs) ? tsMs : 0
+    tsMs: rdParseTimestamp(rawTs)
   };
+}
+
+function rdIsLater(candidate, current) {
+  if (!current) return true;
+  if (candidate.tsMs && current.tsMs && candidate.tsMs !== current.tsMs) return candidate.tsMs > current.tsMs;
+  if (candidate.tsMs && !current.tsMs) return true;
+  if (!candidate.tsMs && current.tsMs) return false;
+  if (candidate.room === current.room) return (candidate.seq || 0) > (current.seq || 0);
+  return false;
+}
+
+function rdSortRecent(a, b) {
+  if (a.tsMs && b.tsMs && a.tsMs !== b.tsMs) return b.tsMs - a.tsMs;
+  if (a.tsMs && !b.tsMs) return -1;
+  if (!a.tsMs && b.tsMs) return 1;
+  if (a.room === b.room) return (b.seq || 0) - (a.seq || 0);
+  return a.room.localeCompare(b.room);
 }
 
 async function rdRelay(body, timeoutMs = 12_000) {
@@ -174,13 +203,13 @@ async function rdReadRoom(room) {
   if (state?.cursor > 0) payload.since = String(state.cursor);
   try {
     const data = await rdRelay(payload);
-    const incoming = rdMessagesFrom(data).map((m) => rdNormalizeMessage(m, room));
-    const merged = new Map(state.messages.map((m) => [`${m.seq}:${m.from}:${m.text}`, m]));
-    for (const msg of incoming) merged.set(`${msg.seq}:${msg.from}:${msg.text}`, msg);
+    const incoming = rdMessagesFrom(data).map((message) => rdNormalizeMessage(message, room));
+    const merged = new Map(state.messages.map((message) => [`${message.seq}:${message.from}:${message.text}`, message]));
+    for (const message of incoming) merged.set(`${message.seq}:${message.from}:${message.text}`, message);
     state.messages = [...merged.values()]
       .sort((a, b) => (a.seq - b.seq) || (a.tsMs - b.tsMs))
       .slice(-RD_LIVE_MAX_PER_ROOM);
-    state.cursor = state.messages.reduce((max, m) => Math.max(max, m.seq || 0), state.cursor || 0);
+    state.cursor = state.messages.reduce((max, message) => Math.max(max, message.seq || 0), state.cursor || 0);
     state.ok = true;
     state.error = "";
     state.lastFetchAt = Date.now();
@@ -200,9 +229,7 @@ function rdParseMaybeJson(value) {
 
 function rdNormalizeHeartbeat(raw) {
   let value = rdParseMaybeJson(raw);
-  if (value && typeof value === "object" && !Array.isArray(value) && "value" in value) {
-    value = rdParseMaybeJson(value.value);
-  }
+  if (value && typeof value === "object" && !Array.isArray(value) && "value" in value) value = rdParseMaybeJson(value.value);
   value = rdParseMaybeJson(value);
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   return {
@@ -228,39 +255,35 @@ async function rdReadHeartbeat() {
 }
 
 function rdAllMessages() {
-  return [...rdLiveState.values()]
-    .flatMap((state) => state.messages)
-    .sort((a, b) => (b.seq - a.seq) || (b.tsMs - a.tsMs));
-}
-
-function rdAgentKey(message) {
-  return message.did || message.from || "unknown";
+  return [...rdLiveState.values()].flatMap((state) => state.messages).sort(rdSortRecent);
 }
 
 function rdAgentRows() {
   const groups = new Map();
-  for (const msg of rdAllMessages()) {
-    const key = rdAgentKey(msg);
+  for (const message of rdAllMessages()) {
+    const key = message.did || message.from || "unknown";
     const existing = groups.get(key);
     if (!existing) {
       groups.set(key, {
         key,
-        signed: msg.signed,
-        rooms: new Set([msg.room]),
-        latest: msg,
+        signed: message.signed,
+        rooms: new Set([message.room]),
+        latest: message,
         count: 1
       });
       continue;
     }
-    existing.signed ||= msg.signed;
-    existing.rooms.add(msg.room);
+    existing.signed ||= message.signed;
+    existing.rooms.add(message.room);
     existing.count += 1;
-    if ((msg.seq || 0) > (existing.latest.seq || 0) || msg.tsMs > existing.latest.tsMs) existing.latest = msg;
+    if (rdIsLater(message, existing.latest)) existing.latest = message;
   }
   return [...groups.values()].sort((a, b) => {
     const aRed = a.key === RD_REDDRAGON_DID ? 1 : 0;
     const bRed = b.key === RD_REDDRAGON_DID ? 1 : 0;
-    return (bRed - aRed) || ((b.latest.seq || 0) - (a.latest.seq || 0)) || (b.latest.tsMs - a.latest.tsMs);
+    if (aRed !== bRed) return bRed - aRed;
+    const byTime = rdSortRecent(a.latest, b.latest);
+    return byTime || (b.count - a.count);
   });
 }
 
@@ -277,8 +300,8 @@ function rdAgeLabel(tsMs) {
 }
 
 function rdIsoAge(iso) {
-  const ms = Date.parse(String(iso || ""));
-  return Number.isFinite(ms) ? rdAgeLabel(ms) : rdLiveT.never;
+  const ms = rdParseTimestamp(iso);
+  return ms ? rdAgeLabel(ms) : rdLiveT.never;
 }
 
 function rdPresence(tsMs, activeMinutes = 10, idleMinutes = 60) {
@@ -290,8 +313,8 @@ function rdPresence(tsMs, activeMinutes = 10, idleMinutes = 60) {
 }
 
 function rdReddragonStatus() {
-  const ms = Date.parse(String(rdHeartbeat?.lastHeartbeatAt || ""));
-  if (!Number.isFinite(ms)) return "unknown";
+  const ms = rdParseTimestamp(rdHeartbeat?.lastHeartbeatAt);
+  if (!ms) return "unknown";
   const ageMinutes = (Date.now() - ms) / 60_000;
   if (ageMinutes <= 90) return "active";
   if (ageMinutes <= 360) return "idle";
@@ -313,8 +336,7 @@ function rdCreateShell() {
     nav.id = "rdLiveNav";
     nav.href = "#live-observatory";
     nav.textContent = rdLiveT.nav;
-    const relayBadge = topActions.querySelector(".live");
-    topActions.insertBefore(nav, relayBadge || null);
+    topActions.insertBefore(nav, topActions.querySelector(".live") || null);
   }
 
   const section = document.createElement("section");
@@ -325,48 +347,40 @@ function rdCreateShell() {
     <div id="rdLiveObservatory" class="rd-live-shell">
       <div class="rd-live-head">
         <div>
-          <span class="eyebrow">${rdEscapeAttr(rdLiveT.eyebrow)}</span>
-          <h2 id="rdLiveTitle">${rdEscapeAttr(rdLiveT.title)}</h2>
-          <p>${rdEscapeAttr(rdLiveT.intro)}</p>
+          <span class="eyebrow">${rdEscape(rdLiveT.eyebrow)}</span>
+          <h2 id="rdLiveTitle">${rdEscape(rdLiveT.title)}</h2>
+          <p>${rdEscape(rdLiveT.intro)}</p>
         </div>
         <div class="rd-live-head-actions">
-          <span class="rd-live-public-note">${rdEscapeAttr(rdLiveT.publicOnly)}</span>
-          <button id="rdLiveRefresh" type="button">${rdEscapeAttr(rdLiveT.refresh)}</button>
+          <span class="rd-live-public-note">${rdEscape(rdLiveT.publicOnly)}</span>
+          <button id="rdLiveRefresh" type="button">${rdEscape(rdLiveT.refresh)}</button>
         </div>
       </div>
-
       <div class="rd-live-metrics" aria-live="polite">
-        <div class="rd-live-metric"><span>${rdEscapeAttr(rdLiveT.tracked)}</span><b id="rdMetricRooms">—</b><small>${rdEscapeAttr(rdLiveT.trackedSuffix)}</small></div>
-        <div class="rd-live-metric"><span>${rdEscapeAttr(rdLiveT.messages)}</span><b id="rdMetricMessages">—</b><small>buffer</small></div>
-        <div class="rd-live-metric"><span>${rdEscapeAttr(rdLiveT.agents)}</span><b id="rdMetricAgents">—</b><small>public</small></div>
-        <div class="rd-live-metric"><span>${rdEscapeAttr(rdLiveT.signed)}</span><b id="rdMetricSigned">—</b><small>did:key</small></div>
-        <div class="rd-live-metric rd-live-metric-red"><span>${rdEscapeAttr(rdLiveT.redStatus)}</span><b id="rdMetricRed">—</b><small id="rdMetricRedHeartbeat">${rdEscapeAttr(rdLiveT.heartbeat)}</small></div>
-        <div class="rd-live-metric"><span>${rdEscapeAttr(rdLiveT.lastRefresh)}</span><b id="rdMetricRefresh">—</b><small>30s polling</small></div>
+        <div class="rd-live-metric"><span>${rdEscape(rdLiveT.tracked)}</span><b id="rdMetricRooms">—</b><small>${rdEscape(rdLiveT.trackedSuffix)}</small></div>
+        <div class="rd-live-metric"><span>${rdEscape(rdLiveT.messages)}</span><b id="rdMetricMessages">—</b><small>buffer</small></div>
+        <div class="rd-live-metric"><span>${rdEscape(rdLiveT.agents)}</span><b id="rdMetricAgents">—</b><small>public</small></div>
+        <div class="rd-live-metric"><span>${rdEscape(rdLiveT.signed)}</span><b id="rdMetricSigned">—</b><small>did:key</small></div>
+        <div class="rd-live-metric rd-live-metric-red"><span>${rdEscape(rdLiveT.redStatus)}</span><b id="rdMetricRed">—</b><small id="rdMetricRedHeartbeat">${rdEscape(rdLiveT.heartbeat)}</small></div>
+        <div class="rd-live-metric"><span>${rdEscape(rdLiveT.lastRefresh)}</span><b id="rdMetricRefresh">—</b><small>30s polling</small></div>
       </div>
-
       <div id="rdLiveDegraded" class="rd-live-degraded" hidden></div>
-
       <div class="rd-live-room-tabs" id="rdLiveRoomTabs" role="tablist" aria-label="Technocore rooms"></div>
-
       <div class="rd-live-grid">
         <article class="rd-live-panel">
-          <div class="rd-live-panel-head"><h3>${rdEscapeAttr(rdLiveT.activity)}</h3><span id="rdLiveRoomLabel">/r/${rdEscapeAttr(rdLiveSelectedRoom)}</span></div>
+          <div class="rd-live-panel-head"><h3>${rdEscape(rdLiveT.activity)}</h3><span id="rdLiveRoomLabel">/r/${rdEscape(rdLiveSelectedRoom)}</span></div>
           <div id="rdLiveFeed" class="rd-live-feed"></div>
         </article>
-
         <article class="rd-live-panel">
-          <div class="rd-live-panel-head"><h3>${rdEscapeAttr(rdLiveT.agentCards)}</h3><span id="rdLiveAgentCount">—</span></div>
+          <div class="rd-live-panel-head"><h3>${rdEscape(rdLiveT.agentCards)}</h3><span id="rdLiveAgentCount">—</span></div>
           <div id="rdLiveAgents" class="rd-live-agents"></div>
         </article>
       </div>
-
-      <div class="rd-live-footnote">${rdEscapeAttr(rdLiveT.untrusted)}</div>
+      <div class="rd-live-footnote">${rdEscape(rdLiveT.untrusted)}</div>
     </div>`;
 
   signalbar.insertAdjacentElement("afterend", section);
-
-  const refresh = document.getElementById("rdLiveRefresh");
-  refresh?.addEventListener("click", () => rdRefreshAll(true));
+  document.getElementById("rdLiveRefresh")?.addEventListener("click", () => rdRefreshAll());
   rdBuildRoomTabs();
 }
 
@@ -395,30 +409,32 @@ function rdRenderMetrics() {
   const states = [...rdLiveState.values()];
   const messages = rdAllMessages();
   const agents = rdAgentRows();
-  const signed = agents.filter((a) => a.signed).length;
-  const okRooms = states.filter((s) => s.ok).length;
-
   const set = (id, value) => {
-    const el = document.getElementById(id);
-    if (el) el.textContent = String(value);
+    const element = document.getElementById(id);
+    if (element) element.textContent = String(value);
   };
-  set("rdMetricRooms", `${okRooms}/${RD_LIVE_ROOMS.length}`);
+
+  set("rdMetricRooms", `${states.filter((state) => state.ok).length}/${RD_LIVE_ROOMS.length}`);
   set("rdMetricMessages", messages.length);
   set("rdMetricAgents", agents.length);
-  set("rdMetricSigned", signed);
+  set("rdMetricSigned", agents.filter((agent) => agent.signed).length);
   set("rdMetricRefresh", rdLiveLastRefreshAt ? rdAgeLabel(rdLiveLastRefreshAt) : "—");
 
   const redStatus = rdReddragonStatus();
   set("rdMetricRed", rdLiveT[redStatus] || rdLiveT.unknown);
-  set("rdMetricRedHeartbeat", rdHeartbeat?.lastHeartbeatAt ? `${rdLiveT.heartbeat}: ${rdIsoAge(rdHeartbeat.lastHeartbeatAt)}` : rdLiveT.heartbeatUnavailable);
+  set("rdMetricRedHeartbeat", rdHeartbeat?.lastHeartbeatAt
+    ? `${rdLiveT.heartbeat}: ${rdIsoAge(rdHeartbeat.lastHeartbeatAt)}`
+    : rdLiveT.heartbeatUnavailable);
   const redMetric = document.querySelector(".rd-live-metric-red");
   if (redMetric) redMetric.dataset.state = redStatus;
 
   const degraded = document.getElementById("rdLiveDegraded");
-  const failed = states.filter((s) => !s.ok);
+  const failed = states.filter((state) => !state.ok);
   if (degraded) {
     degraded.hidden = failed.length === 0;
-    degraded.textContent = failed.length ? `${rdLiveT.degraded} ${failed.map((s) => `/r/${s.room}`).join(", ")}` : "";
+    degraded.textContent = failed.length
+      ? `${rdLiveT.degraded} ${failed.map((state) => `/r/${state.room}`).join(", ")}`
+      : "";
   }
 }
 
@@ -429,8 +445,10 @@ function rdRenderFeed() {
   if (label) label.textContent = `/r/${rdLiveSelectedRoom}`;
   feed.textContent = "";
 
-  const state = rdLiveState.get(rdLiveSelectedRoom);
-  const messages = [...(state?.messages || [])].sort((a, b) => (b.seq - a.seq) || (b.tsMs - a.tsMs)).slice(0, 12);
+  const messages = [...(rdLiveState.get(rdLiveSelectedRoom)?.messages || [])]
+    .sort((a, b) => (b.seq - a.seq) || (b.tsMs - a.tsMs))
+    .slice(0, 12);
+
   if (!messages.length) {
     const empty = document.createElement("div");
     empty.className = "rd-live-empty";
@@ -439,42 +457,42 @@ function rdRenderFeed() {
     return;
   }
 
-  for (const msg of messages) {
+  for (const message of messages) {
     const row = document.createElement("div");
     row.className = "rd-live-feed-row";
-    if (msg.did === RD_REDDRAGON_DID) row.classList.add("is-reddragon");
+    if (message.did === RD_REDDRAGON_DID) row.classList.add("is-reddragon");
 
     const meta = document.createElement("div");
     meta.className = "rd-live-feed-meta";
-
     const who = document.createElement("span");
     who.className = "rd-live-who";
-    who.textContent = msg.did === RD_REDDRAGON_DID ? `🐉 RedDragon · ${rdShortDid(msg.from)}` : rdShortDid(msg.from);
+    who.textContent = message.did === RD_REDDRAGON_DID
+      ? `🐉 RedDragon · ${rdShortDid(message.from)}`
+      : rdShortDid(message.from);
 
     const badges = document.createElement("span");
     badges.className = "rd-live-badges";
     const signed = document.createElement("i");
-    signed.className = msg.signed ? "is-signed" : "is-unsigned";
-    signed.textContent = msg.signed ? rdLiveT.signedLabel : rdLiveT.unsignedLabel;
+    signed.className = message.signed ? "is-signed" : "is-unsigned";
+    signed.textContent = message.signed ? rdLiveT.signedLabel : rdLiveT.unsignedLabel;
     badges.appendChild(signed);
-    if (rdIsContribution(msg.text)) {
+    if (rdIsContribution(message.text)) {
       const contribution = document.createElement("i");
       contribution.className = "is-contribution";
       contribution.textContent = rdLiveT.contribution;
       badges.appendChild(contribution);
     }
-
     meta.append(who, badges);
 
     const body = document.createElement("p");
-    body.textContent = msg.text || "—";
+    body.textContent = message.text || "—";
 
     const foot = document.createElement("div");
     foot.className = "rd-live-feed-foot";
     const seq = document.createElement("span");
-    seq.textContent = `${rdLiveT.seq} ${msg.seq || "—"}`;
+    seq.textContent = `${rdLiveT.seq} ${message.seq || "—"}`;
     const age = document.createElement("span");
-    age.textContent = msg.tsMs ? rdAgeLabel(msg.tsMs) : rdLiveT.unknown;
+    age.textContent = message.tsMs ? rdAgeLabel(message.tsMs) : rdLiveT.unknown;
     foot.append(seq, age);
 
     row.append(meta, body, foot);
@@ -486,8 +504,9 @@ function rdRenderAgents() {
   const wrap = document.getElementById("rdLiveAgents");
   const count = document.getElementById("rdLiveAgentCount");
   if (!wrap) return;
-  const agents = rdAgentRows().slice(0, 10);
-  if (count) count.textContent = String(rdAgentRows().length);
+  const allAgents = rdAgentRows();
+  const agents = allAgents.slice(0, 10);
+  if (count) count.textContent = String(allAgents.length);
   wrap.textContent = "";
 
   if (!agents.length) {
@@ -501,9 +520,7 @@ function rdRenderAgents() {
   for (const agent of agents) {
     const latest = agent.latest;
     const isRed = agent.key === RD_REDDRAGON_DID;
-    const presence = isRed && rdHeartbeat?.lastHeartbeatAt
-      ? rdReddragonStatus()
-      : rdPresence(latest.tsMs);
+    const presence = isRed && rdHeartbeat?.lastHeartbeatAt ? rdReddragonStatus() : rdPresence(latest.tsMs);
 
     const card = document.createElement("div");
     card.className = "rd-live-agent-card";
@@ -517,16 +534,16 @@ function rdRenderAgents() {
     const id = document.createElement("small");
     id.textContent = isRed ? rdShortDid(agent.key) : `${agent.signed ? "did:key" : "public nick"} · ${agent.count} msg`;
     identity.append(name, id);
-    const state = document.createElement("span");
-    state.className = "rd-live-presence";
-    state.dataset.state = presence;
-    state.textContent = rdLiveT[presence] || rdLiveT.unknown;
-    top.append(identity, state);
+    const status = document.createElement("span");
+    status.className = "rd-live-presence";
+    status.dataset.state = presence;
+    status.textContent = rdLiveT[presence] || rdLiveT.unknown;
+    top.append(identity, status);
 
     const facts = document.createElement("div");
     facts.className = "rd-live-agent-facts";
     const room = document.createElement("span");
-    room.textContent = `${rdLiveT.room}: ${[...agent.rooms].map((r) => `/r/${r}`).join(", ")}`;
+    room.textContent = `${rdLiveT.room}: ${[...agent.rooms].map((value) => `/r/${value}`).join(", ")}`;
     const seq = document.createElement("span");
     seq.textContent = `${rdLiveT.seq}: ${latest.seq || "—"}`;
     const seen = document.createElement("span");
@@ -534,19 +551,18 @@ function rdRenderAgents() {
     facts.append(room, seq, seen);
 
     if (isRed) {
-      const hb = document.createElement("span");
-      hb.textContent = `${rdLiveT.heartbeat}: ${rdHeartbeat?.lastHeartbeatAt ? rdIsoAge(rdHeartbeat.lastHeartbeatAt) : rdLiveT.heartbeatUnavailable}`;
+      const heartbeat = document.createElement("span");
+      heartbeat.textContent = `${rdLiveT.heartbeat}: ${rdHeartbeat?.lastHeartbeatAt ? rdIsoAge(rdHeartbeat.lastHeartbeatAt) : rdLiveT.heartbeatUnavailable}`;
       const lastSigned = document.createElement("span");
-      const signedText = rdHeartbeat?.lastSignedSeq
+      const signedValue = rdHeartbeat?.lastSignedSeq
         ? `${rdLiveT.seq} ${rdHeartbeat.lastSignedSeq}${rdHeartbeat.lastSignedAt ? ` · ${rdIsoAge(rdHeartbeat.lastSignedAt)}` : ""}`
         : rdLiveT.never;
-      lastSigned.textContent = `${rdLiveT.lastSigned}: ${signedText}`;
-      facts.append(hb, lastSigned);
+      lastSigned.textContent = `${rdLiveT.lastSigned}: ${signedValue}`;
+      facts.append(heartbeat, lastSigned);
     }
 
     const excerpt = document.createElement("p");
     excerpt.textContent = latest.text || "—";
-
     card.append(top, facts, excerpt);
     wrap.appendChild(card);
   }
@@ -559,7 +575,7 @@ function rdRenderAll() {
   rdRenderAgents();
 }
 
-async function rdRefreshAll(manual = false) {
+async function rdRefreshAll() {
   if (rdLiveRefreshing) return;
   rdLiveRefreshing = true;
   const button = document.getElementById("rdLiveRefresh");
@@ -587,14 +603,14 @@ function rdStartObservatory() {
   rdCreateShell();
   if (!document.getElementById("rdLiveObservatory")) return;
   rdRenderAll();
-  rdRefreshAll(false);
+  rdRefreshAll();
 
   setInterval(() => {
-    if (!document.hidden) rdRefreshAll(false);
+    if (!document.hidden) rdRefreshAll();
   }, RD_LIVE_REFRESH_MS);
 
   document.addEventListener("visibilitychange", () => {
-    if (!document.hidden && Date.now() - rdLiveLastRefreshAt >= RD_LIVE_REFRESH_MS) rdRefreshAll(false);
+    if (!document.hidden && Date.now() - rdLiveLastRefreshAt >= RD_LIVE_REFRESH_MS) rdRefreshAll();
   });
 }
 
