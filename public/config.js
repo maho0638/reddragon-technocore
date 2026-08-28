@@ -1,3 +1,7 @@
+// Legacy progress was global and could leak an old percentage into a fresh/no-DID session.
+// Per-DID public state remains stored separately and is restored by the dedicated modules below.
+try { localStorage.removeItem("reddragon-progress"); } catch {}
+
 window.APP_CONFIG = {
   brandName: "RedDragon",
   productName: "Technocore Agent Lab",
@@ -33,7 +37,8 @@ window.APP_CONFIG = {
     "/contribution-edit-fix.js",
     "/activity-proof.js",
     "/language-final.js",
-    "/final-fixes.js"
+    "/final-fixes.js",
+    "/progress-scope-fix.js"
   ]) {
     const script = document.createElement("script");
     script.type = "module";
