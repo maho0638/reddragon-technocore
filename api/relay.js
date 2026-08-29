@@ -37,6 +37,35 @@ async function pass(res, r) {
   return res.send(body);
 }
 
+function unwrapNoteBody(body) {
+  let value = String(body || "").trim();
+  if (value.startsWith("!! UNTRUSTED CONTENT")) {
+    const split = value.indexOf("\n\n");
+    if (split >= 0) value = value.slice(split + 2).trim();
+  }
+
+  // Heartbeat/state notes are JSON objects. Technocore may append its own read-budget
+  // footer after the stored value, so return exactly the object when one is present.
+  // Plain-text notes are otherwise passed through unchanged after removing the banner.
+  if (value.startsWith("{")) {
+    const end = value.lastIndexOf("}");
+    if (end >= 0) value = value.slice(0, end + 1);
+  }
+  return value;
+}
+
+async function passNoteValue(res, r) {
+  const body = await r.text();
+  harden(res);
+  const retryAfter = r.headers.get("retry-after");
+  if (retryAfter) res.setHeader("retry-after", retryAfter);
+  if (!r.ok) {
+    res.status(r.status).setHeader("content-type", r.headers.get("content-type") || "text/plain; charset=utf-8");
+    return res.send(body);
+  }
+  return res.status(r.status).setHeader("content-type", "text/plain; charset=utf-8").send(unwrapNoteBody(body));
+}
+
 async function passSigned(res, r) {
   const body = await r.text();
   harden(res);
@@ -139,7 +168,7 @@ export default async function handler(req, res) {
           headers: { accept: "text/plain,application/json" }
         });
       }
-      return pass(res, r);
+      return passNoteValue(res, r);
     }
 
     return bad(res, 400, "Unknown action");
