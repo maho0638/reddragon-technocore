@@ -57,7 +57,7 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function request(url, options = {}, attempts = 3) {
+async function request(url, options = {}, attempts = 5) {
   let lastError;
   for (let attempt = 1; attempt <= attempts; attempt++) {
     try {
@@ -107,9 +107,30 @@ function recentOwnMessage(messages) {
   return Number.isFinite(ts) ? { ...latest, tsMs: ts } : latest;
 }
 
+function unwrapTechnocoreNote(value) {
+  if (typeof value !== "string") return value;
+  let text = value.trim();
+
+  // Official Technocore note reads are plain text and intentionally prepend the
+  // UNTRUSTED CONTENT banner before the stored value. The value itself is our JSON.
+  if (text.startsWith("!! UNTRUSTED CONTENT")) {
+    const split = text.indexOf("\n\n");
+    if (split >= 0) text = text.slice(split + 2).trim();
+  }
+
+  // A low read budget can append a caller-specific pacing footer after the note.
+  // Our stored heartbeat JSON is one object, so keep only that object when present.
+  const firstBrace = text.indexOf("{");
+  const lastBrace = text.lastIndexOf("}");
+  if (firstBrace >= 0 && lastBrace > firstBrace) {
+    return text.slice(firstBrace, lastBrace + 1);
+  }
+  return text;
+}
+
 function parseMaybeJson(value) {
   if (typeof value !== "string") return value;
-  const trimmed = value.trim();
+  const trimmed = String(unwrapTechnocoreNote(value) || "").trim();
   if (!trimmed) return null;
   try { return JSON.parse(trimmed); } catch { return trimmed; }
 }
