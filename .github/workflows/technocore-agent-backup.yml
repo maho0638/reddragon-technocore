@@ -41,19 +41,17 @@ jobs:
           TECHNOCORE_POST_ENABLED: ${{ vars.TECHNOCORE_POST_ENABLED != 'false' && 'true' || 'false' }}
         shell: bash
         run: |
-          # The agent already retries each HTTP request internally. The backup
-          # workflow adds a second retry layer so a short Technocore 5xx/network
-          # outage does not immediately turn into a failed backup run. Real
-          # persistent errors (bad secret/config/code) still fail after 3 tries.
+          # The script retries individual HTTP calls internally. This outer retry
+          # absorbs short Technocore 5xx/network outages without hiding persistent
+          # secret/config/code failures.
+          status=1
           for attempt in 1 2 3; do
             echo "Backup agent attempt ${attempt}/3"
-            if node scripts/technocore-agent.mjs; then
-              exit 0
-            fi
-
+            node scripts/technocore-agent.mjs && exit 0
             status=$?
+
             if [ "$attempt" -eq 3 ]; then
-              echo "Backup agent failed after 3 attempts."
+              echo "Backup agent failed after 3 attempts (exit ${status})."
               exit "$status"
             fi
 
@@ -61,3 +59,5 @@ jobs:
             echo "Attempt ${attempt} failed; waiting ${wait_seconds}s before retry."
             sleep "$wait_seconds"
           done
+
+          exit "$status"
