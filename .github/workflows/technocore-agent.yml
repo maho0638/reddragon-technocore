@@ -42,4 +42,25 @@ jobs:
           TECHNOCORE_AGENT_MESSAGE: ${{ vars.TECHNOCORE_AGENT_MESSAGE || 'RedDragon agent check-in' }}
           TECHNOCORE_MIN_POST_HOURS: ${{ vars.TECHNOCORE_MIN_POST_HOURS || '12' }}
           TECHNOCORE_POST_ENABLED: ${{ vars.TECHNOCORE_POST_ENABLED != 'false' && 'true' || 'false' }}
-        run: node scripts/technocore-agent.mjs
+        shell: bash
+        run: |
+          # The script retries individual HTTP calls internally. This outer retry
+          # absorbs short Technocore 5xx/network outages without hiding persistent
+          # secret/config/code failures.
+          status=1
+          for attempt in 1 2 3; do
+            echo "Primary agent attempt ${attempt}/3"
+            node scripts/technocore-agent.mjs && exit 0
+            status=$?
+
+            if [ "$attempt" -eq 3 ]; then
+              echo "Primary agent failed after 3 attempts (exit ${status})."
+              exit "$status"
+            fi
+
+            wait_seconds=$((attempt * 20))
+            echo "Attempt ${attempt} failed; waiting ${wait_seconds}s before retry."
+            sleep "$wait_seconds"
+          done
+
+          exit "$status"
