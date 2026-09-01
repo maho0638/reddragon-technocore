@@ -1,4 +1,5 @@
 import { createHash, createPrivateKey, createPublicKey, sign as nodeSign } from "node:crypto";
+import { readFile } from "node:fs/promises";
 
 const BASE = "https://technocore.chat";
 const configuredDid = (process.env.TECHNOCORE_DID || "").trim();
@@ -7,9 +8,21 @@ const room = (process.env.TECHNOCORE_AGENT_ROOM || "lobby").trim();
 const message = clean(process.env.TECHNOCORE_AGENT_MESSAGE || "RedDragon agent check-in");
 const postEnabled = String(process.env.TECHNOCORE_POST_ENABLED || "false").toLowerCase() === "true";
 const minPostHours = Math.max(0.5, Number(process.env.TECHNOCORE_MIN_POST_HOURS || "12"));
+const contributionRoom = (process.env.TECHNOCORE_CONTRIBUTION_ROOM || "d-reddragon-lab").trim();
+const mailbox = (process.env.TECHNOCORE_AGENT_MAILBOX || "mb-reddragon-agent").trim();
+const siteUrl = clean(process.env.TECHNOCORE_TOOL_URL || "https://reddragon-technocore.vercel.app");
+const repoUrl = clean(process.env.TECHNOCORE_TOOL_REPO || "https://github.com/maho0638/reddragon-technocore");
+const contributionMarker = "REDDRAGON_TOOL_V1";
+const mailboxMarker = "REDDRAGON_MAILBOX_V1";
+const manifestPath = new URL("../public/reddragon-contribution.json", import.meta.url);
+const NAME_RE = /^[a-z0-9][a-z0-9_-]{0,47}$/;
+const OWNED_ROOM_RE = /^d-[a-z0-9][a-z0-9_-]{0,45}$/;
+const MAILBOX_RE = /^mb-[a-z0-9][a-z0-9_-]{0,44}$/;
 
 if (!keyB64) throw new Error("Missing TECHNOCORE_PRIVATE_KEY_PKCS8_B64");
-if (!/^[a-z0-9][a-z0-9_-]{0,47}$/.test(room)) throw new Error("Invalid TECHNOCORE_AGENT_ROOM");
+if (!NAME_RE.test(room)) throw new Error("Invalid TECHNOCORE_AGENT_ROOM");
+if (!OWNED_ROOM_RE.test(contributionRoom)) throw new Error("Invalid TECHNOCORE_CONTRIBUTION_ROOM");
+if (!MAILBOX_RE.test(mailbox)) throw new Error("Invalid TECHNOCORE_AGENT_MAILBOX");
 if (!message) throw new Error("Missing TECHNOCORE_AGENT_MESSAGE");
 if (message.length > 4096) throw new Error("TECHNOCORE_AGENT_MESSAGE is too long");
 
@@ -79,12 +92,17 @@ async function request(url, options = {}, attempts = 5) {
   throw lastError || new Error("Request failed");
 }
 
-async function getRoom() {
-  const { r, text } = await request(`${BASE}/r/${encodeURIComponent(room)}?format=json&limit=200`, {
+async function getRoomByName(targetRoom, allowMissing = false) {
+  const { r, text } = await request(`${BASE}/r/${encodeURIComponent(targetRoom)}?format=json&limit=200`, {
     headers: { accept: "application/json" }
   });
+  if (allowMissing && r.status === 404) return { messages: [] };
   if (!r.ok) throw new Error(`Read failed ${r.status}: ${text}`);
   try { return JSON.parse(text); } catch { throw new Error("Technocore returned invalid room JSON"); }
+}
+
+async function getRoom() {
+  return getRoomByName(room, false);
 }
 
 function messagesFrom(data) {
@@ -92,6 +110,15 @@ function messagesFrom(data) {
   if (Array.isArray(data?.messages)) return data.messages;
   if (Array.isArray(data?.items)) return data.items;
   return [];
+}
+
+function messageDid(message) {
+  const from = String(message?.from || "");
+  return String(message?.did || (from.startsWith("did:key:") ? from : ""));
+}
+
+function messageText(message) {
+  return String(message?.text ?? message?.message ?? message?.body ?? "");
 }
 
 function lastSeq(messages) {
@@ -111,15 +138,14 @@ function unwrapTechnocoreNote(value) {
   if (typeof value !== "string") return value;
   let text = value.trim();
 
-  // Official Technocore note reads are plain text and intentionally prepend the
-  // UNTRUSTED CONTENT banner before the stored value. The value itself is our JSON.
   if (text.startsWith("!! UNTRUSTED CONTENT")) {
     const split = text.indexOf("\n\n");
     if (split >= 0) text = text.slice(split + 2).trim();
   }
 
-  // A low read budget can append a caller-specific pacing footer after the note.
-  // Our stored heartbeat JSON is one object, so keep only that object when present.
+  const budgetFooter = text.indexOf("\n# budget:");
+  if (budgetFooter >= 0) text = text.slice(0, budgetFooter).trim();
+
   const firstBrace = text.indexOf("{");
   const lastBrace = text.lastIndexOf("}");
   if (firstBrace >= 0 && lastBrace > firstBrace) {
@@ -159,13 +185,29 @@ function normalizeHeartbeatState(raw) {
   };
 }
 
-async function readHeartbeatState() {
-  const { r, text } = await request(`${BASE}/kv/${encodeURIComponent(room)}/${encodeURIComponent(heartbeatKey)}`, {
-    headers: { accept: "application/json,text/plain" }
+async function readNote(ns, key) {
+  const { r, text } = await request(`${BASE}/kv/${encodeURIComponent(ns)}/${encodeURIComponent(key)}`, {
+    headers: { accept: "text/plain,application/json" }
   });
-  if (r.status === 404) return { version: 2, lastRoomSeq: 0 };
-  if (!r.ok) throw new Error(`Heartbeat state read failed ${r.status}: ${text}`);
-  return normalizeHeartbeatState(text);
+  if (r.status === 404) return null;
+  if (!r.ok) throw new Error(`Note read failed ${r.status}: ${text}`);
+  return String(unwrapTechnocoreNote(text) || "").trim();
+}
+
+async function writeNote(ns, key, value) {
+  const normalized = clean(value);
+  const { r, text } = await request(`${BASE}/kv/${encodeURIComponent(ns)}/${encodeURIComponent(key)}`, {
+    method: "POST",
+    headers: { "content-type": "application/json", accept: "text/plain,application/json" },
+    body: JSON.stringify({ value: normalized })
+  });
+  if (!r.ok) throw new Error(`Note write failed ${r.status}: ${text}`);
+}
+
+async function readHeartbeatState() {
+  const raw = await readNote(room, heartbeatKey);
+  if (raw == null) return { version: 2, lastRoomSeq: 0 };
+  return normalizeHeartbeatState(raw);
 }
 
 async function writeHeartbeatState(state) {
@@ -197,12 +239,16 @@ function futureMs(iso) {
   return Number.isFinite(ts) ? ts - Date.now() : -1;
 }
 
-async function signedPost(text) {
+function signPayload(text) {
+  return nodeSign(null, Buffer.from(text, "utf8"), privateKey).toString("base64url");
+}
+
+async function signedPostTo(targetRoom, text) {
   const normalized = clean(text);
   const nonce = String(Date.now());
-  const payload = Buffer.from(`${room}|${nonce}|${normalized}`, "utf8");
-  const sig = nodeSign(null, payload, privateKey).toString("base64url");
-  const { r, text: body } = await request(`${BASE}/r/${encodeURIComponent(room)}?format=json`, {
+  const payload = `${targetRoom}|${nonce}|${normalized}`;
+  const sig = signPayload(payload);
+  const { r, text: body } = await request(`${BASE}/r/${encodeURIComponent(targetRoom)}?format=json`, {
     method: "POST",
     headers: { "content-type": "application/json", accept: "application/json,text/plain" },
     body: JSON.stringify({ did, sig, nonce, text: normalized })
@@ -217,8 +263,105 @@ async function signedPost(text) {
     const match = body.match(/\bseq\D+(\d+)\b/i);
     acceptedSeq = match ? Number(match[1]) : null;
   }
-  console.log(`Signed post accepted${acceptedSeq ? `: seq ${acceptedSeq}` : ""}.`);
+  console.log(`Signed post accepted in ${targetRoom}${acceptedSeq ? `: seq ${acceptedSeq}` : ""}.`);
   return { seq: acceptedSeq, nonce };
+}
+
+async function signedPost(text) {
+  return signedPostTo(room, text);
+}
+
+function extractDid(value) {
+  const match = String(value || "").match(/did:key:z6Mk[1-9A-HJ-NP-Za-km-z]+/);
+  return match ? match[0] : "";
+}
+
+async function ensureOwnedContributionRoom() {
+  const current = await readNote("room-owners", contributionRoom);
+  const currentOwner = extractDid(current);
+  if (currentOwner) {
+    if (currentOwner !== did) throw new Error(`${contributionRoom} is already owned by another DID`);
+    console.log(`Contribution room ownership verified: ${contributionRoom}`);
+    return;
+  }
+
+  const nonce = String(Date.now());
+  const value = did;
+  const sig = signPayload(`room-owners|${contributionRoom}|${nonce}|${value}`);
+  const url = `${BASE}/kv/room-owners/${encodeURIComponent(contributionRoom)}/set-signed/${encodeURIComponent(did)}/${encodeURIComponent(sig)}/${encodeURIComponent(nonce)}/${encodeURIComponent(value)}?if_absent=1`;
+  const { r, text } = await request(url, { headers: { accept: "text/plain,application/json" } });
+  if (r.status === 409) {
+    const ownerAfterConflict = extractDid(await readNote("room-owners", contributionRoom));
+    if (ownerAfterConflict === did) {
+      console.log(`Contribution room ownership already held by this DID: ${contributionRoom}`);
+      return;
+    }
+  }
+  if (!r.ok) throw new Error(`Owned-room claim failed ${r.status}: ${text}`);
+  console.log(`Signed owned-room claim created: ${contributionRoom}`);
+}
+
+async function ensureDidDirectoryMailbox() {
+  const shard = fingerprint.slice(0, 2);
+  const key = fingerprint.slice(2);
+  const ns = `did-${shard}`;
+  const current = await readNote(ns, key);
+  const currentText = String(current || "").trim();
+  const preserved = currentText.startsWith(did)
+    ? currentText.split(/\s+/).filter((token) => token !== did && !/^(mailbox|site|repo):/.test(token))
+    : [];
+  const desired = [did, ...preserved, `mailbox:${mailbox}`, `site:${siteUrl}`, `repo:${repoUrl}`].join(" ");
+  if (currentText === desired) {
+    console.log(`DID directory already advertises mailbox: ${mailbox}`);
+    return;
+  }
+  await writeNote(ns, key, desired);
+  console.log(`DID directory updated with mailbox + tool URL: ${ns}/${key}`);
+}
+
+async function contributionManifest() {
+  const bytes = await readFile(manifestPath);
+  const data = JSON.parse(bytes.toString("utf8"));
+  if (data?.did !== did) throw new Error("Contribution manifest DID does not match agent DID");
+  if (data?.ownedRoom !== contributionRoom) throw new Error("Contribution manifest ownedRoom does not match agent configuration");
+  if (data?.mailbox !== mailbox) throw new Error("Contribution manifest mailbox does not match agent configuration");
+  if (data?.site !== siteUrl) throw new Error("Contribution manifest site does not match agent configuration");
+  return { data, hash: createHash("sha256").update(bytes).digest("hex") };
+}
+
+async function ensureSignedToolManifest() {
+  const { hash } = await contributionManifest();
+  const data = await getRoomByName(contributionRoom, true);
+  const already = messagesFrom(data).some((item) => {
+    const text = messageText(item);
+    return messageDid(item) === did && text.includes(contributionMarker) && text.includes(`manifest_sha256=${hash}`);
+  });
+  if (already) {
+    console.log(`Signed tool manifest already present: ${hash.slice(0, 12)}…`);
+    return;
+  }
+
+  const text = `${contributionMarker} site=${siteUrl} repo=${repoUrl} manifest=/reddragon-contribution.json manifest_sha256=${hash} mailbox=${mailbox} purpose=public_observatory,did_verifier,signed_mailbox`;
+  await signedPostTo(contributionRoom, text);
+  console.log(`Signed tool manifest published: ${hash}`);
+}
+
+async function ensureSignedMailbox() {
+  const data = await getRoomByName(mailbox, true);
+  const ready = messagesFrom(data).some((item) => messageDid(item) === did && messageText(item).includes(mailboxMarker));
+  if (ready) {
+    console.log(`Signed mailbox ready: ${mailbox}`);
+    return;
+  }
+  await signedPostTo(mailbox, `${mailboxMarker} recipient=${did} site=${siteUrl} purpose=signed-agent-collaboration-inbox`);
+  console.log(`Signed mailbox initialized: ${mailbox}`);
+}
+
+async function ensureContributionIdentity() {
+  await ensureOwnedContributionRoom();
+  await ensureDidDirectoryMailbox();
+  await ensureSignedToolManifest();
+  await ensureSignedMailbox();
 }
 
 const data = await getRoom();
@@ -229,6 +372,14 @@ state.lastRoomSeq = seq;
 state.lastHeartbeatAt = new Date().toISOString();
 state = await writeHeartbeatState(state);
 console.log(`Heartbeat updated: ${room}/${heartbeatKey} -> ${seq || 0}`);
+
+try {
+  await ensureContributionIdentity();
+} catch (error) {
+  // The provenance/collaboration layer is useful but must not turn a healthy heartbeat
+  // into a failed workflow during a temporary Technocore outage. It retries next run.
+  console.warn(`Contribution identity sync deferred: ${error?.message || error}`);
+}
 
 if (!postEnabled) {
   console.log("Read/heartbeat run complete; signed posting disabled for this run.");
@@ -247,8 +398,6 @@ if (durableAge < minPostHours) {
   process.exit(0);
 }
 
-// Secondary guard: if a recent message is still visible in the room tail, use it to
-// repair durable state and prevent a duplicate even if an earlier state write failed.
 const last = recentOwnMessage(messages);
 if (last?.tsMs) {
   const visibleAge = (Date.now() - last.tsMs) / 3_600_000;
@@ -261,8 +410,6 @@ if (last?.tsMs) {
   }
 }
 
-// Acquire a durable public lock before posting. If the post succeeds but the final
-// state write fails, the lock still prevents an immediate duplicate on the next run.
 const now = Date.now();
 state.postLockUntil = new Date(now + minPostHours * 3_600_000).toISOString();
 state = await writeHeartbeatState(state);
@@ -277,13 +424,9 @@ try {
     await writeHeartbeatState(state);
     console.log(`Durable signed state saved${posted.seq ? `: seq ${posted.seq}` : ""}.`);
   } catch (error) {
-    // Do not fail/retry the workflow after a successful signed post: the pre-post
-    // durable lock is already in place and is safer than risking a duplicate.
     console.warn(`Signed post succeeded but final state update failed: ${error?.message || error}`);
   }
 } catch (error) {
-  // A failed post may be retried later. Shorten the lock to 30 minutes when possible;
-  // if this cleanup itself fails, the original 12h lock fails safely by suppressing spam.
   state.postLockUntil = new Date(Date.now() + 30 * 60_000).toISOString();
   try { await writeHeartbeatState(state); } catch {}
   throw error;
