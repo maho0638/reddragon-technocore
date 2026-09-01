@@ -28,6 +28,11 @@ window.APP_CONFIG = {
   siteUrl: "https://reddragon-technocore.vercel.app",
   technocoreBase: "https://technocore.chat",
   technocoreHumanUrl: "https://technocore.chat/humans",
+  technocoreDid: "did:key:z6MkuhrsP4tDZjWYdZLPxaur19WvrF1yuLGsGB2S8Q1gwS6K",
+  technocoreFingerprint: "835ae177c258e121",
+  technocoreOwnedRoom: "d-reddragon-lab",
+  technocoreMailbox: "mb-reddragon-agent",
+  contributionManifestUrl: "/reddragon-contribution.json",
   flopUrl: "https://flop.finance",
   flopXUrl: "https://x.com/flop_labs",
   heroImage: "/assets/reddragon.jpg"
@@ -36,7 +41,7 @@ window.APP_CONFIG = {
 // Public onboarding state may be kept locally per DID. Private key material is never persisted here.
 // Add-on files are intentionally isolated from the core key/signing implementation.
 (() => {
-  for (const href of ["/enhancements.css", "/live-observatory.css", "/language-stable.css", "/agent-field.css"]) {
+  for (const href of ["/enhancements.css", "/live-observatory.css", "/language-stable.css", "/agent-field.css", "/did-provenance.css"]) {
     const css = document.createElement("link");
     css.rel = "stylesheet";
     css.href = href;
@@ -57,7 +62,8 @@ window.APP_CONFIG = {
     "/progress-scope-fix.js",
     "/live-observatory.js",
     "/language-stable.js",
-    "/agent-field.js"
+    "/agent-field.js",
+    "/did-provenance.js"
   ];
 
   let index = 0;
