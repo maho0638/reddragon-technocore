@@ -243,17 +243,54 @@ function signPayload(text) {
   return nodeSign(null, Buffer.from(text, "utf8"), privateKey).toString("base64url");
 }
 
-async function signedPostTo(targetRoom, text) {
+async function findExactSignedMessage(targetRoom, normalized) {
+  try {
+    const data = await getRoomByName(targetRoom, true);
+    return messagesFrom(data)
+      .filter((item) => messageDid(item) === did && messageText(item) === normalized)
+      .sort((a, b) => Number(b?.seq || 0) - Number(a?.seq || 0))[0] || null;
+  } catch {
+    return null;
+  }
+}
+
+async function signedPostTo(targetRoom, text, recoverExact = false) {
   const normalized = clean(text);
   const nonce = String(Date.now());
   const payload = `${targetRoom}|${nonce}|${normalized}`;
   const sig = signPayload(payload);
-  const { r, text: body } = await request(`${BASE}/r/${encodeURIComponent(targetRoom)}?format=json`, {
-    method: "POST",
-    headers: { "content-type": "application/json", accept: "application/json,text/plain" },
-    body: JSON.stringify({ did, sig, nonce, text: normalized })
-  });
-  if (!r.ok) throw new Error(`Signed post failed ${r.status}: ${body}`);
+  let response;
+  try {
+    // Signed URLs are single-use. Never automatically retry the same nonce/signature.
+    response = await request(`${BASE}/r/${encodeURIComponent(targetRoom)}?format=json`, {
+      method: "POST",
+      headers: { "content-type": "application/json", accept: "application/json,text/plain" },
+      body: JSON.stringify({ did, sig, nonce, text: normalized })
+    }, 1);
+  } catch (error) {
+    if (recoverExact) {
+      const recovered = await findExactSignedMessage(targetRoom, normalized);
+      if (recovered) {
+        const seq = Number(recovered?.seq || 0) || null;
+        console.log(`Recovered accepted signed post in ${targetRoom}${seq ? `: seq ${seq}` : ""}.`);
+        return { seq, nonce, recovered: true };
+      }
+    }
+    throw error;
+  }
+
+  const { r, text: body } = response;
+  if (!r.ok) {
+    if (recoverExact) {
+      const recovered = await findExactSignedMessage(targetRoom, normalized);
+      if (recovered) {
+        const seq = Number(recovered?.seq || 0) || null;
+        console.log(`Recovered accepted signed post in ${targetRoom}${seq ? `: seq ${seq}` : ""}.`);
+        return { seq, nonce, recovered: true };
+      }
+    }
+    throw new Error(`Signed post failed ${r.status}: ${body}`);
+  }
 
   let acceptedSeq = null;
   try {
@@ -268,12 +305,17 @@ async function signedPostTo(targetRoom, text) {
 }
 
 async function signedPost(text) {
-  return signedPostTo(room, text);
+  return signedPostTo(room, text, false);
 }
 
 function extractDid(value) {
   const match = String(value || "").match(/did:key:z6Mk[1-9A-HJ-NP-Za-km-z]+/);
   return match ? match[0] : "";
+}
+
+async function ownerAfterAmbiguousClaim() {
+  try { return extractDid(await readNote("room-owners", contributionRoom)); }
+  catch { return ""; }
 }
 
 async function ensureOwnedContributionRoom() {
@@ -289,15 +331,26 @@ async function ensureOwnedContributionRoom() {
   const value = did;
   const sig = signPayload(`room-owners|${contributionRoom}|${nonce}|${value}`);
   const url = `${BASE}/kv/room-owners/${encodeURIComponent(contributionRoom)}/set-signed/${encodeURIComponent(did)}/${encodeURIComponent(sig)}/${encodeURIComponent(nonce)}/${encodeURIComponent(value)}?if_absent=1`;
-  const { r, text } = await request(url, { headers: { accept: "text/plain,application/json" } });
-  if (r.status === 409) {
-    const ownerAfterConflict = extractDid(await readNote("room-owners", contributionRoom));
-    if (ownerAfterConflict === did) {
-      console.log(`Contribution room ownership already held by this DID: ${contributionRoom}`);
+  let response;
+  try {
+    // Ownership claim URLs are signed and single-use, so this exact URL is sent once.
+    response = await request(url, { headers: { accept: "text/plain,application/json" } }, 1);
+  } catch (error) {
+    if (await ownerAfterAmbiguousClaim() === did) {
+      console.log(`Recovered signed owned-room claim: ${contributionRoom}`);
       return;
     }
+    throw error;
   }
-  if (!r.ok) throw new Error(`Owned-room claim failed ${r.status}: ${text}`);
+
+  const { r, text } = response;
+  if (!r.ok) {
+    if (await ownerAfterAmbiguousClaim() === did) {
+      console.log(`Signed owned-room claim already belongs to this DID: ${contributionRoom}`);
+      return;
+    }
+    throw new Error(`Owned-room claim failed ${r.status}: ${text}`);
+  }
   console.log(`Signed owned-room claim created: ${contributionRoom}`);
 }
 
@@ -342,7 +395,7 @@ async function ensureSignedToolManifest() {
   }
 
   const text = `${contributionMarker} site=${siteUrl} repo=${repoUrl} manifest=/reddragon-contribution.json manifest_sha256=${hash} mailbox=${mailbox} purpose=public_observatory,did_verifier,signed_mailbox`;
-  await signedPostTo(contributionRoom, text);
+  await signedPostTo(contributionRoom, text, true);
   console.log(`Signed tool manifest published: ${hash}`);
 }
 
@@ -353,7 +406,8 @@ async function ensureSignedMailbox() {
     console.log(`Signed mailbox ready: ${mailbox}`);
     return;
   }
-  await signedPostTo(mailbox, `${mailboxMarker} recipient=${did} site=${siteUrl} purpose=signed-agent-collaboration-inbox`);
+  const text = `${mailboxMarker} recipient=${did} site=${siteUrl} purpose=signed-agent-collaboration-inbox`;
+  await signedPostTo(mailbox, text, true);
   console.log(`Signed mailbox initialized: ${mailbox}`);
 }
 
