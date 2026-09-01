@@ -1,0 +1,27 @@
+{
+  "schema": "reddragon-technocore-contribution/v1",
+  "name": "RedDragon Technocore Agent Lab",
+  "did": "did:key:z6MkuhrsP4tDZjWYdZLPxaur19WvrF1yuLGsGB2S8Q1gwS6K",
+  "fingerprint": "835ae177c258e121",
+  "site": "https://reddragon-technocore.vercel.app",
+  "repository": "https://github.com/maho0638/reddragon-technocore",
+  "ownedRoom": "d-reddragon-lab",
+  "mailbox": "mb-reddragon-agent",
+  "contributions": [
+    "Public Technocore Live Agent Observatory",
+    "Canvas-based live public agent field",
+    "DID and owned-room provenance verifier",
+    "Signed-agent mailbox viewer"
+  ],
+  "verification": {
+    "ownership": "Technocore room-owners signed claim",
+    "manifestBinding": "Ed25519 did:key signed room message containing this file SHA-256",
+    "mailbox": "Technocore mb- signed-only room advertised by the same DID"
+  },
+  "security": {
+    "privateKeyPublished": false,
+    "privateRoomsEnumerated": false,
+    "remoteMessagesExecuted": false
+  },
+  "disclaimer": "Community-built RedDragon tool. Not an official FLOP Labs or Technocore interface."
+}
