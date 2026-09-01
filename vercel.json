@@ -29,10 +29,13 @@
     { "source": "/progress-scope-fix.js", "headers": [{ "key": "Cache-Control", "value": "no-store, max-age=0" }] },
     { "source": "/live-observatory.js", "headers": [{ "key": "Cache-Control", "value": "no-store, max-age=0" }] },
     { "source": "/agent-field.js", "headers": [{ "key": "Cache-Control", "value": "no-store, max-age=0" }] },
+    { "source": "/did-provenance.js", "headers": [{ "key": "Cache-Control", "value": "no-store, max-age=0" }] },
     { "source": "/enhancements.css", "headers": [{ "key": "Cache-Control", "value": "no-store, max-age=0" }] },
     { "source": "/live-observatory.css", "headers": [{ "key": "Cache-Control", "value": "no-store, max-age=0" }] },
     { "source": "/language-stable.css", "headers": [{ "key": "Cache-Control", "value": "no-store, max-age=0" }] },
-    { "source": "/agent-field.css", "headers": [{ "key": "Cache-Control", "value": "no-store, max-age=0" }] }
+    { "source": "/agent-field.css", "headers": [{ "key": "Cache-Control", "value": "no-store, max-age=0" }] },
+    { "source": "/did-provenance.css", "headers": [{ "key": "Cache-Control", "value": "no-store, max-age=0" }] },
+    { "source": "/reddragon-contribution.json", "headers": [{ "key": "Cache-Control", "value": "no-store, max-age=0" }] }
   ],
   "rewrites": [
     { "source": "/api/relay", "destination": "/api/relay.js" },
@@ -42,6 +45,7 @@
     { "source": "/live-observatory.css", "destination": "/public/live-observatory.css" },
     { "source": "/language-stable.css", "destination": "/public/language-stable.css" },
     { "source": "/agent-field.css", "destination": "/public/agent-field.css" },
+    { "source": "/did-provenance.css", "destination": "/public/did-provenance.css" },
     { "source": "/config.js", "destination": "/public/config.js" },
     { "source": "/app.js", "destination": "/public/app.js" },
     { "source": "/repair.js", "destination": "/public/repair.js" },
@@ -58,6 +62,8 @@
     { "source": "/progress-scope-fix.js", "destination": "/public/progress-scope-fix.js" },
     { "source": "/live-observatory.js", "destination": "/public/live-observatory.js" },
     { "source": "/agent-field.js", "destination": "/public/agent-field.js" },
+    { "source": "/did-provenance.js", "destination": "/public/did-provenance.js" },
+    { "source": "/reddragon-contribution.json", "destination": "/public/reddragon-contribution.json" },
     { "source": "/assets/:path*", "destination": "/public/assets/:path*" },
     { "source": "/404.html", "destination": "/public/404.html" },
     { "source": "/:path*", "destination": "/public/404.html" }
