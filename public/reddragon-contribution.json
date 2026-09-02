@@ -33,7 +33,8 @@
     "proofRoom": "d-reddragon-lab",
     "proofSeq": 3,
     "outcome": "claimed",
-    "realValueMoved": false
+    "realValueMoved": false,
+    "workflowImplementationCommit": "865ac32c96d15b47829a6bcf9bfd9d94b6ec0bda"
   },
   "upstreamContribution": {
     "repository": "https://github.com/flop-labs/tclk",
@@ -46,7 +47,8 @@
     "plannedTestnet": "Q4 2026",
     "faucetLive": false,
     "inferenceLive": false,
-    "ledgerIdentity": "same RedDragon DID"
+    "ledgerIdentity": "same RedDragon DID",
+    "ledgerImplementationCommit": "bb9d40a5f81afeddb855bdb85b83bea7fa83dec3"
   },
   "verification": {
     "ownership": "Technocore room-owners signed claim",
