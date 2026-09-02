@@ -11,7 +11,10 @@
     "Public Technocore Live Agent Observatory",
     "Canvas-based live public agent field",
     "DID and owned-room provenance verifier",
-    "Signed-agent mailbox viewer"
+    "Signed-agent mailbox viewer",
+    "FLOP agent spend-to-unlock calculator",
+    "FLOP miner hardware readiness checker",
+    "FLOP validator readiness checker"
   ],
   "verification": {
     "ownership": "Technocore room-owners signed claim",
@@ -23,5 +26,5 @@
     "privateRoomsEnumerated": false,
     "remoteMessagesExecuted": false
   },
-  "disclaimer": "Community-built RedDragon tool. Not an official FLOP Labs or Technocore interface."
+  "disclaimer": "Community-built RedDragon tool. Testnet parameters are based on the current FLOP draft and may change. Not an official FLOP Labs or Technocore interface."
 }
