@@ -1,0 +1,37 @@
+name: RedDragon TCLK Paper Demo
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/reddragon-tclk-demo.yml"
+      - "scripts/reddragon-tclk-demo.mjs"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: reddragon-tclk-paper-demo
+  cancel-in-progress: false
+
+jobs:
+  demo:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+          package-manager-cache: false
+      - name: Install official tclk package
+        run: npm install --no-save --ignore-scripts --package-lock=false @flop-labs/tclk@0.1.0
+      - name: Run signed RedDragon PAPER demo
+        env:
+          TECHNOCORE_PRIVATE_KEY_PKCS8_B64: ${{ secrets.TECHNOCORE_PRIVATE_KEY_PKCS8_B64 }}
+        run: node scripts/reddragon-tclk-demo.mjs
