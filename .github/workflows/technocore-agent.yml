@@ -8,6 +8,7 @@ on:
       - ".github/workflows/technocore-agent.yml"
       - ".github/workflows/technocore-agent-backup.yml"
       - "scripts/technocore-agent.mjs"
+      - "public/reddragon-contribution.json"
       - "package.json"
   schedule:
     # Primary off-minute cadence. GitHub scheduled runs can be delayed, so a
@@ -27,7 +28,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba8058251ac181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Setup Node
