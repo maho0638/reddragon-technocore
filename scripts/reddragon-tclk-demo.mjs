@@ -214,46 +214,61 @@ async function exactSignedMessage(room, did, text) {
 }
 
 async function ensureSignedText(signer, room, text) {
-  const existing = await exactSignedMessage(room, signer.did, text);
-  if (existing) {
-    console.log(`exists  /r/${room} seq ${existing.seq ?? "?"}`);
-    return existing;
-  }
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    const existing = await exactSignedMessage(room, signer.did, text);
+    if (existing) {
+      console.log(`exists  /r/${room} seq ${existing.seq ?? "?"}`);
+      return existing;
+    }
 
-  const nonce = String(Date.now());
-  const sig = signer.sign(`${room}|${nonce}|${text}`);
-  let response;
-  try {
-    response = await fetchWithTimeout(`${BASE}/r/${encodeURIComponent(room)}?format=json`, {
-      method: "POST",
-      headers: { "content-type": "application/json", accept: "application/json,text/plain" },
-      body: JSON.stringify({ did: signer.did, sig, nonce, text }),
-    });
-  } catch (error) {
+    // A signed nonce is single-use, so each attempt gets a fresh nonce/signature. We never
+    // resend the same signed request. After an ambiguous timeout we first reconcile by exact
+    // text; only if the record is still absent do we mint a fresh nonce and try again.
+    const nonce = String(Date.now() + attempt);
+    const sig = signer.sign(`${room}|${nonce}|${text}`);
+    let response;
+    try {
+      response = await fetchWithTimeout(`${BASE}/r/${encodeURIComponent(room)}?format=json`, {
+        method: "POST",
+        headers: { "content-type": "application/json", accept: "application/json,text/plain" },
+        body: JSON.stringify({ did: signer.did, sig, nonce, text }),
+      }, 25_000);
+    } catch (error) {
+      await sleep(1800 * attempt);
+      const recovered = await exactSignedMessage(room, signer.did, text);
+      if (recovered) {
+        console.log(`recover /r/${room} seq ${recovered.seq ?? "?"}`);
+        return recovered;
+      }
+      if (attempt < 3) continue;
+      throw error;
+    }
+
+    const body = await response.text();
+    if (response.ok) {
+      try {
+        const parsed = JSON.parse(body);
+        return parsed?.posted || parsed;
+      } catch {
+        const recovered = await exactSignedMessage(room, signer.did, text);
+        return recovered || { seq: null, from: signer.did, text };
+      }
+    }
+
+    await sleep(900 * attempt);
     const recovered = await exactSignedMessage(room, signer.did, text);
     if (recovered) {
       console.log(`recover /r/${room} seq ${recovered.seq ?? "?"}`);
       return recovered;
     }
-    throw error;
-  }
-
-  const body = await response.text();
-  if (!response.ok) {
-    const recovered = await exactSignedMessage(room, signer.did, text);
-    if (recovered) {
-      console.log(`recover /r/${room} seq ${recovered.seq ?? "?"}`);
-      return recovered;
+    if ((response.status === 429 || response.status >= 500) && attempt < 3) {
+      const stated = Number(response.headers.get("retry-after"));
+      await sleep(Number.isFinite(stated) && stated > 0 ? Math.min(stated * 1000, 30_000) : 1800 * attempt);
+      continue;
     }
     throw new Error(`Signed post /r/${room} failed: ${response.status} ${body.slice(0, 240)}`);
   }
-
-  try {
-    const parsed = JSON.parse(body);
-    return parsed?.posted || parsed;
-  } catch {
-    return { seq: null, from: signer.did, text };
-  }
+  throw new Error(`Signed post /r/${room} failed after retries`);
 }
 
 function unwrapNote(body) {
@@ -362,7 +377,6 @@ console.log(`offer    ${offer.id}`);
 console.log(`contract ${accept.contract}`);
 console.log(`room     ${deal}`);
 
-// A small public task note gives the contract a concrete, verifiable purpose.
 await noteSet(
   "rd-tclk-demo",
   "paper-v1",
