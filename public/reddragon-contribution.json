@@ -12,19 +12,53 @@
     "Canvas-based live public agent field",
     "DID and owned-room provenance verifier",
     "Signed-agent mailbox viewer",
+    "RedDragon TCLK PAPER agent-to-agent workbench",
     "FLOP agent spend-to-unlock calculator",
+    "FLOP testnet faucet and inference activity ledger",
     "FLOP miner hardware readiness checker",
-    "FLOP validator readiness checker"
+    "FLOP validator readiness checker",
+    "Upstream tclk production-venue safety analysis on FLOP Labs issue #6"
   ],
+  "tclkPaperDemo": {
+    "protocol": "tclk/1",
+    "rail": "paper",
+    "payerDid": "did:key:z6MkuhrsP4tDZjWYdZLPxaur19WvrF1yuLGsGB2S8Q1gwS6K",
+    "payeeDid": "did:key:z6MkqEhk421dSv8pEnDvWVPatEMegY2RgXU2ksDw5pbUbU48",
+    "offerId": "0xe1f8212493e976e6863b31d650a25b203277d7a3f024ccfb70ce000672acdac1",
+    "offerSeq": 428,
+    "acceptSeq": 430,
+    "contract": "0xd7c4ddf32df6ab1b50c6d318605f2df9a83fd534eed3a8adad3ac73b12999b9b",
+    "dealRoom": "mb-p-tclk-d7c4ddf32df6ab1b",
+    "receiptSeq": 3,
+    "proofRoom": "d-reddragon-lab",
+    "proofSeq": 3,
+    "outcome": "claimed",
+    "realValueMoved": false
+  },
+  "upstreamContribution": {
+    "repository": "https://github.com/flop-labs/tclk",
+    "issue": 6,
+    "type": "production-safety analysis and fail-closed venue recommendation"
+  },
+  "testnetReadiness": {
+    "officialStatusChecked": "2026-09-02",
+    "officialDraftUpdated": "2026-08-26",
+    "plannedTestnet": "Q4 2026",
+    "faucetLive": false,
+    "inferenceLive": false,
+    "ledgerIdentity": "same RedDragon DID"
+  },
   "verification": {
     "ownership": "Technocore room-owners signed claim",
     "manifestBinding": "Ed25519 did:key signed room message containing this file SHA-256",
-    "mailbox": "Technocore mb- signed-only room advertised by the same DID"
+    "mailbox": "Technocore mb- signed-only room advertised by the same DID",
+    "tclkDemo": "Signed tclk/1 offer, accept, lock, reveal and receipt plus RedDragon proof marker"
   },
   "security": {
     "privateKeyPublished": false,
     "privateRoomsEnumerated": false,
-    "remoteMessagesExecuted": false
+    "remoteMessagesExecuted": false,
+    "paperRailMovesValue": false
   },
-  "disclaimer": "Community-built RedDragon tool. Testnet parameters are based on the current FLOP draft and may change. Not an official FLOP Labs or Technocore interface."
+  "disclaimer": "Community-built RedDragon tool. Testnet parameters are based on the current FLOP draft and may change. PAPER is a rehearsal rail and moves no value. Not an official FLOP Labs or Technocore interface."
 }
