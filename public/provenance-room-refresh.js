@@ -1,6 +1,7 @@
 const RD_PROV_FIX_DID = "did:key:z6MkuhrsP4tDZjWYdZLPxaur19WvrF1yuLGsGB2S8Q1gwS6K";
 const RD_PROV_FIX_FP = "835ae177c258e121";
 const RD_PROV_FIX_ROOM = "d-reddragon-835ae177";
+const RD_PROV_FIX_PROOF_ROOM = "d-reddragon-lab";
 const RD_PROV_FIX_MAILBOX = "mb-reddragon-agent";
 const RD_PROV_FIX_CAP = "tclk1:paper";
 const RD_PROV_FIX_MARKER = "REDDRAGON_TOOL_V1";
@@ -16,21 +17,22 @@ function rdProvFixLang() {
 const RD_PROV_FIX_COPY = {
   tr: {
     title: "RedDragon provenance",
-    intro: "Aynı DID altında gerçek owned-room, signed manifest ve tclk capability zincirini canlı doğrular.",
-    owner: "Owned room sahibi",
+    intro: "Aynı DID altında ownership claim, imzalı manifest kanıtı ve tclk capability zincirini canlı doğrular.",
+    owner: "Owned-room claim",
     manifest: "İmzalı tool manifest",
     didNote: "DID notu + tclk capability",
     local: "Site manifesti",
     checking: "kontrol ediliyor",
     verified: "doğrulandı",
     missing: "bulunamadı",
-    summaryOk: "RedDragon DID → owned room → signed manifest → tclk1:paper zinciri doğrulandı.",
+    summaryOk: "RedDragon DID → ownership claim → signed manifest → tclk1:paper zinciri doğrulandı.",
     summaryBad: "Kanıt zincirinin bazı parçaları henüz doğrulanamadı.",
     refresh: "Kanıtı yenile",
     manifestJson: "Manifest JSON",
-    openRoom: "Technocore'da oda",
-    oldProof: "Not: d-reddragon-lab eski TCLK PAPER proof room olarak korunur; ownership provenance için kullanılmaz.",
-    room: "Owned room",
+    openProof: "Signed proof odası",
+    capacityNote: "Ownership claim d-reddragon-835ae177 için aynı DID ile alındı. Technocore yeni oda kapasitesi dolu olduğunda ilk mesaj açılamayabildiği için manifest kanıtı mevcut d-reddragon-lab odasında aynı DID ile imzalanır.",
+    room: "Ownership claim",
+    proofRoom: "Manifest proof room",
     did: "Public DID",
     mailbox: "Signed mailbox",
     cap: "TCLK capability",
@@ -38,21 +40,22 @@ const RD_PROV_FIX_COPY = {
   },
   en: {
     title: "RedDragon provenance",
-    intro: "Live-verifies the true owned-room, signed manifest and tclk capability chain under the same DID.",
-    owner: "Owned-room owner",
+    intro: "Live-verifies the ownership claim, signed manifest proof and tclk capability chain under the same DID.",
+    owner: "Owned-room claim",
     manifest: "Signed tool manifest",
     didNote: "DID note + tclk capability",
     local: "Site manifest",
     checking: "checking",
     verified: "verified",
     missing: "missing",
-    summaryOk: "RedDragon DID → owned room → signed manifest → tclk1:paper chain verified.",
+    summaryOk: "RedDragon DID → ownership claim → signed manifest → tclk1:paper chain verified.",
     summaryBad: "Some proof-chain elements could not be verified yet.",
     refresh: "Refresh proof",
     manifestJson: "Manifest JSON",
-    openRoom: "Open Technocore room",
-    oldProof: "Note: d-reddragon-lab is retained as the historical TCLK PAPER proof room; it is not used for ownership provenance.",
-    room: "Owned room",
+    openProof: "Signed proof room",
+    capacityNote: "The ownership claim for d-reddragon-835ae177 is held by the same DID. Because Technocore can reject the first message while global room capacity is full, the manifest proof is signed by the same DID in the existing d-reddragon-lab room.",
+    room: "Ownership claim",
+    proofRoom: "Manifest proof room",
     did: "Public DID",
     mailbox: "Signed mailbox",
     cap: "TCLK capability",
@@ -146,6 +149,7 @@ function rdProvFixBuild() {
     </div>
     <div class="rd-prov-kv">
       <span>${rdProvFixT.room}</span><code>${RD_PROV_FIX_ROOM}</code>
+      <span>${rdProvFixT.proofRoom}</span><code>${RD_PROV_FIX_PROOF_ROOM}</code>
       <span>${rdProvFixT.did}</span><code>${RD_PROV_FIX_DID}</code>
       <span>${rdProvFixT.mailbox}</span><code>${RD_PROV_FIX_MAILBOX}</code>
       <span>${rdProvFixT.cap}</span><code>${RD_PROV_FIX_CAP}</code>
@@ -154,14 +158,14 @@ function rdProvFixBuild() {
     <div class="rd-prov-actions">
       <button id="rdProvFixRefresh" type="button">${rdProvFixT.refresh}</button>
       <a href="/reddragon-contribution.json" target="_blank" rel="noopener">${rdProvFixT.manifestJson}</a>
-      <a href="https://technocore.chat/humans#r/${RD_PROV_FIX_ROOM}" target="_blank" rel="noopener noreferrer">${rdProvFixT.openRoom}</a>
+      <a href="https://technocore.chat/humans#r/${RD_PROV_FIX_PROOF_ROOM}" target="_blank" rel="noopener noreferrer">${rdProvFixT.openProof}</a>
     </div>
-    <div class="rd-prov-result">${rdProvFixT.oldProof}</div>`;
+    <div class="rd-prov-result">${rdProvFixT.capacityNote}</div>`;
 
   const verifierRoom = document.getElementById("rdVerifyRoom");
   if (verifierRoom) verifierRoom.value = RD_PROV_FIX_ROOM;
   const sourceNote = shell.querySelector(".rd-prov-note");
-  if (sourceNote) sourceNote.textContent = rdProvFixT.oldProof;
+  if (sourceNote) sourceNote.textContent = rdProvFixT.capacityNote;
 
   document.getElementById("rdProvFixRefresh")?.addEventListener("click", rdProvFixRefresh);
   return true;
@@ -183,12 +187,13 @@ async function rdProvFixRefresh() {
 
     const localOk = manifest.data?.did === RD_PROV_FIX_DID &&
       manifest.data?.ownedRoom === RD_PROV_FIX_ROOM &&
+      manifest.data?.manifestProofRoom === RD_PROV_FIX_PROOF_ROOM &&
       manifest.data?.mailbox === RD_PROV_FIX_MAILBOX;
     rdProvFixStatus("rdProvFixLocal", localOk);
 
-    const [ownerResult, roomResult, noteResult] = await Promise.allSettled([
+    const [ownerResult, proofRoomResult, noteResult] = await Promise.allSettled([
       rdProvFixRelay({ action: "kvGet", ns: "room-owners", key: RD_PROV_FIX_ROOM }),
-      rdProvFixRelay({ action: "read", room: RD_PROV_FIX_ROOM }),
+      rdProvFixRelay({ action: "read", room: RD_PROV_FIX_PROOF_ROOM }),
       rdProvFixRelay({ action: "kvGet", ns: `did-${RD_PROV_FIX_FP.slice(0, 2)}`, key: RD_PROV_FIX_FP.slice(2) })
     ]);
 
@@ -197,11 +202,16 @@ async function rdProvFixRefresh() {
     rdProvFixStatus("rdProvFixOwner", ownerOk, ownerOk ? rdProvFixT.verified : rdProvFixT.missing);
 
     let signedManifest = null;
-    if (roomResult.status === "fulfilled") {
-      signedManifest = rdProvFixMessages(roomResult.value)
+    if (proofRoomResult.status === "fulfilled") {
+      signedManifest = rdProvFixMessages(proofRoomResult.value)
         .filter((m) => rdProvFixDid(m) === RD_PROV_FIX_DID)
         .sort((a, b) => rdProvFixSeq(b) - rdProvFixSeq(a))
-        .find((m) => rdProvFixText(m).includes(RD_PROV_FIX_MARKER) && rdProvFixText(m).includes(`manifest_sha256=${manifest.hash}`)) || null;
+        .find((m) => {
+          const text = rdProvFixText(m);
+          return text.includes(RD_PROV_FIX_MARKER) &&
+            text.includes(`manifest_sha256=${manifest.hash}`) &&
+            text.includes(`ownership_room=${RD_PROV_FIX_ROOM}`);
+        }) || null;
     }
     rdProvFixStatus("rdProvFixManifest", Boolean(signedManifest), signedManifest ? `seq ${rdProvFixSeq(signedManifest)}` : rdProvFixT.missing);
 
