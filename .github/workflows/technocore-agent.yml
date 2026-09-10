@@ -8,6 +8,7 @@ on:
       - ".github/workflows/technocore-agent.yml"
       - ".github/workflows/technocore-agent-backup.yml"
       - "scripts/technocore-agent.mjs"
+      - "scripts/ensure-tclk-capability.mjs"
       - "public/reddragon-contribution.json"
       - "package.json"
   schedule:
@@ -36,6 +37,10 @@ jobs:
         with:
           node-version: "24"
           package-manager-cache: false
+      - name: Ensure tclk capability advertisement
+        continue-on-error: true
+        shell: bash
+        run: node scripts/ensure-tclk-capability.mjs
       - name: Run RedDragon Technocore agent
         env:
           TECHNOCORE_PRIVATE_KEY_PKCS8_B64: ${{ secrets.TECHNOCORE_PRIVATE_KEY_PKCS8_B64 }}
