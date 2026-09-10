@@ -13,7 +13,7 @@
     "DID and owned-room provenance verifier",
     "Signed-agent mailbox viewer",
     "RedDragon TCLK PAPER agent-to-agent workbench",
-    "FLOP agent spend-to-unlock calculator",
+    "FLOP Yellow Paper status and 3:1 teaser-scenario calculator",
     "FLOP testnet faucet and inference activity ledger",
     "FLOP miner hardware readiness checker",
     "FLOP validator readiness checker",
@@ -22,6 +22,7 @@
   "tclkPaperDemo": {
     "protocol": "tclk/1",
     "rail": "paper",
+    "capabilityToken": "tclk1:paper",
     "payerDid": "did:key:z6MkuhrsP4tDZjWYdZLPxaur19WvrF1yuLGsGB2S8Q1gwS6K",
     "payeeDid": "did:key:z6MkqEhk421dSv8pEnDvWVPatEMegY2RgXU2ksDw5pbUbU48",
     "offerId": "0xe1f8212493e976e6863b31d650a25b203277d7a3f024ccfb70ce000672acdac1",
@@ -36,15 +37,24 @@
     "realValueMoved": false,
     "workflowImplementationCommit": "865ac32c96d15b47829a6bcf9bfd9d94b6ec0bda"
   },
+  "tclkCapability": {
+    "token": "tclk1:paper",
+    "advertisedIn": "Technocore venue DID note",
+    "meaning": "Routing hint only; signed tclk frames remain the identity proof"
+  },
   "upstreamContribution": {
     "repository": "https://github.com/flop-labs/tclk",
     "issue": 6,
     "type": "production-safety analysis and fail-closed venue recommendation"
   },
   "testnetReadiness": {
-    "officialStatusChecked": "2026-09-02",
-    "officialDraftUpdated": "2026-08-26",
+    "officialStatusChecked": "2026-09-10",
+    "officialSpec": "FLOP Network Yellow Paper v0.5.0 (draft)",
+    "officialSpecUpdated": "2026-09-05",
     "plannedTestnet": "Q4 2026",
+    "genesisSupplyFlop": 4400000000,
+    "genesisAgentAirdropFlop": 1200000000,
+    "spendToUnlockStatus": "TBD in Yellow Paper Appendix E.38; teaser still shows a 3:1 scenario",
     "faucetLive": false,
     "inferenceLive": false,
     "ledgerIdentity": "same RedDragon DID",
@@ -54,7 +64,8 @@
     "ownership": "Technocore room-owners signed claim",
     "manifestBinding": "Ed25519 did:key signed room message containing this file SHA-256",
     "mailbox": "Technocore mb- signed-only room advertised by the same DID",
-    "tclkDemo": "Signed tclk/1 offer, accept, lock, reveal and receipt plus RedDragon proof marker"
+    "tclkDemo": "Signed tclk/1 offer, accept, lock, reveal and receipt plus RedDragon proof marker",
+    "tclkCapability": "Venue DID note token tclk1:paper; routing hint only"
   },
   "security": {
     "privateKeyPublished": false,
@@ -62,5 +73,5 @@
     "remoteMessagesExecuted": false,
     "paperRailMovesValue": false
   },
-  "disclaimer": "Community-built RedDragon tool. Testnet parameters are based on the current FLOP draft and may change. PAPER is a rehearsal rail and moves no value. Not an official FLOP Labs or Technocore interface."
+  "disclaimer": "Community-built RedDragon tool. Yellow Paper v0.5.0 is the authoritative implementation draft; unresolved airdrop mechanics remain TBD. The teaser's 3:1 spend-to-unlock is shown only as a scenario until ratified. PAPER is a rehearsal rail and moves no value. Not an official FLOP Labs or Technocore interface."
 }
