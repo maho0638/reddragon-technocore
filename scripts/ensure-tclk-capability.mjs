@@ -22,6 +22,26 @@ function unwrap(value) {
   return text;
 }
 
+function normalizeNote(value) {
+  let text = unwrap(value);
+  for (let i = 0; i < 3; i += 1) {
+    if (!text) return "";
+    try {
+      const parsed = JSON.parse(text);
+      if (typeof parsed === "string") {
+        text = unwrap(parsed);
+        continue;
+      }
+      if (parsed && typeof parsed === "object" && typeof parsed.value === "string") {
+        text = unwrap(parsed.value);
+        continue;
+      }
+    } catch {}
+    break;
+  }
+  return text;
+}
+
 async function request(url, options = {}, attempts = 4) {
   let lastError;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
@@ -39,41 +59,38 @@ async function request(url, options = {}, attempts = 4) {
 }
 
 const url = `${BASE}/kv/${encodeURIComponent(namespace)}/${encodeURIComponent(key)}`;
-const { response, text } = await request(url, { headers: { accept: "text/plain,application/json" } });
-const current = response.status === 404 ? "" : unwrap(text);
+const first = await request(url, { headers: { accept: "text/plain,application/json" } });
+const current = first.response.status === 404 ? "" : normalizeNote(first.text);
 
 if (current && !current.startsWith(DID)) {
   throw new Error("DID note contains an unexpected identity; refusing to overwrite it");
 }
 
 const preserved = current
-  ? current.split(/\s+/).filter((token) =>
-      token &&
-      token !== DID &&
-      !/^tclk1:/.test(token)
-    )
+  ? current.split(/\s+/).filter((token) => token && token !== DID && !/^tclk1:/.test(token))
   : [];
-
 const desired = [DID, CAPABILITY, ...preserved].join(" ");
-if (current === desired) {
-  console.log(`TCLK capability already advertised: ${CAPABILITY} (${namespace}/${key})`);
-  process.exit(0);
+
+if (current !== desired) {
+  const write = await request(url, {
+    method: "POST",
+    headers: { "content-type": "application/json", accept: "text/plain,application/json" },
+    body: JSON.stringify({ value: desired })
+  });
+  if (!write.response.ok) {
+    throw new Error(`Capability write failed ${write.response.status}: ${write.text.slice(0, 200)}`);
+  }
 }
 
-const write = await request(url, {
-  method: "POST",
-  headers: { "content-type": "application/json", accept: "text/plain,application/json" },
-  body: JSON.stringify({ value: desired })
-});
-
-if (!write.response.ok) {
-  throw new Error(`Capability write failed ${write.response.status}: ${write.text.slice(0, 200)}`);
+let lastSeen = "";
+for (let attempt = 1; attempt <= 5; attempt += 1) {
+  const verify = await request(url, { headers: { accept: "text/plain,application/json", "cache-control": "no-cache" } });
+  lastSeen = normalizeNote(verify.text);
+  if (lastSeen.startsWith(DID) && lastSeen.split(/\s+/).includes(CAPABILITY)) {
+    console.log(`TCLK capability advertised and verified: ${CAPABILITY} (${namespace}/${key})`);
+    process.exit(0);
+  }
+  await sleep(attempt * 400);
 }
 
-const verify = await request(url, { headers: { accept: "text/plain,application/json" } });
-const verified = unwrap(verify.text);
-if (!verified.startsWith(DID) || !verified.split(/\s+/).includes(CAPABILITY)) {
-  throw new Error("TCLK capability write could not be verified");
-}
-
-console.log(`TCLK capability advertised and verified: ${CAPABILITY} (${namespace}/${key})`);
+throw new Error(`TCLK capability write could not be verified; observed=${lastSeen.slice(0, 180)}`);
