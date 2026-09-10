@@ -30,7 +30,7 @@ window.APP_CONFIG = {
   technocoreHumanUrl: "https://technocore.chat/humans",
   technocoreDid: "did:key:z6MkuhrsP4tDZjWYdZLPxaur19WvrF1yuLGsGB2S8Q1gwS6K",
   technocoreFingerprint: "835ae177c258e121",
-  technocoreOwnedRoom: "d-reddragon-lab",
+  technocoreOwnedRoom: "d-reddragon-835ae177",
   technocoreMailbox: "mb-reddragon-agent",
   contributionManifestUrl: "/reddragon-contribution.json",
   flopUrl: "https://flop.finance",
@@ -64,6 +64,7 @@ window.APP_CONFIG = {
     "/language-stable.js",
     "/agent-field.js",
     "/did-provenance.js",
+    "/provenance-room-refresh.js",
     "/testnet-toolkit.js",
     "/flop-spec-refresh.js",
     "/tclk-workbench.js"
