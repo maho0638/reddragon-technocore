@@ -6,6 +6,7 @@
   "site": "https://reddragon-technocore.vercel.app",
   "repository": "https://github.com/maho0638/reddragon-technocore",
   "ownedRoom": "d-reddragon-835ae177",
+  "manifestProofRoom": "d-reddragon-lab",
   "mailbox": "mb-reddragon-agent",
   "contributions": [
     "Public Technocore Live Agent Observatory",
@@ -32,7 +33,7 @@
     "dealRoom": "mb-p-tclk-d7c4ddf32df6ab1b",
     "receiptSeq": 3,
     "proofRoom": "d-reddragon-lab",
-    "proofRoomRole": "historical TCLK PAPER proof room; not ownership provenance",
+    "proofRoomRole": "historical TCLK PAPER proof and current signed manifest proof room; not ownership provenance",
     "proofSeq": 3,
     "outcome": "claimed",
     "realValueMoved": false,
@@ -63,7 +64,7 @@
   },
   "verification": {
     "ownership": "Technocore room-owners signed claim for d-reddragon-835ae177",
-    "manifestBinding": "Ed25519 did:key signed message in the owned provenance room containing this file SHA-256",
+    "manifestBinding": "Ed25519 did:key signed message in d-reddragon-lab containing this file SHA-256 and the ownership-room reference",
     "mailbox": "Technocore mb- signed-only room advertised by the same DID",
     "tclkDemo": "Historical signed tclk/1 offer, accept, lock, reveal and receipt plus RedDragon proof marker in d-reddragon-lab",
     "tclkCapability": "Venue DID note token tclk1:paper; routing hint only"
@@ -74,5 +75,5 @@
     "remoteMessagesExecuted": false,
     "paperRailMovesValue": false
   },
-  "disclaimer": "Community-built RedDragon tool. Yellow Paper v0.5.0 is the authoritative implementation draft; unresolved airdrop mechanics remain TBD. The teaser's 3:1 spend-to-unlock is shown only as a scenario until ratified. d-reddragon-lab is retained as a historical TCLK proof room and is not presented as ownership provenance. PAPER is a rehearsal rail and moves no value. Not an official FLOP Labs or Technocore interface."
+  "disclaimer": "Community-built RedDragon tool. Yellow Paper v0.5.0 is the authoritative implementation draft; unresolved airdrop mechanics remain TBD. The teaser's 3:1 spend-to-unlock is shown only as a scenario until ratified. d-reddragon-835ae177 holds the signed ownership claim; d-reddragon-lab is used for historical TCLK proof and signed manifest publication, not ownership provenance. PAPER is a rehearsal rail and moves no value. Not an official FLOP Labs or Technocore interface."
 }
