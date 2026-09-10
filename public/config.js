@@ -65,6 +65,7 @@ window.APP_CONFIG = {
     "/agent-field.js",
     "/did-provenance.js",
     "/testnet-toolkit.js",
+    "/flop-spec-refresh.js",
     "/tclk-workbench.js"
   ];
 
