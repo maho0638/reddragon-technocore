@@ -9,6 +9,7 @@ on:
       - ".github/workflows/technocore-agent-backup.yml"
       - "scripts/technocore-agent.mjs"
       - "scripts/ensure-tclk-capability.mjs"
+      - "scripts/publish-manifest-proof.mjs"
       - "public/reddragon-contribution.json"
       - "package.json"
   schedule:
@@ -71,3 +72,8 @@ jobs:
           done
 
           exit "$status"
+      - name: Publish signed manifest proof
+        env:
+          TECHNOCORE_PRIVATE_KEY_PKCS8_B64: ${{ secrets.TECHNOCORE_PRIVATE_KEY_PKCS8_B64 }}
+        shell: bash
+        run: node scripts/publish-manifest-proof.mjs
