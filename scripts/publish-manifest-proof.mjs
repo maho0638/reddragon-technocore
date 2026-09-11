@@ -43,11 +43,17 @@ function clean(text) {
     .trim();
 }
 
+function roomCapacityBlocked(status, body) {
+  const text = String(body || "").toLowerCase();
+  return status === 400 && text.includes("room limit reached");
+}
+
 async function readRoom() {
   const response = await fetch(`${BASE}/r/${encodeURIComponent(PROOF_ROOM)}?format=json&limit=200`, {
     headers: { accept: "application/json", "cache-control": "no-cache" },
     signal: AbortSignal.timeout(20_000)
   });
+  if (response.status === 404) return [];
   if (!response.ok) throw new Error(`Proof-room read failed ${response.status}`);
   const data = await response.json();
   if (Array.isArray(data)) return data;
@@ -111,6 +117,10 @@ if (!response.ok) {
   const recovered = (await readRoom()).find((message) => messageDid(message) === did && messageText(message) === proofText);
   if (recovered) {
     console.log(`Recovered signed manifest proof: room=${PROOF_ROOM} seq=${Number(recovered?.seq || 0) || "?"} hash=${hash}`);
+    process.exit(0);
+  }
+  if (roomCapacityBlocked(response.status, body)) {
+    console.warn(`Signed manifest proof deferred: Technocore global room capacity is full; historical room ${PROOF_ROOM} is currently absent. Core DID/ownership/capability verification remains separate. hash=${hash}`);
     process.exit(0);
   }
   throw new Error(`Signed manifest proof failed ${response.status}: ${body.slice(0, 220)}`);

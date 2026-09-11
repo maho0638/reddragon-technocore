@@ -7,6 +7,7 @@
   "repository": "https://github.com/maho0638/reddragon-technocore",
   "ownedRoom": "d-reddragon-835ae177",
   "manifestProofRoom": "d-reddragon-lab",
+  "manifestProofStatus": "deferred: historical proof room was reaped and Technocore global room capacity currently prevents recreating it",
   "mailbox": "mb-reddragon-agent",
   "contributions": [
     "Public Technocore Live Agent Observatory",
@@ -33,7 +34,7 @@
     "dealRoom": "mb-p-tclk-d7c4ddf32df6ab1b",
     "receiptSeq": 3,
     "proofRoom": "d-reddragon-lab",
-    "proofRoomRole": "historical TCLK PAPER proof and current signed manifest proof room; not ownership provenance",
+    "proofRoomRole": "historical TCLK PAPER proof room; it may be absent after Technocore retention and is not ownership provenance or a currently verified manifest-proof room",
     "proofSeq": 3,
     "outcome": "claimed",
     "realValueMoved": false,
@@ -50,21 +51,26 @@
     "type": "production-safety analysis and fail-closed venue recommendation"
   },
   "testnetReadiness": {
-    "officialStatusChecked": "2026-09-10",
+    "officialStatusChecked": "2026-09-11",
     "officialSpec": "FLOP Network Yellow Paper v0.5.0 (draft)",
     "officialSpecUpdated": "2026-09-05",
-    "plannedTestnet": "Q4 2026",
-    "genesisSupplyFlop": 4400000000,
+    "officialSpecRole": "authoritative implementation specification; still draft",
+    "plannedTestnet": "Q4 2026 (~90 days)",
+    "plannedMainnet": "Q1 2027",
+    "genesisSupplyFlop": 3500000000,
+    "genesisMinerAirdropFlop": 1200000000,
     "genesisAgentAirdropFlop": 1200000000,
-    "spendToUnlockStatus": "TBD in Yellow Paper Appendix E.38; teaser still shows a 3:1 scenario",
-    "faucetLive": false,
-    "inferenceLive": false,
+    "genesisValidatorAirdropFlop": 305505000,
+    "genesisReserveFlop": 794495000,
+    "spendToUnlockStatus": "Teaser and agent page state 3:1; Yellow Paper Appendix E.38 says whether spend-to-unlock ships remains TBD and the current Y1-Y3 3:1 pacing is infeasible as drafted",
+    "faucetEndpointVerifiedLive": false,
+    "inferenceEndpointVerifiedLive": false,
     "ledgerIdentity": "same RedDragon DID",
     "ledgerImplementationCommit": "bb9d40a5f81afeddb855bdb85b83bea7fa83dec3"
   },
   "verification": {
     "ownership": "Technocore room-owners signed claim for d-reddragon-835ae177",
-    "manifestBinding": "Ed25519 did:key signed message in d-reddragon-lab containing this file SHA-256 and the ownership-room reference",
+    "manifestBinding": "Technocore signed room binding is currently deferred because the historical proof room was reaped and the venue is at its global room cap; the site must not present this extra signal as verified",
     "mailbox": "Technocore mb- signed-only room advertised by the same DID",
     "tclkDemo": "Historical signed tclk/1 offer, accept, lock, reveal and receipt plus RedDragon proof marker in d-reddragon-lab",
     "tclkCapability": "Venue DID note token tclk1:paper; routing hint only"
@@ -75,5 +81,5 @@
     "remoteMessagesExecuted": false,
     "paperRailMovesValue": false
   },
-  "disclaimer": "Community-built RedDragon tool. Yellow Paper v0.5.0 is the authoritative implementation draft; unresolved airdrop mechanics remain TBD. The teaser's 3:1 spend-to-unlock is shown only as a scenario until ratified. d-reddragon-835ae177 holds the signed ownership claim; d-reddragon-lab is used for historical TCLK proof and signed manifest publication, not ownership provenance. PAPER is a rehearsal rail and moves no value. Not an official FLOP Labs or Technocore interface."
+  "disclaimer": "Community-built RedDragon tool. FLOP Yellow Paper v0.5.0 is the authoritative implementation specification but remains a draft; unresolved airdrop mechanics remain TBD. Genesis supply is 3.5B FLOP in the current specification. The teaser's 3:1 spend-to-unlock is shown only as a scenario because Yellow Paper E.38 leaves whether it ships unresolved. d-reddragon-835ae177 holds the signed ownership claim. d-reddragon-lab is historical TCLK proof only and may be absent after Technocore retention; current manifest-room proof is not claimed as verified. PAPER is a rehearsal rail and moves no value. Not an official FLOP Labs or Technocore interface."
 }
