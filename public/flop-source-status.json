@@ -5,6 +5,7 @@
     "name": "RedDragon FLOP Community Observatory",
     "site": "https://reddragon-technocore.vercel.app/flop",
     "repository": "https://github.com/maho0638/reddragon-technocore",
+    "llms": "https://reddragon-technocore.vercel.app/llms.txt",
     "independentCommunityTool": true,
     "affiliatedWithFlopLabs": false
   },
@@ -47,9 +48,10 @@
     {
       "id": "genesis-supply-2026-09-11",
       "severity": "material",
-      "status": "open-public-doc-drift",
+      "status": "reported-upstream",
       "authoritativeValue": "3.5B FLOP genesis supply",
       "secondaryValue": "4.4B FLOP genesis airdrop displayed in teaser",
+      "upstreamIssue": "https://github.com/flop-labs/yellowpaper/issues/54",
       "resolutionPolicy": "RedDragon follows the Yellow Paper and labels the teaser value as stale/drifted rather than combining the two."
     }
   ],
