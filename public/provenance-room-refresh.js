@@ -17,22 +17,24 @@ function rdProvFixLang() {
 const RD_PROV_FIX_COPY = {
   tr: {
     title: "RedDragon provenance",
-    intro: "Aynı DID altında ownership claim, imzalı manifest kanıtı ve tclk capability zincirini canlı doğrular.",
+    intro: "Aynı DID altında ownership claim, site manifesti ve tclk capability sinyallerini canlı doğrular. Technocore oda-retention/kapasite durumu nedeniyle signed manifest-room kanıtı ayrı ve opsiyonel bir sinyal olarak gösterilir.",
     owner: "Owned-room claim",
-    manifest: "İmzalı tool manifest",
+    manifest: "Signed manifest-room kanıtı",
     didNote: "DID notu + tclk capability",
     local: "Site manifesti",
     checking: "kontrol ediliyor",
     verified: "doğrulandı",
     missing: "bulunamadı",
-    summaryOk: "RedDragon DID → ownership claim → signed manifest → tclk1:paper zinciri doğrulandı.",
-    summaryBad: "Kanıt zincirinin bazı parçaları henüz doğrulanamadı.",
+    deferred: "Technocore oda kapasitesi nedeniyle ertelendi",
+    summaryOk: "RedDragon DID → ownership claim → signed manifest-room proof → tclk1:paper zinciri doğrulandı.",
+    summaryDeferred: "Kimlik, ownership ve tclk capability doğrulanabilir; ek signed manifest-room kanıtı Technocore oda kapasitesi/retention nedeniyle şu anda kullanılamıyor.",
+    summaryBad: "Temel kanıt sinyallerinin bazıları doğrulanamadı.",
     refresh: "Kanıtı yenile",
     manifestJson: "Manifest JSON",
-    openProof: "Signed proof odası",
-    capacityNote: "Ownership claim d-reddragon-835ae177 için aynı DID ile alındı. Technocore yeni oda kapasitesi dolu olduğunda ilk mesaj açılamayabildiği için manifest kanıtı mevcut d-reddragon-lab odasında aynı DID ile imzalanır.",
+    openProof: "Tarihsel proof room",
+    capacityNote: "d-reddragon-835ae177 ownership claim'i aynı DID tarafından alınmış durumda. d-reddragon-lab tarihsel TCLK proof odasıdır; retention sonrası oda yoksa ve global room cap doluysa yeniden yaratılamaz. Bu yüzden site, mevcut olmayan signed manifest-room kanıtını doğrulanmış gibi göstermez.",
     room: "Ownership claim",
-    proofRoom: "Manifest proof room",
+    proofRoom: "Tarihsel proof room",
     did: "Public DID",
     mailbox: "Signed mailbox",
     cap: "TCLK capability",
@@ -40,22 +42,24 @@ const RD_PROV_FIX_COPY = {
   },
   en: {
     title: "RedDragon provenance",
-    intro: "Live-verifies the ownership claim, signed manifest proof and tclk capability chain under the same DID.",
+    intro: "Live-verifies the ownership claim, site manifest and tclk capability signals under the same DID. Because of Technocore room retention/capacity, signed manifest-room proof is shown as a separate optional signal.",
     owner: "Owned-room claim",
-    manifest: "Signed tool manifest",
+    manifest: "Signed manifest-room proof",
     didNote: "DID note + tclk capability",
     local: "Site manifest",
     checking: "checking",
     verified: "verified",
     missing: "missing",
-    summaryOk: "RedDragon DID → ownership claim → signed manifest → tclk1:paper chain verified.",
-    summaryBad: "Some proof-chain elements could not be verified yet.",
+    deferred: "deferred by Technocore room capacity",
+    summaryOk: "RedDragon DID → ownership claim → signed manifest-room proof → tclk1:paper chain verified.",
+    summaryDeferred: "Identity, ownership and tclk capability are verifiable; the extra signed manifest-room proof is currently unavailable because of Technocore room capacity/retention.",
+    summaryBad: "Some core proof signals could not be verified.",
     refresh: "Refresh proof",
     manifestJson: "Manifest JSON",
-    openProof: "Signed proof room",
-    capacityNote: "The ownership claim for d-reddragon-835ae177 is held by the same DID. Because Technocore can reject the first message while global room capacity is full, the manifest proof is signed by the same DID in the existing d-reddragon-lab room.",
+    openProof: "Historical proof room",
+    capacityNote: "The ownership claim for d-reddragon-835ae177 is held by the same DID. d-reddragon-lab is a historical TCLK proof room; if retention has reaped it while the global room cap is full, it cannot be recreated. The site therefore does not present a missing signed manifest-room proof as verified.",
     room: "Ownership claim",
-    proofRoom: "Manifest proof room",
+    proofRoom: "Historical proof room",
     did: "Public DID",
     mailbox: "Signed mailbox",
     cap: "TCLK capability",
@@ -213,7 +217,12 @@ async function rdProvFixRefresh() {
             text.includes(`ownership_room=${RD_PROV_FIX_ROOM}`);
         }) || null;
     }
-    rdProvFixStatus("rdProvFixManifest", Boolean(signedManifest), signedManifest ? `seq ${rdProvFixSeq(signedManifest)}` : rdProvFixT.missing);
+    const manifestDetail = signedManifest
+      ? `seq ${rdProvFixSeq(signedManifest)}`
+      : proofRoomResult.status === "rejected"
+        ? rdProvFixT.deferred
+        : rdProvFixT.missing;
+    rdProvFixStatus("rdProvFixManifest", Boolean(signedManifest), manifestDetail);
 
     const didNote = noteResult.status === "fulfilled" ? String(noteResult.value || "") : "";
     const noteOk = didNote.includes(RD_PROV_FIX_DID) &&
@@ -222,7 +231,14 @@ async function rdProvFixRefresh() {
     rdProvFixStatus("rdProvFixDidNote", noteOk);
 
     const summary = document.getElementById("rdProvFixSummary");
-    if (summary) summary.textContent = localOk && ownerOk && signedManifest && noteOk ? rdProvFixT.summaryOk : rdProvFixT.summaryBad;
+    if (summary) {
+      const coreOk = localOk && ownerOk && noteOk;
+      summary.textContent = coreOk && signedManifest
+        ? rdProvFixT.summaryOk
+        : coreOk
+          ? rdProvFixT.summaryDeferred
+          : rdProvFixT.summaryBad;
+    }
   } catch {
     const summary = document.getElementById("rdProvFixSummary");
     if (summary) summary.textContent = rdProvFixT.summaryBad;
