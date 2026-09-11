@@ -10,6 +10,7 @@ on:
       - "scripts/technocore-agent.mjs"
       - "scripts/ensure-tclk-capability.mjs"
       - "scripts/publish-manifest-proof.mjs"
+      - "scripts/sonnet2-register-writer.mjs"
       - "public/reddragon-contribution.json"
       - "package.json"
   schedule:
@@ -42,6 +43,11 @@ jobs:
         continue-on-error: true
         shell: bash
         run: node scripts/ensure-tclk-capability.mjs
+      - name: Ensure Sonnet-2 writer registration
+        env:
+          TECHNOCORE_PRIVATE_KEY_PKCS8_B64: ${{ secrets.TECHNOCORE_PRIVATE_KEY_PKCS8_B64 }}
+        shell: bash
+        run: node scripts/sonnet2-register-writer.mjs
       - name: Run RedDragon Technocore agent
         env:
           TECHNOCORE_PRIVATE_KEY_PKCS8_B64: ${{ secrets.TECHNOCORE_PRIVATE_KEY_PKCS8_B64 }}
