@@ -17,7 +17,7 @@ try {
 
 window.APP_CONFIG = {
   brandName: "RedDragon",
-  productName: "Technocore Agent Lab",
+  productName: "FLOP Community Observatory · Agent Lab",
   byline: "by @joannawolker",
   xHandle: "@joannawolker",
   xUrl: "https://x.com/joannawolker",
@@ -26,6 +26,7 @@ window.APP_CONFIG = {
   mediumUrl: "https://medium.com/@ayazunal450",
   mediumWriteUrl: "https://medium.com/new-story",
   siteUrl: "https://reddragon-technocore.vercel.app",
+  flopCommunityUrl: "/flop",
   technocoreBase: "https://technocore.chat",
   technocoreHumanUrl: "https://technocore.chat/humans",
   technocoreDid: "did:key:z6MkuhrsP4tDZjWYdZLPxaur19WvrF1yuLGsGB2S8Q1gwS6K",
@@ -37,6 +38,21 @@ window.APP_CONFIG = {
   flopXUrl: "https://x.com/flop_labs",
   heroImage: "/assets/reddragon.jpg"
 };
+
+// Put the source-first FLOP landing page in the main navigation without coupling it to
+// the signing/onboarding code. This remains a normal local link and never writes data.
+(() => {
+  const actions = document.querySelector(".top-actions");
+  const officialFlop = document.getElementById("flopLink");
+  if (!actions || document.getElementById("flopCommunityLink")) return;
+  const link = document.createElement("a");
+  link.id = "flopCommunityLink";
+  link.href = window.APP_CONFIG.flopCommunityUrl;
+  let lang = "en";
+  try { lang = localStorage.getItem("reddragon-lang") || lang; } catch {}
+  link.textContent = lang === "tr" ? "FLOP Gözlemevi" : "FLOP Observatory";
+  actions.insertBefore(link, officialFlop || actions.firstChild);
+})();
 
 // Public onboarding state may be kept locally per DID. Private key material is never persisted here.
 // Add-on files are intentionally isolated from the core key/signing implementation.
@@ -67,7 +83,8 @@ window.APP_CONFIG = {
     "/provenance-room-refresh.js",
     "/testnet-toolkit.js",
     "/flop-spec-refresh.js",
-    "/tclk-workbench.js"
+    "/tclk-workbench.js",
+    "/community-positioning.js"
   ];
 
   let index = 0;

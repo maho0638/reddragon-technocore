@@ -1,0 +1,69 @@
+{
+  "schema": "reddragon-flop-source-status/v1",
+  "checkedAt": "2026-09-11",
+  "project": {
+    "name": "RedDragon FLOP Community Observatory",
+    "site": "https://reddragon-technocore.vercel.app/flop",
+    "repository": "https://github.com/maho0638/reddragon-technocore",
+    "independentCommunityTool": true,
+    "affiliatedWithFlopLabs": false
+  },
+  "authoritative": {
+    "source": "FLOP Network Yellow Paper",
+    "version": "0.5.0 (draft)",
+    "updated": "2026-09-05",
+    "url": "https://flop.finance/intro/yellowpaper/",
+    "githubMirror": "https://github.com/flop-labs/yellowpaper",
+    "genesis": {
+      "supplyFlop": 3500000000,
+      "minerAirdropFlop": 1200000000,
+      "validatorAirdropFlop": 305505000,
+      "agentAirdropFlop": 1200000000,
+      "ecosystemReserveFlop": 794495000
+    },
+    "airdropMechanics": {
+      "openItem": "E.38",
+      "status": "TBD",
+      "unresolved": [
+        "testnet-to-mainnet conversion scoring",
+        "caps and sublinear scoring form",
+        "activity minimums",
+        "validator cohort conversion basis",
+        "agent vesting horizon",
+        "whether spend-to-unlock ships",
+        "unallocated remainder disposition"
+      ],
+      "spendToUnlockRatified": false
+    }
+  },
+  "secondaryPublicSource": {
+    "source": "FLOP Teaser",
+    "url": "https://flop.finance/teaser/",
+    "version": "0.1 (draft)",
+    "displayedGenesisAirdropFlop": 4400000000,
+    "spendToUnlockScenario": "3 FLOP inference spend -> 1 airdropped FLOP unlocked"
+  },
+  "sourceDrift": [
+    {
+      "id": "genesis-supply-2026-09-11",
+      "severity": "material",
+      "status": "open-public-doc-drift",
+      "authoritativeValue": "3.5B FLOP genesis supply",
+      "secondaryValue": "4.4B FLOP genesis airdrop displayed in teaser",
+      "resolutionPolicy": "RedDragon follows the Yellow Paper and labels the teaser value as stale/drifted rather than combining the two."
+    }
+  ],
+  "roadmap": {
+    "testnet": "Q4 2026 (~90 days planned)",
+    "mainnet": "Q1 2027 target",
+    "officialFaucetEndpointVerifiedLive": false,
+    "officialInferenceEndpointVerifiedLive": false
+  },
+  "sources": [
+    "https://flop.finance/intro/yellowpaper/",
+    "https://github.com/flop-labs/yellowpaper",
+    "https://flop.finance/teaser/",
+    "https://flop.finance/"
+  ],
+  "disclaimer": "This is an independent community status file. FLOP Labs and its official sources control the network specification, launch rules and eligibility. Draft material can change."
+}
