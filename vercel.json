@@ -1,5 +1,7 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
   "version": 2,
+  "cleanUrls": true,
   "headers": [
     {
       "source": "/(.*)",
@@ -13,80 +15,21 @@
         { "key": "Strict-Transport-Security", "value": "max-age=31536000; includeSubDomains" }
       ]
     },
-    { "source": "/config.js", "headers": [{ "key": "Cache-Control", "value": "no-store, max-age=0" }] },
-    { "source": "/app.js", "headers": [{ "key": "Cache-Control", "value": "no-store, max-age=0" }] },
-    { "source": "/repair.js", "headers": [{ "key": "Cache-Control", "value": "no-store, max-age=0" }] },
-    { "source": "/public-state.js", "headers": [{ "key": "Cache-Control", "value": "no-store, max-age=0" }] },
-    { "source": "/enhancements.js", "headers": [{ "key": "Cache-Control", "value": "no-store, max-age=0" }] },
-    { "source": "/patches.js", "headers": [{ "key": "Cache-Control", "value": "no-store, max-age=0" }] },
-    { "source": "/proof-import.js", "headers": [{ "key": "Cache-Control", "value": "no-store, max-age=0" }] },
-    { "source": "/contribution-edit-fix.js", "headers": [{ "key": "Cache-Control", "value": "no-store, max-age=0" }] },
-    { "source": "/activity-proof.js", "headers": [{ "key": "Cache-Control", "value": "no-store, max-age=0" }] },
-    { "source": "/language-safe.js", "headers": [{ "key": "Cache-Control", "value": "no-store, max-age=0" }] },
-    { "source": "/language-final.js", "headers": [{ "key": "Cache-Control", "value": "no-store, max-age=0" }] },
-    { "source": "/language-stable.js", "headers": [{ "key": "Cache-Control", "value": "no-store, max-age=0" }] },
-    { "source": "/final-fixes.js", "headers": [{ "key": "Cache-Control", "value": "no-store, max-age=0" }] },
-    { "source": "/progress-scope-fix.js", "headers": [{ "key": "Cache-Control", "value": "no-store, max-age=0" }] },
-    { "source": "/live-observatory.js", "headers": [{ "key": "Cache-Control", "value": "no-store, max-age=0" }] },
-    { "source": "/agent-field.js", "headers": [{ "key": "Cache-Control", "value": "no-store, max-age=0" }] },
-    { "source": "/did-provenance.js", "headers": [{ "key": "Cache-Control", "value": "no-store, max-age=0" }] },
-    { "source": "/testnet-toolkit.js", "headers": [{ "key": "Cache-Control", "value": "no-store, max-age=0" }] },
-    { "source": "/tclk-workbench.js", "headers": [{ "key": "Cache-Control", "value": "no-store, max-age=0" }] },
-    { "source": "/community-positioning.js", "headers": [{ "key": "Cache-Control", "value": "no-store, max-age=0" }] },
-    { "source": "/enhancements.css", "headers": [{ "key": "Cache-Control", "value": "no-store, max-age=0" }] },
-    { "source": "/live-observatory.css", "headers": [{ "key": "Cache-Control", "value": "no-store, max-age=0" }] },
-    { "source": "/language-stable.css", "headers": [{ "key": "Cache-Control", "value": "no-store, max-age=0" }] },
-    { "source": "/agent-field.css", "headers": [{ "key": "Cache-Control", "value": "no-store, max-age=0" }] },
-    { "source": "/did-provenance.css", "headers": [{ "key": "Cache-Control", "value": "no-store, max-age=0" }] },
-    { "source": "/testnet-toolkit.css", "headers": [{ "key": "Cache-Control", "value": "no-store, max-age=0" }] },
-    { "source": "/tclk-workbench.css", "headers": [{ "key": "Cache-Control", "value": "no-store, max-age=0" }] },
-    { "source": "/reddragon-contribution.json", "headers": [{ "key": "Cache-Control", "value": "no-store, max-age=0" }] },
-    { "source": "/flop-source-status.json", "headers": [{ "key": "Cache-Control", "value": "public, max-age=300" }] },
-    { "source": "/llms.txt", "headers": [{ "key": "Cache-Control", "value": "public, max-age=300" }] },
-    { "source": "/robots.txt", "headers": [{ "key": "Cache-Control", "value": "public, max-age=3600" }] },
-    { "source": "/sitemap.xml", "headers": [{ "key": "Cache-Control", "value": "public, max-age=3600" }] }
-  ],
-  "rewrites": [
-    { "source": "/api/relay", "destination": "/api/relay.js" },
-    { "source": "/", "destination": "/public/index.html" },
-    { "source": "/flop", "destination": "/public/flop.html" },
-    { "source": "/flop.html", "destination": "/public/flop.html" },
-    { "source": "/flop.css", "destination": "/public/flop.css" },
-    { "source": "/flop-source-status.json", "destination": "/public/flop-source-status.json" },
-    { "source": "/llms.txt", "destination": "/public/llms.txt" },
-    { "source": "/robots.txt", "destination": "/public/robots.txt" },
-    { "source": "/sitemap.xml", "destination": "/public/sitemap.xml" },
-    { "source": "/styles.css", "destination": "/public/styles.css" },
-    { "source": "/enhancements.css", "destination": "/public/enhancements.css" },
-    { "source": "/live-observatory.css", "destination": "/public/live-observatory.css" },
-    { "source": "/language-stable.css", "destination": "/public/language-stable.css" },
-    { "source": "/agent-field.css", "destination": "/public/agent-field.css" },
-    { "source": "/did-provenance.css", "destination": "/public/did-provenance.css" },
-    { "source": "/testnet-toolkit.css", "destination": "/public/testnet-toolkit.css" },
-    { "source": "/tclk-workbench.css", "destination": "/public/tclk-workbench.css" },
-    { "source": "/config.js", "destination": "/public/config.js" },
-    { "source": "/app.js", "destination": "/public/app.js" },
-    { "source": "/repair.js", "destination": "/public/repair.js" },
-    { "source": "/public-state.js", "destination": "/public/public-state.js" },
-    { "source": "/enhancements.js", "destination": "/public/enhancements.js" },
-    { "source": "/patches.js", "destination": "/public/patches.js" },
-    { "source": "/proof-import.js", "destination": "/public/proof-import.js" },
-    { "source": "/contribution-edit-fix.js", "destination": "/public/contribution-edit-fix.js" },
-    { "source": "/activity-proof.js", "destination": "/public/activity-proof.js" },
-    { "source": "/language-safe.js", "destination": "/public/language-safe.js" },
-    { "source": "/language-final.js", "destination": "/public/language-final.js" },
-    { "source": "/language-stable.js", "destination": "/public/language-stable.js" },
-    { "source": "/final-fixes.js", "destination": "/public/final-fixes.js" },
-    { "source": "/progress-scope-fix.js", "destination": "/public/progress-scope-fix.js" },
-    { "source": "/live-observatory.js", "destination": "/public/live-observatory.js" },
-    { "source": "/agent-field.js", "destination": "/public/agent-field.js" },
-    { "source": "/did-provenance.js", "destination": "/public/did-provenance.js" },
-    { "source": "/testnet-toolkit.js", "destination": "/public/testnet-toolkit.js" },
-    { "source": "/tclk-workbench.js", "destination": "/public/tclk-workbench.js" },
-    { "source": "/community-positioning.js", "destination": "/public/community-positioning.js" },
-    { "source": "/reddragon-contribution.json", "destination": "/public/reddragon-contribution.json" },
-    { "source": "/assets/:path*", "destination": "/public/assets/:path*" },
-    { "source": "/404.html", "destination": "/public/404.html" },
-    { "source": "/:path*", "destination": "/public/404.html" }
+    {
+      "source": "/flop-source-status.json",
+      "headers": [{ "key": "Cache-Control", "value": "public, max-age=300" }]
+    },
+    {
+      "source": "/llms.txt",
+      "headers": [{ "key": "Cache-Control", "value": "public, max-age=300" }]
+    },
+    {
+      "source": "/robots.txt",
+      "headers": [{ "key": "Cache-Control", "value": "public, max-age=3600" }]
+    },
+    {
+      "source": "/sitemap.xml",
+      "headers": [{ "key": "Cache-Control", "value": "public, max-age=3600" }]
+    }
   ]
 }
