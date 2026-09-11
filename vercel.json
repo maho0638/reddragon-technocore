@@ -42,6 +42,7 @@
     { "source": "/tclk-workbench.css", "headers": [{ "key": "Cache-Control", "value": "no-store, max-age=0" }] },
     { "source": "/reddragon-contribution.json", "headers": [{ "key": "Cache-Control", "value": "no-store, max-age=0" }] },
     { "source": "/flop-source-status.json", "headers": [{ "key": "Cache-Control", "value": "public, max-age=300" }] },
+    { "source": "/llms.txt", "headers": [{ "key": "Cache-Control", "value": "public, max-age=300" }] },
     { "source": "/robots.txt", "headers": [{ "key": "Cache-Control", "value": "public, max-age=3600" }] },
     { "source": "/sitemap.xml", "headers": [{ "key": "Cache-Control", "value": "public, max-age=3600" }] }
   ],
@@ -52,6 +53,7 @@
     { "source": "/flop.html", "destination": "/public/flop.html" },
     { "source": "/flop.css", "destination": "/public/flop.css" },
     { "source": "/flop-source-status.json", "destination": "/public/flop-source-status.json" },
+    { "source": "/llms.txt", "destination": "/public/llms.txt" },
     { "source": "/robots.txt", "destination": "/public/robots.txt" },
     { "source": "/sitemap.xml", "destination": "/public/sitemap.xml" },
     { "source": "/styles.css", "destination": "/public/styles.css" },
