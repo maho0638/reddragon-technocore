@@ -1,5 +1,5 @@
 const RD_FLOP_SPEC_DID = "did:key:z6MkuhrsP4tDZjWYdZLPxaur19WvrF1yuLGsGB2S8Q1gwS6K";
-const RD_FLOP_SPEC_CHECKED = "2026-09-10";
+const RD_FLOP_SPEC_CHECKED = "2026-09-11";
 const RD_FLOP_YELLOW_PAPER = "https://flop.finance/intro/yellowpaper/";
 const RD_FLOP_TEASER = "https://flop.finance/teaser/";
 const RD_FLOP_LEDGER_KEY = `reddragon-flop-testnet-ledger:${RD_FLOP_SPEC_DID}`;
@@ -14,29 +14,29 @@ function rdFlopSpecLang() {
 
 const RD_FLOP_SPEC_COPY = {
   tr: {
-    intro: "FLOP Yellow Paper v0.5.0 ile doğrulanan parametreleri ve testnet hazırlığını gösterir. Airdrop tahmini yapmaz; kesinleşmemiş kuralları senaryo olarak etiketler.",
+    intro: "FLOP Yellow Paper v0.5.0 ile doğrulanan güncel parametreleri ve testnet hazırlığını gösterir. Airdrop tahmini yapmaz; kesinleşmemiş kuralları açıkça senaryo/TBD olarak etiketler.",
     badge: "Yellow Paper v0.5.0 · taslak",
-    endpoint: "10 Eylül 2026 kontrolünde resmî faucet veya inference endpoint'i doğrulanmadı. Testnet Q4 2026 için planlı; RedDragon sahte endpoint kullanmaz.",
+    endpoint: "11 Eylül 2026 kontrolünde resmî FLOP kaynaklarında canlı bir faucet veya inference endpoint'i doğrulanmadı. Testnet Q4 2026 için, yaklaşık 90 gün olarak planlı; mainnet Q1 2027 hedefleniyor. RedDragon doğrulanmamış endpoint kullanmaz.",
     unlockLabel: "3:1 teaser senaryosu karşılığı",
-    spendTitle: "Agent 3:1 senaryo hesaplayıcı",
-    spendIntro: "Teaser her 3 FLOP inference harcamasının 1 airdrop FLOP kilidi açacağını söylüyor. Ancak Yellow Paper v0.5.0 Appendix E.38, spend-to-unlock mekanizmasının yayımlanıp yayımlanmayacağını hâlâ TBD bırakıyor. Bu hesap yalnızca teaser senaryosudur.",
+    spendTitle: "Agent 3:1 teaser senaryo hesaplayıcı",
+    spendIntro: "Teaser ve agent sayfası her 3 FLOP inference harcamasının 1 airdrop FLOP kilidi açacağını söylüyor. Ancak authoritative Yellow Paper v0.5.0 Appendix E.38, spend-to-unlock'ın yayımlanıp yayımlanmayacağını hâlâ TBD bırakıyor ve mevcut Y1–Y3 3:1 tasarımını harcama projeksiyonuna göre uygulanamaz olarak işaretliyor. Bu hesap yalnızca teaser senaryosudur.",
     plan3: "3 · Doğrulanabilir inference kullanımı",
-    plan3d: "Testnet açıldığında gerçek inference kullanımını aynı DID altında kaydet. Agent dağıtım yöntemi ve spend-to-unlock kuralı Yellow Paper'da henüz ratifiye edilmedi.",
-    source: "Kaynak durumu: Yellow Paper v0.5.0 (05.09.2026) authoritative implementation draft. Genesis 4.4B FLOP; agent genesis airdrop havuzu 1.2B FLOP. Teaser 3:1 gösteriyor, Yellow Paper E.38 ise bu mekanizmayı TBD bırakıyor.",
+    plan3d: "Testnet açıldığında gerçek inference kullanımını aynı DID altında kaydet. Agent dağıtım skoru, vesting ufku ve spend-to-unlock mekanizması Yellow Paper E.38'de henüz kesinleşmiş değil.",
+    source: "Kaynak durumu: FLOP Yellow Paper v0.5.0 (05.09.2026 güncellemeli authoritative implementation spec, hâlâ draft). Genesis arzı 3.5B FLOP: 1.2B miner + 1.2B agent + 305.505M validator + 794.495M reserve/incentives. Teaser 3:1 gösteriyor; Yellow Paper E.38 ise mekanizmanın ship edilmesini TBD bırakıyor.",
     yp: "Yellow Paper",
     teaser: "Teaser",
     exportFail: "Ledger dışa aktarılamadı."
   },
   en: {
-    intro: "Shows parameters verified against FLOP Yellow Paper v0.5.0 and testnet readiness. It does not estimate an airdrop; unresolved rules are labeled as scenarios.",
+    intro: "Shows current parameters verified against FLOP Yellow Paper v0.5.0 and testnet readiness. It does not estimate an airdrop; unresolved mechanics are explicitly labeled scenario/TBD.",
     badge: "Yellow Paper v0.5.0 · draft",
-    endpoint: "As checked on 10 Sep 2026, no official faucet or inference endpoint was verified. Testnet is planned for Q4 2026; RedDragon does not invent endpoints.",
+    endpoint: "As checked on 11 Sep 2026, no live official FLOP faucet or inference endpoint was verified in official sources. Testnet is planned for Q4 2026 for roughly 90 days; mainnet is targeted for Q1 2027. RedDragon does not use unverified endpoints.",
     unlockLabel: "3:1 teaser-scenario equivalent",
-    spendTitle: "Agent 3:1 scenario calculator",
-    spendIntro: "The Teaser says every 3 FLOP spent on inference unlocks 1 airdropped FLOP. Yellow Paper v0.5.0 Appendix E.38 still leaves whether spend-to-unlock ships as TBD. This calculator is a teaser scenario only.",
+    spendTitle: "Agent 3:1 teaser scenario calculator",
+    spendIntro: "The Teaser and agent page say every 3 FLOP spent on inference unlocks 1 airdropped FLOP. However, the authoritative Yellow Paper v0.5.0 Appendix E.38 still leaves whether spend-to-unlock ships as TBD and marks the current Y1–Y3 3:1 design infeasible against projected network inference spend. This calculator is a teaser scenario only.",
     plan3: "3 · Verifiable inference usage",
-    plan3d: "When testnet opens, record real inference usage under the same DID. Agent distribution and spend-to-unlock are not yet ratified in the Yellow Paper.",
-    source: "Source status: Yellow Paper v0.5.0 (2026-09-05), the authoritative implementation draft. Genesis is 4.4B FLOP; the agent genesis airdrop pool is 1.2B FLOP. The Teaser shows 3:1, while Yellow Paper E.38 keeps the mechanism TBD.",
+    plan3d: "When testnet opens, record real inference usage under the same DID. Agent conversion scoring, vesting horizon and spend-to-unlock remain unresolved in Yellow Paper E.38.",
+    source: "Source status: FLOP Yellow Paper v0.5.0 (authoritative implementation spec updated 2026-09-05, still draft). Genesis supply is 3.5B FLOP: 1.2B miner + 1.2B agent + 305.505M validator + 794.495M reserve/incentives. The Teaser shows 3:1; Yellow Paper E.38 keeps whether that mechanism ships as TBD.",
     yp: "Yellow Paper",
     teaser: "Teaser",
     exportFail: "Could not export ledger."
@@ -73,13 +73,18 @@ function rdFlopSpecExportLedger() {
         checkedAt: RD_FLOP_SPEC_CHECKED,
         yellowPaperVersion: "0.5.0 (draft)",
         yellowPaperUpdated: "2026-09-05",
-        plannedTestnet: "Q4 2026",
-        genesisSupplyFlop: 4400000000,
+        authoritativeReference: "FLOP Network Yellow Paper implementation specification",
+        plannedTestnet: "Q4 2026 (~90 days)",
+        plannedMainnet: "Q1 2027",
+        genesisSupplyFlop: 3500000000,
+        genesisMinerAirdropFlop: 1200000000,
         genesisAgentAirdropFlop: 1200000000,
+        genesisValidatorAirdropFlop: 305505000,
+        genesisReserveFlop: 794495000,
         faucetEndpointVerifiedLive: false,
         inferenceEndpointVerifiedLive: false,
         spendToUnlockRatified: false,
-        spendToUnlockStatus: "TBD in Yellow Paper Appendix E.38",
+        spendToUnlockStatus: "Teaser/agent page state 3:1; Yellow Paper Appendix E.38 says whether spend-to-unlock ships is TBD and the current Y1-Y3 3:1 pacing is infeasible as drafted",
         sources: [RD_FLOP_YELLOW_PAPER, RD_FLOP_TEASER]
       },
       scenario: {
@@ -157,7 +162,7 @@ function rdFlopSpecPatch() {
     const small = cols[1].querySelector("small");
     const strong = cols[1].querySelector("strong");
     if (small) small.textContent = tr ? "Testnet planı" : "Testnet plan";
-    if (strong) strong.textContent = "Q4 2026";
+    if (strong) strong.textContent = "Q4 2026 · ~90 gün";
   }
   if (cols[2]) {
     const small = cols[2].querySelector("small");
