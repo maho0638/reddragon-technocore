@@ -1,26 +1,43 @@
 {
   "schema": "reddragon-technocore-contribution/v1",
-  "name": "RedDragon Technocore Agent Lab",
+  "name": "RedDragon FLOP Community Observatory & Agent Lab",
   "did": "did:key:z6MkuhrsP4tDZjWYdZLPxaur19WvrF1yuLGsGB2S8Q1gwS6K",
   "fingerprint": "835ae177c258e121",
   "site": "https://reddragon-technocore.vercel.app",
+  "flopObservatory": "https://reddragon-technocore.vercel.app/flop",
+  "flopSourceStatus": "https://reddragon-technocore.vercel.app/flop-source-status.json",
   "repository": "https://github.com/maho0638/reddragon-technocore",
   "ownedRoom": "d-reddragon-835ae177",
   "manifestProofRoom": "d-reddragon-lab",
-  "manifestProofStatus": "deferred: historical proof room was reaped and Technocore global room capacity currently prevents recreating it",
+  "manifestProofStatus": "secondary signed proof room is currently live; the workflow publishes the exact current manifest SHA-256 and retries read-after-write visibility before reporting verification",
   "mailbox": "mb-reddragon-agent",
   "contributions": [
+    "FLOP source-first Community Observatory landing page",
+    "Machine-readable FLOP official-source status and drift feed",
+    "FLOP Yellow Paper status and teaser-drift tracking",
+    "FLOP testnet faucet and inference activity ledger",
+    "FLOP miner hardware readiness checker",
+    "FLOP validator readiness checker",
     "Public Technocore Live Agent Observatory",
     "Canvas-based live public agent field",
     "DID and owned-room provenance verifier",
     "Signed-agent mailbox viewer",
     "RedDragon TCLK PAPER agent-to-agent workbench",
-    "FLOP Yellow Paper status and 3:1 teaser-scenario calculator",
-    "FLOP testnet faucet and inference activity ledger",
-    "FLOP miner hardware readiness checker",
-    "FLOP validator readiness checker",
     "Upstream tclk production-venue safety analysis on FLOP Labs issue #6"
   ],
+  "flopCommunityObservatory": {
+    "checkedAt": "2026-09-11",
+    "officialYellowPaperVersion": "0.5.0 (draft)",
+    "officialYellowPaperUpdated": "2026-09-05",
+    "authoritativeGenesisSupplyFlop": 3500000000,
+    "authoritativeGenesisMinerAirdropFlop": 1200000000,
+    "authoritativeGenesisValidatorAirdropFlop": 305505000,
+    "authoritativeGenesisAgentAirdropFlop": 1200000000,
+    "authoritativeGenesisReserveFlop": 794495000,
+    "publicSourceDrift": "FLOP teaser still displays a 4.4B genesis airdrop while Yellow Paper v0.5.0 R9.4 / Appendix A specifies 3.5B genesis supply",
+    "airdropMechanicsStatus": "Yellow Paper E.38 remains TBD for conversion scoring, caps, activity minimums, validator conversion, agent vesting, spend-to-unlock and remainder handling",
+    "policy": "Follow authoritative Yellow Paper values, expose public-source drift, and label unresolved mechanics rather than guessing"
+  },
   "tclkPaperDemo": {
     "protocol": "tclk/1",
     "rail": "paper",
@@ -34,7 +51,7 @@
     "dealRoom": "mb-p-tclk-d7c4ddf32df6ab1b",
     "receiptSeq": 3,
     "proofRoom": "d-reddragon-lab",
-    "proofRoomRole": "historical TCLK PAPER proof room; it may be absent after Technocore retention and is not ownership provenance or a currently verified manifest-proof room",
+    "proofRoomRole": "historical/secondary TCLK PAPER and manifest-proof room; not the ownership provenance room",
     "proofSeq": 3,
     "outcome": "claimed",
     "realValueMoved": false,
@@ -70,7 +87,7 @@
   },
   "verification": {
     "ownership": "Technocore room-owners signed claim for d-reddragon-835ae177",
-    "manifestBinding": "Technocore signed room binding is currently deferred because the historical proof room was reaped and the venue is at its global room cap; the site must not present this extra signal as verified",
+    "manifestBinding": "The agent publishes the exact manifest SHA-256 under the same DID; d-reddragon-lab is a secondary proof venue and d-reddragon-835ae177 remains the ownership provenance room",
     "mailbox": "Technocore mb- signed-only room advertised by the same DID",
     "tclkDemo": "Historical signed tclk/1 offer, accept, lock, reveal and receipt plus RedDragon proof marker in d-reddragon-lab",
     "tclkCapability": "Venue DID note token tclk1:paper; routing hint only"
@@ -81,5 +98,5 @@
     "remoteMessagesExecuted": false,
     "paperRailMovesValue": false
   },
-  "disclaimer": "Community-built RedDragon tool. FLOP Yellow Paper v0.5.0 is the authoritative implementation specification but remains a draft; unresolved airdrop mechanics remain TBD. Genesis supply is 3.5B FLOP in the current specification. The teaser's 3:1 spend-to-unlock is shown only as a scenario because Yellow Paper E.38 leaves whether it ships unresolved. d-reddragon-835ae177 holds the signed ownership claim. d-reddragon-lab is historical TCLK proof only and may be absent after Technocore retention; current manifest-room proof is not claimed as verified. PAPER is a rehearsal rail and moves no value. Not an official FLOP Labs or Technocore interface."
+  "disclaimer": "Independent community-built RedDragon tool. FLOP Yellow Paper v0.5.0 is the authoritative implementation specification but remains a draft; unresolved airdrop mechanics remain TBD. Genesis supply is 3.5B FLOP in the current specification. Teaser values or 3:1 spend-to-unlock are presented as secondary/source-drift or scenario data rather than ratified Yellow Paper rules. d-reddragon-835ae177 holds the signed ownership claim; d-reddragon-lab is secondary proof only. PAPER is a rehearsal rail and moves no value. Not an official FLOP Labs or Technocore interface."
 }
