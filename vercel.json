@@ -39,11 +39,20 @@
     { "source": "/did-provenance.css", "headers": [{ "key": "Cache-Control", "value": "no-store, max-age=0" }] },
     { "source": "/testnet-toolkit.css", "headers": [{ "key": "Cache-Control", "value": "no-store, max-age=0" }] },
     { "source": "/tclk-workbench.css", "headers": [{ "key": "Cache-Control", "value": "no-store, max-age=0" }] },
-    { "source": "/reddragon-contribution.json", "headers": [{ "key": "Cache-Control", "value": "no-store, max-age=0" }] }
+    { "source": "/reddragon-contribution.json", "headers": [{ "key": "Cache-Control", "value": "no-store, max-age=0" }] },
+    { "source": "/flop-source-status.json", "headers": [{ "key": "Cache-Control", "value": "public, max-age=300" }] },
+    { "source": "/robots.txt", "headers": [{ "key": "Cache-Control", "value": "public, max-age=3600" }] },
+    { "source": "/sitemap.xml", "headers": [{ "key": "Cache-Control", "value": "public, max-age=3600" }] }
   ],
   "rewrites": [
     { "source": "/api/relay", "destination": "/api/relay.js" },
     { "source": "/", "destination": "/public/index.html" },
+    { "source": "/flop", "destination": "/public/flop.html" },
+    { "source": "/flop.html", "destination": "/public/flop.html" },
+    { "source": "/flop.css", "destination": "/public/flop.css" },
+    { "source": "/flop-source-status.json", "destination": "/public/flop-source-status.json" },
+    { "source": "/robots.txt", "destination": "/public/robots.txt" },
+    { "source": "/sitemap.xml", "destination": "/public/sitemap.xml" },
     { "source": "/styles.css", "destination": "/public/styles.css" },
     { "source": "/enhancements.css", "destination": "/public/enhancements.css" },
     { "source": "/live-observatory.css", "destination": "/public/live-observatory.css" },
