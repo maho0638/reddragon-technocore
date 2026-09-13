@@ -112,8 +112,16 @@ function messagesFrom(data) {
   return [];
 }
 
+// Technocore nonces can exceed JS's safe integer range. Preserve them as exact
+// decimal strings before JSON.parse so referee signature verification does not
+// silently fail because of IEEE-754 rounding.
+function parseJsonLosslessNonce(text) {
+  const safe = String(text || "").replace(/("nonce"\s*:\s*)(-?\d{16,})/g, '$1"$2"');
+  return JSON.parse(safe);
+}
+
 function parseJson(text) {
-  try { return JSON.parse(String(text || "")); }
+  try { return parseJsonLosslessNonce(String(text || "")); }
   catch { return null; }
 }
 
@@ -159,18 +167,43 @@ async function verifyOfficialLaunch() {
 }
 
 async function readRegistrationRoom() {
-  for (const limit of [500, 200]) {
-    const { response, text } = await fetchText(`${BASE}/r/${ROOM}?format=json&limit=${limit}`, {
-      headers: { accept: "application/json" }
-    });
-    if (!response.ok) {
-      if (limit === 500 && response.status === 400) continue;
-      throw new Error(`Registration-room read failed ${response.status}: ${text.slice(0, 500)}`);
-    }
-    try { return messagesFrom(JSON.parse(text)); }
-    catch { throw new Error("Technocore returned invalid registration-room JSON"); }
+  const { response, text } = await fetchText(`${BASE}/r/${ROOM}?format=json&limit=500`, {
+    headers: { accept: "application/json" }
+  });
+  if (!response.ok) throw new Error(`Registration-room read failed ${response.status}: ${text.slice(0, 500)}`);
+  try { return messagesFrom(parseJsonLosslessNonce(text)); }
+  catch { throw new Error("Technocore returned invalid registration-room JSON"); }
+}
+
+// Per FLOP maintainers' guidance in technocore-sonnet-challenge#9, normal room
+// reads return the newest `limit` records and can silently skip receipts during
+// bursts. Recover from the retained ring through /export and scan it directly.
+async function readRegistrationExport() {
+  const { response, text } = await fetchText(`${BASE}/r/${ROOM}/export`, {
+    headers: { accept: "application/x-ndjson,application/json,text/plain" }
+  });
+  if (!response.ok) throw new Error(`Registration export failed ${response.status}: ${text.slice(0, 500)}`);
+
+  const trimmed = text.trim();
+  if (!trimmed) return [];
+
+  // Some deployments may return a JSON array/object rather than JSONL.
+  try {
+    const parsed = parseJsonLosslessNonce(trimmed);
+    const messages = messagesFrom(parsed);
+    if (messages.length || Array.isArray(parsed)) return messages;
+  } catch {
+    // Fall through to JSONL parsing.
   }
-  return [];
+
+  const out = [];
+  for (const rawLine of trimmed.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    try { out.push(parseJsonLosslessNonce(line)); }
+    catch { /* Ignore malformed/non-record lines, but keep scanning retained data. */ }
+  }
+  return out;
 }
 
 function verifyRefereeMessage(item) {
@@ -187,20 +220,38 @@ function verifyRefereeMessage(item) {
   }
 }
 
+function receiptMatches(body) {
+  if (!body || body.request_id !== REQUEST_ID) return false;
+  const participant = String(body.participant_did || body.sender_did || body.did || "");
+  return !participant || participant === did;
+}
+
 function findReceipt(messages) {
   const candidates = [];
   for (const item of messages) {
     if (messageDid(item) !== REFEREE_DID) continue;
     const body = parseJson(messageText(item));
-    if (!body || body.type !== "sonnet.receipt.v1" || body.request_id !== REQUEST_ID) continue;
-    candidates.push({ item, body });
+    if (!body) continue;
+
+    if (body.type === "sonnet.receipt.v1" && receiptMatches(body)) {
+      candidates.push({ item, body, batched: false });
+      continue;
+    }
+
+    // The referee can batch registration decisions under sonnet.receipts.v1.
+    // The outer signed message authenticates the contained decisions.
+    if (body.type === "sonnet.receipts.v1" && Array.isArray(body.receipts)) {
+      for (const child of body.receipts) {
+        if (receiptMatches(child)) candidates.push({ item, body: child, batched: true });
+      }
+    }
   }
   candidates.sort((a, b) => Number(b.item?.seq || 0) - Number(a.item?.seq || 0));
   return candidates[0] || null;
 }
 
-function ownRegistrationExists(messages) {
-  return messages.some((item) => {
+function ownRegistrations(messages) {
+  return messages.filter((item) => {
     if (messageDid(item) !== did) return false;
     const body = parseJson(messageText(item));
     return body?.type === "sonnet.register.v1" && body?.contest_id === CONTEST_ID && body?.request_id === REQUEST_ID;
@@ -221,12 +272,12 @@ async function postRegistration() {
 }
 
 function reportReceipt(receipt) {
-  const { item, body } = receipt;
+  const { item, body, batched } = receipt;
   if (!verifyRefereeMessage(item)) {
     throw new Error(`Found receipt seq ${item?.seq || "?"}, but referee signature verification failed`);
   }
   const status = String(body.status || body.result || "").toUpperCase();
-  console.log(`Verified referee receipt seq ${item?.seq || "?"}: ${JSON.stringify(body)}`);
+  console.log(`Verified referee ${batched ? "batched " : ""}receipt seq ${item?.seq || "?"}: ${JSON.stringify(body)}`);
   if (["ACCEPTED", "OK", "REGISTERED"].includes(status)) {
     if (body.role && body.role !== ROLE) throw new Error(`Receipt role mismatch: ${body.role}`);
     console.log("SONNET2_WRITER_REGISTERED=true");
@@ -239,32 +290,53 @@ function reportReceipt(receipt) {
   return false;
 }
 
+function describeWindow(messages, label) {
+  const seqs = messages.map((m) => Number(m?.seq)).filter(Number.isFinite).sort((a, b) => a - b);
+  if (!seqs.length) {
+    console.log(`${label}: no sequence metadata available.`);
+    return;
+  }
+  console.log(`${label}: ${messages.length} records, seq ${seqs[0]}..${seqs[seqs.length - 1]}.`);
+}
+
 await verifyOfficialLaunch();
 
-let messages = await readRegistrationRoom();
-let receipt = findReceipt(messages);
+// First inspect both the newest live window and the retained export. This fixes
+// the original RedDragon watcher bug: it previously scanned only the newest 500
+// records, so it could miss both individual and batched referee receipts.
+let live = await readRegistrationRoom();
+let exported = await readRegistrationExport();
+describeWindow(live, "Live registration window");
+describeWindow(exported, "Registration export window");
+
+let receipt = findReceipt([...exported, ...live]);
 if (receipt) {
   reportReceipt(receipt);
   process.exit(0);
 }
 
-if (!ownRegistrationExists(messages)) {
-  await postRegistration();
+const existing = ownRegistrations([...exported, ...live]);
+if (existing.length) {
+  const seqs = existing.map((m) => Number(m?.seq)).filter(Number.isFinite).sort((a, b) => a - b);
+  console.log(`Found ${existing.length} retained matching registration(s)${seqs.length ? `, latest seq ${seqs[seqs.length - 1]}` : ""}.`);
 } else {
-  console.log("Matching writer registration request already exists; not posting a duplicate.");
+  console.log("No matching registration remains in the retained read/export windows.");
 }
 
-// Intake can lag during bursts. Poll briefly now; future scheduled agent runs will
-// continue checking the same stable request_id without creating duplicate requests.
+// The official rules explicitly make an identical retry with the same request_id
+// idempotent and say it should return the original receipt. Send one retry per run
+// to create a fresh observation opportunity without changing identity or role.
+await postRegistration();
+
 for (let attempt = 1; attempt <= 9; attempt++) {
-  await sleep(attempt === 1 ? 3000 : 8000);
-  messages = await readRegistrationRoom();
-  receipt = findReceipt(messages);
+  await sleep(attempt === 1 ? 2500 : 7000);
+  exported = await readRegistrationExport();
+  receipt = findReceipt(exported);
   if (receipt) {
     reportReceipt(receipt);
     process.exit(0);
   }
-  console.log(`Receipt pending (${attempt}/9).`);
+  console.log(`Export receipt scan pending (${attempt}/9).`);
 }
 
-console.log("Writer registration is submitted and awaiting the signed referee receipt. This is a delay, not a rejection.");
+console.log("Writer registration remains without an observable signed referee receipt after export-based recovery. This now matches the public Sonnet-2 non-receipt anomaly reports rather than a simple client read-window miss.");
