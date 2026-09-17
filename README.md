@@ -1,6 +1,6 @@
 # RedDragon FLOP Community Observatory & Agent Lab
 
-Independent, community-built FLOP research and agent tooling. RedDragon tracks authoritative FLOP specification changes, exposes official-source drift, prepares users for testnet without inventing endpoints or reward formulas, and provides verifiable DID / Technocore / TCLK tooling.
+Independent, community-built FLOP research and agent tooling. RedDragon tracks authoritative FLOP specification changes, exposes source drift, prepares users for testnet without inventing endpoints or reward formulas, and provides verifiable DID / Technocore / TCLK tooling.
 
 - FLOP Observatory: https://reddragon-technocore.vercel.app/flop
 - Full Agent Lab: https://reddragon-technocore.vercel.app
@@ -12,35 +12,42 @@ Independent, community-built FLOP research and agent tooling. RedDragon tracks a
 
 ## Why this is useful to FLOP builders and the community
 
-FLOP is moving quickly and its public documents can temporarily disagree while the specification evolves. RedDragon deliberately separates normative/authoritative material from older overview copy instead of blending them together.
+FLOP is moving quickly and its public surfaces can temporarily disagree while the specification evolves. RedDragon deliberately separates the live authoritative specification from stale mirrors or provisional overview copy instead of blending them together.
 
-Current source check, 2026-09-11:
+Current source check, 2026-09-17:
 
-- FLOP Yellow Paper: **v0.5.0 (draft)**, updated 2026-09-05.
-- Current authoritative genesis supply: **3.5B FLOP**.
-- Current genesis buckets: **1.2B miner + 305.505M validator + 1.2B agent + 794.495M ecosystem/incentives reserve**.
-- The public teaser still displays **4.4B** genesis airdrop; RedDragon flags this as public-source drift and follows the Yellow Paper.
-- Yellow Paper open item **E.38** still leaves testnet→mainnet scoring, caps, activity minimums, validator conversion, agent vesting, spend-to-unlock and remainder handling unresolved.
-- Testnet remains planned for **Q4 2026**; RedDragon did not verify an official live faucet or inference endpoint as of the check date.
+- FLOP Yellow Paper: **v0.5.0 (draft / implementation spec — iterating)**, page metadata updated 2026-09-05.
+- Live authoritative genesis supply: **4.4B FLOP** under **D-0440**.
+- Current genesis buckets: **1.2B miner + 1.2B validator + 1.2B agent + 800M ecosystem/incentives reserve**.
+- Validator minimum stake in the live Yellow Paper: **1.2M FLOP**.
+- The live Yellow Paper and teaser now agree on 4.4B. The public GitHub mirror still carries the older 3.5B / 305.505M-validator revision, so RedDragon flags the mirror as stale and follows the live FLOP-hosted specification.
+- Yellow Paper open item **E.38** still leaves testnet→mainnet scoring, caps, activity minimums, validator conversion, agent vesting, whether spend-to-unlock ships and remainder handling unresolved.
+- The official Agent page states a public **3 FLOP inference spend → 1 airdropped FLOP unlocked** rule, but RedDragon keeps it labeled as unresolved at the normative-spec level while E.38 remains open.
+- Testnet remains planned for **Q4 2026 (~90 days)**; RedDragon did not verify an official public live faucet or inference endpoint as of the check date.
+- Official GPU-provider, validator and KOL/creator applications are currently linked from flop.finance.
+- FLOP's rentable-GPU market monitor is live at https://gpus.flop.finance/.
 
 Machine-readable status: [`public/flop-source-status.json`](public/flop-source-status.json)
 
 Official sources used:
 
 - https://flop.finance/intro/yellowpaper/
+- https://flop.finance/intro/agent/
 - https://github.com/flop-labs/yellowpaper
 - https://flop.finance/teaser/
 - https://flop.finance/
+- https://gpus.flop.finance/
 
 ## What the project includes
 
 ### FLOP community observatory
 
 - Source-first Yellow Paper status
-- Material official-source drift callouts
-- Current genesis allocation summary
+- Material official-source/mirror drift callouts
+- Current D-0440 genesis allocation summary
 - E.38 unresolved-airdrop-mechanics warning
 - Testnet readiness status without fabricated endpoints
+- Current creator/application and GPU-market links
 - Machine-readable source-status JSON
 - Search/social discovery support through canonical metadata, Open Graph, `robots.txt`, and `sitemap.xml`
 
