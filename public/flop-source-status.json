@@ -1,6 +1,6 @@
 {
   "schema": "reddragon-flop-source-status/v1",
-  "checkedAt": "2026-09-11",
+  "checkedAt": "2026-09-17",
   "project": {
     "name": "RedDragon FLOP Community Observatory",
     "site": "https://reddragon-technocore.vercel.app/flop",
@@ -11,16 +11,20 @@
   },
   "authoritative": {
     "source": "FLOP Network Yellow Paper",
-    "version": "0.5.0 (draft)",
+    "version": "0.5.0 (draft / implementation spec — iterating)",
     "updated": "2026-09-05",
     "url": "https://flop.finance/intro/yellowpaper/",
     "githubMirror": "https://github.com/flop-labs/yellowpaper",
+    "decision": "D-0440",
     "genesis": {
-      "supplyFlop": 3500000000,
+      "supplyFlop": 4400000000,
       "minerAirdropFlop": 1200000000,
-      "validatorAirdropFlop": 305505000,
+      "validatorAirdropFlop": 1200000000,
       "agentAirdropFlop": 1200000000,
-      "ecosystemReserveFlop": 794495000
+      "ecosystemReserveFlop": 800000000
+    },
+    "validator": {
+      "minimumStakeFlop": 1200000
     },
     "airdropMechanics": {
       "openItem": "E.38",
@@ -34,7 +38,8 @@
         "whether spend-to-unlock ships",
         "unallocated remainder disposition"
       ],
-      "spendToUnlockRatified": false
+      "publicAgentPageStatesSpendToUnlock3to1": true,
+      "spendToUnlockRatifiedInYellowPaper": false
     }
   },
   "secondaryPublicSource": {
@@ -42,17 +47,18 @@
     "url": "https://flop.finance/teaser/",
     "version": "0.1 (draft)",
     "displayedGenesisAirdropFlop": 4400000000,
-    "spendToUnlockScenario": "3 FLOP inference spend -> 1 airdropped FLOP unlocked"
+    "spendToUnlockScenario": "3 FLOP inference spend -> 1 airdropped FLOP unlocked",
+    "alignedWithLiveYellowPaperOnGenesisSupply": true
   },
   "sourceDrift": [
     {
-      "id": "genesis-supply-2026-09-11",
+      "id": "github-mirror-stale-d0440-2026-09-17",
       "severity": "material",
       "status": "reported-upstream",
-      "authoritativeValue": "3.5B FLOP genesis supply",
-      "secondaryValue": "4.4B FLOP genesis airdrop displayed in teaser",
+      "authoritativeValue": "Live FLOP Yellow Paper: D-0440, 4.4B FLOP genesis supply; 1.2B validator cohort; 800M reserve",
+      "staleMirrorValue": "GitHub mirror at the previously checked v0.5.0 revision: 3.5B FLOP; 305.505M validator cohort; 794.495M reserve",
       "upstreamIssue": "https://github.com/flop-labs/yellowpaper/issues/54",
-      "resolutionPolicy": "RedDragon follows the Yellow Paper and labels the teaser value as stale/drifted rather than combining the two."
+      "resolutionPolicy": "RedDragon follows the live FLOP-hosted Yellow Paper and treats the public GitHub mirror as stale until it is synchronized."
     }
   ],
   "roadmap": {
@@ -61,11 +67,22 @@
     "officialFaucetEndpointVerifiedLive": false,
     "officialInferenceEndpointVerifiedLive": false
   },
+  "currentOpportunities": {
+    "kolCreatorApplicationsOpen": true,
+    "minerApplicationsOpen": true,
+    "validatorApplicationsOpen": true,
+    "kolApplication": "https://flop.finance/apply/kol",
+    "gpuMarketMonitorLive": true,
+    "gpuMarket": "https://gpus.flop.finance/",
+    "individualRewardGuaranteed": false
+  },
   "sources": [
     "https://flop.finance/intro/yellowpaper/",
-    "https://github.com/flop-labs/yellowpaper",
+    "https://flop.finance/intro/agent/",
     "https://flop.finance/teaser/",
-    "https://flop.finance/"
+    "https://flop.finance/",
+    "https://gpus.flop.finance/",
+    "https://github.com/flop-labs/yellowpaper"
   ],
-  "disclaimer": "This is an independent community status file. FLOP Labs and its official sources control the network specification, launch rules and eligibility. Draft material can change."
+  "disclaimer": "This is an independent community status file. FLOP Labs and its official sources control the network specification, launch rules and eligibility. Draft material can change; applications and activity do not guarantee rewards."
 }
