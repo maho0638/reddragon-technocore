@@ -162,8 +162,12 @@ async function verifyOfficialLaunch() {
   }
   const now = Date.now();
   if (now < OPEN_MS) throw new Error("Sonnet-2 has not opened yet");
-  if (now >= CLOSE_MS) throw new Error("Sonnet-2 registration window has closed");
+  const contestClosed = now >= CLOSE_MS;
   console.log("Official Sonnet-2 launch record verified against FLOP Labs GitHub.");
+  if (contestClosed) {
+    console.log("Sonnet-2 registration window has closed; running read-only receipt/status recovery.");
+  }
+  return { contestClosed };
 }
 
 async function readRegistrationRoom() {
@@ -242,7 +246,17 @@ function findReceipt(messages) {
     // The outer signed message authenticates the contained decisions.
     if (body.type === "sonnet.receipts.v1" && Array.isArray(body.receipts)) {
       for (const child of body.receipts) {
-        if (receiptMatches(child)) candidates.push({ item, body: child, batched: true });
+        if (!receiptMatches(child)) continue;
+        // Batch entries carry request_id + sender_did, while the authoritative
+        // status/role/reason live on the signed envelope (issue #72).
+        const merged = {
+          ...child,
+          status: child?.status ?? body.status,
+          role: child?.role ?? body.role,
+          reason: child?.reason ?? body.reason,
+          contest_id: child?.contest_id ?? body.contest_id
+        };
+        candidates.push({ item, body: merged, batched: true });
       }
     }
   }
@@ -299,7 +313,7 @@ function describeWindow(messages, label) {
   console.log(`${label}: ${messages.length} records, seq ${seqs[0]}..${seqs[seqs.length - 1]}.`);
 }
 
-await verifyOfficialLaunch();
+const { contestClosed } = await verifyOfficialLaunch();
 
 // First inspect both the newest live window and the retained export. This fixes
 // the original RedDragon watcher bug: it previously scanned only the newest 500
@@ -321,6 +335,11 @@ if (existing.length) {
   console.log(`Found ${existing.length} retained matching registration(s)${seqs.length ? `, latest seq ${seqs[seqs.length - 1]}` : ""}.`);
 } else {
   console.log("No matching registration remains in the retained read/export windows.");
+}
+
+if (contestClosed) {
+  console.log("Contest is closed. Read-only recovery found no retained matching referee receipt; not posting or retrying registration.");
+  process.exit(0);
 }
 
 // The official rules explicitly make an identical retry with the same request_id
