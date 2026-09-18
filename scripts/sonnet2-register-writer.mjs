@@ -7,6 +7,7 @@ import {
 
 const BASE = "https://technocore.chat";
 const ROOM = "mb-sonnet-2-registration";
+const RESULTS_ROOM = "d-sonnet-2-results";
 const CONTEST_ID = "sonnet-2";
 const ROLE = "writer";
 const X_ACCOUNT_URL = "https://x.com/joannawolker";
@@ -210,18 +211,54 @@ async function readRegistrationExport() {
   return out;
 }
 
-function verifyRefereeMessage(item) {
+function verifyRefereeMessage(item, room = ROOM) {
   if (messageDid(item) !== REFEREE_DID) return false;
   const nonce = String(item?.nonce || "");
   const sig = String(item?.sig || item?.signature || "");
   const text = messageText(item);
   if (!nonce || !sig || !text) return false;
   try {
-    const payload = `${ROOM}|${nonce}|${text}`;
+    const payload = `${room}|${nonce}|${text}`;
     return nodeVerify(null, Buffer.from(payload, "utf8"), publicKeyFromDid(REFEREE_DID), Buffer.from(sig, "base64url"));
   } catch {
     return false;
   }
+}
+
+async function readResultsExport() {
+  const { response, text } = await fetchText(`${BASE}/r/${RESULTS_ROOM}/export`, {
+    headers: { accept: "application/x-ndjson,application/json,text/plain" }
+  });
+  if (!response.ok) throw new Error(`Results export failed ${response.status}: ${text.slice(0, 500)}`);
+
+  const trimmed = text.trim();
+  if (!trimmed) return [];
+  try {
+    const parsed = parseJsonLosslessNonce(trimmed);
+    const messages = messagesFrom(parsed);
+    if (messages.length || Array.isArray(parsed)) return messages;
+  } catch {}
+
+  const out = [];
+  for (const rawLine of trimmed.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    try { out.push(parseJsonLosslessNonce(line)); } catch {}
+  }
+  return out;
+}
+
+function findIdentityAttestations(messages) {
+  const out = [];
+  for (const item of messages) {
+    if (messageDid(item) !== REFEREE_DID) continue;
+    const body = parseJson(messageText(item));
+    if (!body || body.type !== "sonnet.identities.v1") continue;
+    if (!JSON.stringify(body).includes(did)) continue;
+    out.push({ item, body, verified: verifyRefereeMessage(item, RESULTS_ROOM) });
+  }
+  out.sort((a, b) => Number(a.item?.seq || 0) - Number(b.item?.seq || 0));
+  return out;
 }
 
 function receiptMatches(body) {
@@ -322,6 +359,19 @@ let live = await readRegistrationRoom();
 let exported = await readRegistrationExport();
 describeWindow(live, "Live registration window");
 describeWindow(exported, "Registration export window");
+
+if (contestClosed) {
+  const results = await readResultsExport();
+  describeWindow(results, "Sonnet-2 results export window");
+  const identityAttestations = findIdentityAttestations(results);
+  if (identityAttestations.length) {
+    for (const att of identityAttestations) {
+      console.log(`RedDragon identity attestation found at results seq ${att.item?.seq || "?"}; referee_signature_verified=${att.verified}; body=${JSON.stringify(att.body)}`);
+    }
+  } else {
+    console.log("No retained sonnet.identities.v1 attestation for the exact RedDragon DID is visible in the current results export window.");
+  }
+}
 
 let receipt = findReceipt([...exported, ...live]);
 if (receipt) {
