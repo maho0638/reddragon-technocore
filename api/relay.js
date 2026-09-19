@@ -157,6 +157,20 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, technocore: true });
     }
 
+    if (action === "rooms") {
+      const r = await upstreamRead(`${BASE}/rooms?format=json&limit=200`, {
+        headers: { accept: "application/json" }
+      });
+      return pass(res, r);
+    }
+
+    if (action === "config") {
+      const r = await upstreamRead(`${BASE}/config?format=json`, {
+        headers: { accept: "application/json" }
+      });
+      return pass(res, r);
+    }
+
     if (action === "read") {
       if (!NAME_RE.test(room)) return bad(res, 400, "Invalid room");
       if (since != null && !/^\d{1,19}$/.test(String(since))) return bad(res, 400, "Invalid since cursor");
