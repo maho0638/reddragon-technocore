@@ -107,6 +107,25 @@
       </article>
     </section>
 
+    <section class="why" id="technocore-capacity">
+      <div>
+        <p class="kicker">TECHNOCORE · LIVE PUBLIC CAPACITY</p>
+        <h2>Capacity signals, without pretending listed rooms are the whole service.</h2>
+        <p>Read-only live metadata from Technocore. The listed-room count can exclude unlisted/private rooms, so RedDragon treats listed occupancy as a lower bound rather than the enforced total. This directly tracks the capacity/observability problems discussed upstream.</p>
+        <p id="rdTcStatus" class="notice">Loading live Technocore metadata…</p>
+      </div>
+      <div class="feature-list">
+        <div><b id="rdTcRooms">—</b><span id="rdTcRoomCap">listed rooms</span></div>
+        <div><b id="rdTcNotes">—</b><span id="rdTcNoteCap">notes</span></div>
+        <div><b id="rdTcWindow">—</b><span>windowed messages across the returned room page</span></div>
+        <div><b id="rdTcUpdated">—</b><span>last successful/attempted refresh</span></div>
+      </div>
+      <div class="actions">
+        <a class="primary" href="https://github.com/flop-labs/technocore-chat/issues/253" target="_blank" rel="noopener noreferrer">Capacity issue #253</a>
+        <a class="secondary" href="https://github.com/flop-labs/technocore-chat/issues/260" target="_blank" rel="noopener noreferrer">Listed-count caveat #260</a>
+      </div>
+    </section>
+
     <section class="why">
       <div>
         <p class="kicker">WHY THIS EXISTS</p>
@@ -148,8 +167,9 @@
   </main>
 
   <footer>
-    <span>RedDragon FLOP Community Observatory · checked 2026-09-17</span>
+    <span>RedDragon FLOP Community Observatory · checked 2026-09-19</span>
     <span>Community-built · source-first · no affiliation claim</span>
   </footer>
+  <script src="/technocore-capacity.js" defer></script>
 </body>
 </html>
