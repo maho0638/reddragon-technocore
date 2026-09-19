@@ -39,6 +39,32 @@ jobs:
         with:
           node-version: "24"
           package-manager-cache: false
+      - name: Probe public Technocore capacity
+        continue-on-error: true
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          const timeout = (ms) => AbortSignal.timeout(ms);
+          const get = async (url) => {
+            const r = await fetch(url, { headers: { accept: "application/json" }, signal: timeout(15000) });
+            if (!r.ok) throw new Error(`${url} -> HTTP ${r.status}`);
+            return r.json();
+          };
+          const [rooms, config] = await Promise.all([
+            get("https://technocore.chat/rooms?format=json&limit=200"),
+            get("https://technocore.chat/config?format=json")
+          ]);
+          const snapshot = {
+            checked_at: new Date().toISOString(),
+            listed_rooms: rooms?.total ?? null,
+            room_capacity: rooms?.capacity ?? config?.max_rooms ?? config?.MAX_ROOMS ?? null,
+            note_total: rooms?.notes?.total ?? null,
+            note_capacity: rooms?.notes?.capacity ?? config?.max_notes_total ?? config?.MAX_NOTES_TOTAL ?? null,
+            windowed_messages: rooms?.engagement?.windowed_messages ?? null,
+            caveat: "listed_rooms can exclude unlisted/private rooms; treat listed occupancy as a lower bound"
+          };
+          console.log("TECHNOCORE_CAPACITY_SNAPSHOT=" + JSON.stringify(snapshot));
+          NODE
       - name: Ensure tclk capability advertisement
         continue-on-error: true
         shell: bash
