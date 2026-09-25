@@ -9,6 +9,7 @@ const ROOM = "close1";
 const STATE_PATH = "runtime/close1-state.enc";
 const STATE_MARKER = "REDDRAGON_CLOSE1_STATE_V5:";
 const SEASON = "close-1";
+const OPEN_MS = Date.parse("2026-09-25T12:00:00Z");
 const LOCK_MS = Date.parse("2026-10-04T09:00:00Z");
 const EXPECTED_DID = "did:key:z6MkuhrsP4tDZjWYdZLPxaur19WvrF1yuLGsGB2S8Q1gwS6K";
 const keyB64 = String(process.env.TECHNOCORE_PRIVATE_KEY_PKCS8_B64 || "").trim();
@@ -364,6 +365,99 @@ function currentOwnPosition(posSnapshots) {
   return hit ? Number(hit[1]) : null;
 }
 
+function clamp(value, lo, hi) {
+  return Math.min(hi, Math.max(lo, value));
+}
+
+function leaderScore(pnlSnapshots) {
+  const latest = pnlSnapshots.at(-1);
+  if (!latest || !Array.isArray(latest.top) || !latest.top.length) return null;
+  const scores = latest.top.map((row) => Number(row?.[1])).filter(Number.isFinite);
+  return scores.length ? Math.max(...scores) : null;
+}
+
+function ownScoreEstimate(state, latestMark) {
+  const realized = Number(state?.realizedScoreEst || 0);
+  if (state?.state !== "open" || !Number.isFinite(Number(state.qty)) || !Number.isFinite(Number(state.entryPx))) {
+    return realized;
+  }
+  const qty = Number(state.qty);
+  const entry = Number(state.entryPx);
+  const mark = Number(latestMark);
+  if (!Number.isFinite(mark)) return realized;
+  const direction = state.side === "buy" ? 1 : -1;
+  const gross = direction * qty * (mark - entry);
+  const entryFeeEst = Number(state.entryFeeEst || (0.01 * qty * entry));
+  return realized + gross - entryFeeEst;
+}
+
+function raceContext({ now, pnlSnapshots, state, latest }) {
+  const leader = leaderScore(pnlSnapshots);
+  const own = ownScoreEstimate(state, latest?.px);
+  const remainingMs = Math.max(0, LOCK_MS - now);
+  const totalMs = LOCK_MS - OPEN_MS;
+  const timeRemainingFrac = clamp(remainingMs / totalMs, 0, 1);
+  const elapsedFrac = 1 - timeRemainingFrac;
+  const gap = Number.isFinite(leader) ? leader - own : null;
+  return {
+    leaderScore: leader,
+    ownScoreEst: own,
+    leaderGap: gap,
+    timeRemainingFrac,
+    elapsedFrac,
+    hoursRemaining: remainingMs / 3600000
+  };
+}
+
+// The encrypted strategy decides whether a setup is good enough to trade.
+// This overlay only sizes an already-approved entry for the race objective:
+// preserve optionality early, scale conviction when behind late, and protect a lead.
+function applyRaceSizing(decision, race, latestPx) {
+  if (!decision || decision.action !== "enter") return decision;
+  let qty = Number(decision.qty);
+  if (!Number.isFinite(qty) || qty < 0.1) return null;
+
+  const px = Number(latestPx);
+  const maxAffordable = Number.isFinite(px) && px > 0
+    ? Math.max(0.1, Math.min(44.5, (10000 / (px * 1.035))))
+    : 43;
+  const confidence = clamp(Number(decision.confidence || 0.5), 0, 1);
+  const gap = Number(race?.leaderGap);
+  const t = clamp(Number(race?.timeRemainingFrac ?? 1), 0, 1);
+
+  // Start from the encrypted strategy's quantity; race pressure may only
+  // increase size when confidence is already high.
+  let multiplier = 1;
+
+  if (Number.isFinite(gap)) {
+    if (gap <= 0) {
+      // At/above the current leader: defend the score, do not press without exceptional conviction.
+      multiplier *= confidence >= 0.9 ? 0.7 : 0.45;
+    } else {
+      const normalizedGap = clamp(gap / 500, 0, 1);
+      const urgency = clamp((1 - t) * 1.25, 0, 1);
+      const pressure = normalizedGap * urgency;
+
+      if (confidence >= 0.82) multiplier *= 1 + 0.75 * pressure;
+      else if (confidence < 0.65) multiplier *= 0.75;
+    }
+  }
+
+  // Early contest: keep capital optional unless the signal is unusually strong.
+  if (t > 0.70 && confidence < 0.86) multiplier *= 0.8;
+
+  qty = clamp(qty * multiplier, 0.1, maxAffordable);
+  return {
+    ...decision,
+    qty: Math.floor(qty * 100) / 100,
+    race: {
+      leaderGap: Number.isFinite(gap) ? Number(gap.toFixed(2)) : null,
+      hoursRemaining: Number(race.hoursRemaining.toFixed(2)),
+      multiplier: Number(multiplier.toFixed(3))
+    }
+  };
+}
+
 function canonicalTerms(terms) {
   return JSON.stringify({
     id: String(terms.id),
@@ -506,8 +600,9 @@ if (stateSelftest) {
   process.exit(0);
 }
 const ownPos = currentOwnPosition(positions);
+let race = raceContext({ now, pnlSnapshots: pnl, state, latest });
 console.log(
-  `STATUS execute=${execute} n=${latest.n} ref=${latest.px} state=${state.state} ownTopPos=${ownPos ?? "na"}`
+  `STATUS execute=${execute} n=${latest.n} ref=${latest.px} state=${state.state} ownTopPos=${ownPos ?? "na"} leader=${race.leaderScore ?? "na"} ownEst=${race.ownScoreEst.toFixed(2)} gap=${race.leaderGap ?? "na"} hLeft=${race.hoursRemaining.toFixed(1)}`
 );
 
 if (state.state === "entry_preflight") {
@@ -637,7 +732,9 @@ if (state.state === "entry_accepted") {
       qty: Number(state.qty),
       entryPx: Number(state.entryPx),
       entrySweep: outcome?.n || Number(state.acceptedAtSweep || latest.n),
-      entryId: state.id
+      entryId: state.id,
+      realizedScoreEst: Number(state.realizedScoreEst || 0),
+      entryFeeEst: Number(state.entryFeeEst || (0.01 * Number(state.qty) * Number(state.entryPx)))
     };
     await setState(open);
     console.log("POSITION_OPEN");
@@ -709,10 +806,15 @@ if (state.state === "exit_accepted") {
     console.log("EXIT_VOID_REEVALUATE");
     state = open;
   } else if (outcome?.outcome === "settled" || (!topStillOpen && Number(latest.n) >= Number(state.acceptedAtSweep || latest.n) + 1)) {
+    const direction = state.entrySide === "buy" ? 1 : -1;
+    const gross = direction * Number(state.qty) * (Number(latest.px) - Number(state.entryPx));
+    const fees = Number(state.entryFeeEst || (0.01 * Number(state.qty) * Number(state.entryPx))) +
+      (0.01 * Number(state.qty) * Number(latest.px));
     await setState({
       state: "idle",
       cooldownUntilSweep: Number(latest.n) + 2,
-      lastClosedId: state.id
+      lastClosedId: state.id,
+      realizedScoreEst: Number(state.realizedScoreEst || 0) + gross - fees
     });
     console.log("POSITION_CLOSED");
     process.exit(0);
@@ -738,7 +840,8 @@ if (state.state === "open") {
     pnlSnapshots: pnl,
     positionSnapshots: positions,
     state,
-    latest
+    latest,
+    race
   });
   if (decision?.action === "exit") {
     await postExit(state, latest);
@@ -756,7 +859,8 @@ if (Number(state.cooldownUntilSweep || 0) > Number(latest.n)) {
   process.exit(0);
 }
 
-const decision = decide({
+race = raceContext({ now, pnlSnapshots: pnl, state, latest });
+const rawDecision = decide({
   now,
   mode: "entry",
   series,
@@ -764,9 +868,14 @@ const decision = decide({
   pnlSnapshots: pnl,
   positionSnapshots: positions,
   state,
-  latest
+  latest,
+  race
 });
+const decision = applyRaceSizing(rawDecision, race, latest.px);
 if (decision?.action === "enter") {
+  console.log(
+    `RACE_SIZE leaderGap=${decision.race?.leaderGap ?? "na"} hLeft=${decision.race?.hoursRemaining ?? "na"} mult=${decision.race?.multiplier ?? "na"} qty=${Number(decision.qty).toFixed(2)}`
+  );
   await postEntry(decision, latest);
 } else {
   console.log("NO_TRADE");
