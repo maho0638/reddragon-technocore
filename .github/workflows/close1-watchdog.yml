@@ -29,7 +29,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
-          EVENT_NAME: ${{ github.event_name }}
           TRADER_WORKFLOW: close1-trader.yml
         shell: bash
         run: |
@@ -49,14 +48,6 @@ jobs:
             exit 0
           fi
 
-          if [[ "$EVENT_NAME" == "workflow_run" ]]; then
-            echo "Trader cycle completed; dispatching next 5-minute loop cycle."
-            curl -fsSL -X POST "${auth[@]}" \
-              "$api/actions/workflows/$TRADER_WORKFLOW/dispatches" \
-              -d '{"ref":"main"}'
-            exit 0
-          fi
-
           runs="$(curl -fsSL "${auth[@]}" "$api/actions/workflows/$TRADER_WORKFLOW/runs?per_page=12")"
 
           count="$(jq '.workflow_runs | length' <<<"$runs")"
@@ -69,10 +60,6 @@ jobs:
           latest_id="$(jq -r '.workflow_runs[0].id' <<<"$runs")"
           latest_status="$(jq -r '.workflow_runs[0].status' <<<"$runs")"
           latest_conclusion="$(jq -r '.workflow_runs[0].conclusion // ""' <<<"$runs")"
-          latest_created="$(jq -r '.workflow_runs[0].created_at' <<<"$runs")"
-          created_epoch="$(date -u -d "$latest_created" +%s)"
-          age=$(( now - created_epoch ))
-
           consecutive_bad=0
           while IFS=$'\t' read -r status conclusion; do
             if [[ "$status" != "completed" ]]; then
@@ -86,7 +73,7 @@ jobs:
             fi
           done < <(jq -r '.workflow_runs[] | [.status, (.conclusion // "")] | @tsv' <<<"$runs")
 
-          echo "latest_id=$latest_id status=$latest_status conclusion=$latest_conclusion age_s=$age consecutive_bad=$consecutive_bad"
+          echo "latest_id=$latest_id status=$latest_status conclusion=$latest_conclusion consecutive_bad=$consecutive_bad"
 
           if [[ "$latest_status" != "completed" ]]; then
             echo "Trader run already active."
