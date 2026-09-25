@@ -421,7 +421,16 @@ function applyRaceSizing(decision, race, latestPx) {
   const maxAffordable = Number.isFinite(px) && px > 0
     ? Math.max(0.1, Math.min(44.5, (10000 / (px * 1.035))))
     : 43;
-  const confidence = clamp(Number(decision.confidence || 0.5), 0, 1);
+  const rawConfidence = decision.confidence;
+  const confidence = clamp(
+    Number.isFinite(Number(rawConfidence))
+      ? Number(rawConfidence)
+      : ({ very_high: 0.95, high: 0.9, medium: 0.72, low: 0.55 }[
+          String(rawConfidence || "").toLowerCase().replace(/\s+/g, "_")
+        ] ?? 0.5),
+    0,
+    1
+  );
   const gap = Number(race?.leaderGap);
   const t = clamp(Number(race?.timeRemainingFrac ?? 1), 0, 1);
 
@@ -529,7 +538,7 @@ async function findOutcome(id) {
   return null;
 }
 
-async function postEntry(decision, latest) {
+async function postEntry(decision, latest, priorState = {}) {
   const offer = makeOffer(decision.side, Number(decision.qty), latest, "rd4e");
   if (!execute) {
     console.log(`DRY_ENTRY side=${decision.side} qty=${Number(decision.qty).toFixed(2)}`);
@@ -542,7 +551,8 @@ async function postEntry(decision, latest) {
     qty: Number(decision.qty),
     entryPx: Number(latest.px),
     until: offer.until,
-    entrySweep: Number(latest.n)
+    entrySweep: Number(latest.n),
+    realizedScoreEst: Number(priorState.realizedScoreEst || 0)
   };
   await setState(preflight);
   const posted = await signedPost(ROOM, offer.text);
@@ -566,7 +576,9 @@ async function postExit(openState, latest) {
     entrySweep: Number(openState.entrySweep),
     entryId: openState.entryId || null,
     until: offer.until,
-    requestedAtSweep: Number(latest.n)
+    requestedAtSweep: Number(latest.n),
+    realizedScoreEst: Number(openState.realizedScoreEst || 0),
+    entryFeeEst: Number(openState.entryFeeEst || (0.01 * Number(openState.qty) * Number(openState.entryPx)))
   };
   await setState(preflight);
   const posted = await signedPost(ROOM, offer.text);
@@ -670,7 +682,9 @@ if (state.state === "exit_preflight") {
       entryPx: Number(state.entryPx),
       entrySweep: Number(state.entrySweep),
       entryId: state.entryId || null,
-      lastPreflight: state.id
+      lastPreflight: state.id,
+      realizedScoreEst: Number(state.realizedScoreEst || 0),
+      entryFeeEst: Number(state.entryFeeEst || (0.01 * Number(state.qty) * Number(state.entryPx)))
     };
     await setState(open);
     console.log("EXIT_PREFLIGHT_CLEARED");
@@ -777,7 +791,9 @@ if (state.state === "exit_offer") {
     entryPx: Number(state.entryPx),
     entrySweep: Number(state.entrySweep),
     entryId: state.entryId || null,
-    exitRetryAfterSweep: Number(latest.n)
+    exitRetryAfterSweep: Number(latest.n),
+    realizedScoreEst: Number(state.realizedScoreEst || 0),
+    entryFeeEst: Number(state.entryFeeEst || (0.01 * Number(state.qty) * Number(state.entryPx)))
   };
   await setState(open);
   console.log("EXIT_EXPIRED_REEVALUATE");
@@ -800,7 +816,9 @@ if (state.state === "exit_accepted") {
       entryPx: Number(state.entryPx),
       entrySweep: Number(state.entrySweep),
       entryId: state.entryId || null,
-      lastExitVoid: outcome.reason
+      lastExitVoid: outcome.reason,
+      realizedScoreEst: Number(state.realizedScoreEst || 0),
+      entryFeeEst: Number(state.entryFeeEst || (0.01 * Number(state.qty) * Number(state.entryPx)))
     };
     await setState(open);
     console.log("EXIT_VOID_REEVALUATE");
@@ -876,7 +894,7 @@ if (decision?.action === "enter") {
   console.log(
     `RACE_SIZE leaderGap=${decision.race?.leaderGap ?? "na"} hLeft=${decision.race?.hoursRemaining ?? "na"} mult=${decision.race?.multiplier ?? "na"} qty=${Number(decision.qty).toFixed(2)}`
   );
-  await postEntry(decision, latest);
+  await postEntry(decision, latest, state);
 } else {
   console.log("NO_TRADE");
 }
