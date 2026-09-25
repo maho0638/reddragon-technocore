@@ -14,6 +14,9 @@ const siteUrl = clean(process.env.TECHNOCORE_TOOL_URL || "https://reddragon-tech
 const repoUrl = clean(process.env.TECHNOCORE_TOOL_REPO || "https://github.com/maho0638/reddragon-technocore");
 const contributionMarker = "REDDRAGON_TOOL_V1";
 const mailboxMarker = "REDDRAGON_MAILBOX_V1";
+const CLOSE1_ROOM = "close1";
+const CLOSE1_SEASON = "close-1";
+const CLOSE1_LOCK_MS = Date.parse("2026-10-04T09:00:00Z");
 const manifestPath = new URL("../public/reddragon-contribution.json", import.meta.url);
 const NAME_RE = /^[a-z0-9][a-z0-9_-]{0,47}$/;
 const OWNED_ROOM_RE = /^d-[a-z0-9][a-z0-9_-]{0,45}$/;
@@ -304,6 +307,60 @@ async function signedPostTo(targetRoom, text, recoverExact = false) {
   return { seq: acceptedSeq, nonce };
 }
 
+async function findExactSignedMessageInExport(targetRoom, normalized) {
+  try {
+    const { r, text } = await request(`${BASE}/r/${encodeURIComponent(targetRoom)}/export`, {
+      headers: { accept: "application/x-ndjson,application/json,text/plain" }
+    }, 3);
+    if (!r.ok) return null;
+    const trimmed = String(text || "").trim();
+    if (!trimmed) return null;
+
+    let items = [];
+    try {
+      const parsed = JSON.parse(trimmed);
+      items = messagesFrom(parsed);
+      if (!items.length && Array.isArray(parsed)) items = parsed;
+    } catch {
+      for (const rawLine of trimmed.split(/\r?\n/)) {
+        const line = rawLine.trim();
+        if (!line) continue;
+        try { items.push(JSON.parse(line)); } catch {}
+      }
+    }
+
+    return items
+      .filter((item) => messageDid(item) === did && messageText(item) === normalized)
+      .sort((a, b) => Number(b?.seq || 0) - Number(a?.seq || 0))[0] || null;
+  } catch {
+    return null;
+  }
+}
+
+async function ensureClose1Registration() {
+  if (Date.now() >= CLOSE1_LOCK_MS) {
+    console.log("Close-1 registration window is locked; no registration post attempted.");
+    return;
+  }
+
+  const registration = JSON.stringify({ t: "owner", season: CLOSE1_SEASON, key: did });
+
+  const recent = await findExactSignedMessage(CLOSE1_ROOM, registration);
+  if (recent) {
+    console.log(`Close-1 owner registration already visible: seq ${Number(recent?.seq || 0) || "?"}.`);
+    return;
+  }
+
+  const retained = await findExactSignedMessageInExport(CLOSE1_ROOM, registration);
+  if (retained) {
+    console.log(`Close-1 owner registration already retained: seq ${Number(retained?.seq || 0) || "?"}.`);
+    return;
+  }
+
+  const posted = await signedPostTo(CLOSE1_ROOM, registration, true);
+  console.log(`CLOSE1_OWNER_REGISTERED=true room=${CLOSE1_ROOM} seq=${posted.seq || "?"}`);
+}
+
 async function signedPost(text) {
   return signedPostTo(room, text, false);
 }
@@ -434,6 +491,8 @@ try {
   // into a failed workflow during a temporary Technocore outage. It retries next run.
   console.warn(`Contribution identity sync deferred: ${error?.message || error}`);
 }
+
+await ensureClose1Registration();
 
 if (!postEnabled) {
   console.log("Read/heartbeat run complete; signed posting disabled for this run.");
