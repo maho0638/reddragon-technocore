@@ -1,4 +1,5 @@
 name: Close-1 RedDragon Trader
+# Watched by close1-watchdog.yml
 
 on:
   push:
