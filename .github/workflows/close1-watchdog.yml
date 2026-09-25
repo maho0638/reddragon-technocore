@@ -1,6 +1,10 @@
 name: Close-1 Trader Watchdog
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/close1-watchdog.yml"
   workflow_dispatch:
   workflow_run:
     workflows: ["Close-1 RedDragon Trader"]
