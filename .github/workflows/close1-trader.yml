@@ -13,7 +13,7 @@ on:
     - cron: "2,7,12,17,22,27,32,37,42,47,52,57 * * * *"
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: close1-reddragon-trader
@@ -34,6 +34,8 @@ jobs:
       - name: Evaluate Close-1 strategy
         env:
           TECHNOCORE_PRIVATE_KEY_PKCS8_B64: ${{ secrets.TECHNOCORE_PRIVATE_KEY_PKCS8_B64 }}
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
           CLOSE1_EXECUTE: "false"
           CLOSE1_STATE_SELFTEST: "true"
         run: node scripts/close1-trader-runner.mjs
