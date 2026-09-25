@@ -4,7 +4,8 @@ on:
   push:
     branches: [main]
     paths:
-      - "scripts/close1-trader.mjs"
+      - "scripts/close1-trader-runner.mjs"
+      - "scripts/close1-strategy.enc.json"
       - ".github/workflows/close1-trader.yml"
   workflow_dispatch:
   schedule:
