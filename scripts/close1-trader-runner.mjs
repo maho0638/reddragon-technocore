@@ -1,11 +1,13 @@
 import {
   createPrivateKey, createPublicKey, sign as nodeSign, createHash,
-  diffieHellman, hkdfSync, createDecipheriv
+  diffieHellman, hkdfSync, createDecipheriv, createCipheriv, randomBytes
 } from "node:crypto";
 import { readFile } from "node:fs/promises";
 
 const BASE = "https://technocore.chat";
 const ROOM = "close1";
+const STATE_ROOM = "mb-reddragon-agent";
+const STATE_MARKER = "REDDRAGON_CLOSE1_STATE_V4:";
 const SEASON = "close-1";
 const LOCK_MS = Date.parse("2026-10-04T09:00:00Z");
 const EXPECTED_DID = "did:key:z6MkuhrsP4tDZjWYdZLPxaur19WvrF1yuLGsGB2S8Q1gwS6K";
@@ -44,11 +46,15 @@ if (did !== EXPECTED_DID) throw new Error("Private key does not match RedDragon 
 
 const jwk = privateKey.export({ format: "jwk" });
 const secretSeed = Buffer.from(jwk.d, "base64url");
-const stateNs = "p-" + createHash("sha256")
-  .update(Buffer.concat([secretSeed, Buffer.from("reddragon-close1-state-v4")]))
-  .digest("hex")
-  .slice(0, 36);
-const stateKey = "trader";
+const stateEncKey = Buffer.from(
+  hkdfSync(
+    "sha256",
+    secretSeed,
+    Buffer.from("reddragon-close1-state-v4"),
+    Buffer.from("encrypted-room-state"),
+    32
+  )
+);
 
 function b64u(s) {
   return Buffer.from(s, "base64url");
@@ -122,6 +128,10 @@ function messagesFrom(value) {
 function messageText(item) {
   return String(item?.text ?? item?.message ?? item?.body ?? "");
 }
+function messageDid(item) {
+  const from = String(item?.from || "");
+  return String(item?.did || (from.startsWith("did:key:") ? from : ""));
+}
 function parseBody(item) {
   try {
     return JSON.parse(messageText(item));
@@ -161,59 +171,57 @@ async function readExport(room) {
   return out;
 }
 
-function noteValue(text) {
-  const trimmed = String(text || "").trim();
-  if (!trimmed) return "";
+function toB64u(value) {
+  return Buffer.from(value).toString("base64url");
+}
+function encryptState(state) {
+  const nonce = randomBytes(12);
+  const cipher = createCipheriv("aes-256-gcm", stateEncKey, nonce);
+  cipher.setAAD(Buffer.from(STATE_MARKER));
+  const ciphertext = Buffer.concat([
+    cipher.update(Buffer.from(JSON.stringify(state), "utf8")),
+    cipher.final()
+  ]);
+  const tag = cipher.getAuthTag();
+  return STATE_MARKER + toB64u(nonce) + "." + toB64u(Buffer.concat([ciphertext, tag]));
+}
+function decryptState(text) {
+  if (!String(text || "").startsWith(STATE_MARKER)) return null;
   try {
-    const parsed = JSON.parse(trimmed);
-    if (typeof parsed?.value === "string") return parsed.value;
-  } catch {}
-  return trimmed;
-}
-async function getNote(key) {
-  const { r, text } = await request(
-    `${BASE}/kv/${encodeURIComponent(stateNs)}/${encodeURIComponent(key)}`,
-    { headers: { accept: "text/plain,application/json", "cache-control": "no-cache" } },
-    2
-  );
-  if (r.status === 404) return null;
-  if (!r.ok) throw new Error(`note read failed ${r.status}`);
-  return noteValue(text);
-}
-async function setNote(key, value) {
-  const encoded = encodeURIComponent(String(value));
-  const { r, text } = await request(
-    `${BASE}/kv/${encodeURIComponent(stateNs)}/${encodeURIComponent(key)}/set/${encoded}`,
-    { headers: { accept: "text/plain,application/json", "cache-control": "no-cache" } },
-    2
-  );
-  if (!r.ok) throw new Error(`note write failed ${r.status}: ${text.slice(0, 200)}`);
-}
-async function verifyStateLane(sweep) {
-  if (!execute) return;
-  const probe = `ok-${Number(sweep)}`;
-  await setNote("health", probe);
-  const observed = await getNote("health");
-  if (observed !== probe) throw new Error("STATE_HEALTH_MISMATCH");
-  console.log("STATE_HEALTH_OK");
+    const payload = String(text).slice(STATE_MARKER.length);
+    const [nonceText, packedText] = payload.split(".");
+    const nonce = Buffer.from(nonceText, "base64url");
+    const packed = Buffer.from(packedText, "base64url");
+    if (nonce.length !== 12 || packed.length <= 16) return null;
+    const ciphertext = packed.subarray(0, packed.length - 16);
+    const tag = packed.subarray(packed.length - 16);
+    const dec = createDecipheriv("aes-256-gcm", stateEncKey, nonce);
+    dec.setAAD(Buffer.from(STATE_MARKER));
+    dec.setAuthTag(tag);
+    const plain = Buffer.concat([dec.update(ciphertext), dec.final()]).toString("utf8");
+    const parsed = JSON.parse(plain);
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
 }
 async function getState() {
-  const raw = await getNote(stateKey);
-  if (!raw) return { state: "idle" };
-  try {
-    const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === "object" ? parsed : { state: "idle" };
-  } catch {
-    return { state: "idle" };
+  const messages = await readExport(STATE_ROOM);
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messageDid(messages[i]) !== did) continue;
+    const state = decryptState(messageText(messages[i]));
+    if (state) return state;
   }
+  return { state: "idle" };
 }
 async function setState(state) {
   if (!execute) {
     console.log(`DRY_STATE=${state.state}`);
     return;
   }
-  await setNote(stateKey, JSON.stringify(state));
-  console.log(`STATE=${state.state}`);
+  const posted = await signedPost(STATE_ROOM, encryptState(state));
+  if (!posted.seq) throw new Error("STATE_POST_UNCONFIRMED");
+  console.log(`STATE=${state.state} seq=${posted.seq}`);
 }
 
 let lastNonce = 0;
@@ -386,17 +394,18 @@ async function postEntry(decision, latest) {
     console.log(`DRY_ENTRY side=${decision.side} qty=${Number(decision.qty).toFixed(2)}`);
     return;
   }
-  const posted = await signedPost(ROOM, offer.text);
-  await setState({
-    state: "entry_offer",
+  const preflight = {
+    state: "entry_preflight",
     id: offer.id,
     side: decision.side,
     qty: Number(decision.qty),
     entryPx: Number(latest.px),
     until: offer.until,
-    postedSeq: posted.seq,
     entrySweep: Number(latest.n)
-  });
+  };
+  await setState(preflight);
+  const posted = await signedPost(ROOM, offer.text);
+  await setState({ ...preflight, state: "entry_offer", postedSeq: posted.seq });
   console.log(`ENTRY_OFFER side=${decision.side} qty=${Number(decision.qty).toFixed(2)} seq=${posted.seq || "?"}`);
 }
 async function postExit(openState, latest) {
@@ -406,19 +415,21 @@ async function postExit(openState, latest) {
     console.log(`DRY_EXIT side=${side} qty=${Number(openState.qty).toFixed(2)}`);
     return;
   }
-  const posted = await signedPost(ROOM, offer.text);
-  await setState({
-    state: "exit_offer",
+  const preflight = {
+    state: "exit_preflight",
     id: offer.id,
     exitSide: side,
     qty: Number(openState.qty),
     entrySide: openState.side,
     entryPx: Number(openState.entryPx),
     entrySweep: Number(openState.entrySweep),
+    entryId: openState.entryId || null,
     until: offer.until,
-    postedSeq: posted.seq,
     requestedAtSweep: Number(latest.n)
-  });
+  };
+  await setState(preflight);
+  const posted = await signedPost(ROOM, offer.text);
+  await setState({ ...preflight, state: "exit_offer", postedSeq: posted.seq });
   console.log(`EXIT_OFFER side=${side} qty=${Number(openState.qty).toFixed(2)} seq=${posted.seq || "?"}`);
 }
 
@@ -435,12 +446,86 @@ const positions = await positionSnapshots();
 const latest = series.at(-1);
 if (!latest) throw new Error("No referee price available");
 
-await verifyStateLane(latest.n);
 let state = await getState();
 const ownPos = currentOwnPosition(positions);
 console.log(
   `STATUS execute=${execute} n=${latest.n} ref=${latest.px} state=${state.state} ownTopPos=${ownPos ?? "na"}`
 );
+
+if (state.state === "entry_preflight") {
+  const seen = await findAcceptance(state.id);
+  if (seen) {
+    await setState({
+      ...state,
+      state: "entry_accepted",
+      acceptedSeq: seen.seq,
+      acceptedAtSweep: Number(latest.n),
+      taker: seen.taker
+    });
+    console.log("ENTRY_PREFLIGHT_RECOVERED_ACCEPTED");
+    process.exit(0);
+  }
+  const roomMessages = await readExport(ROOM);
+  const posted = roomMessages.find((m) => {
+    const b = parseBody(m);
+    return b?.t === "trade" && b?.season === SEASON &&
+      b?.terms?.id === state.id && b?.terms?.maker === did;
+  });
+  if (posted) {
+    await setState({ ...state, state: "entry_offer", postedSeq: Number(posted?.seq || 0) || null });
+    console.log("ENTRY_PREFLIGHT_RECOVERED_OFFER");
+    process.exit(0);
+  }
+  if (Number(latest.n) > Number(state.entrySweep || 0) + 1) {
+    await setState({ state: "idle", cooldownUntilSweep: Number(latest.n) + 1, lastPreflight: state.id });
+    console.log("ENTRY_PREFLIGHT_CLEARED");
+    process.exit(0);
+  }
+  console.log("ENTRY_PREFLIGHT_WAIT");
+  process.exit(0);
+}
+
+if (state.state === "exit_preflight") {
+  const seen = await findAcceptance(state.id);
+  if (seen) {
+    await setState({
+      ...state,
+      state: "exit_accepted",
+      acceptedSeq: seen.seq,
+      acceptedAtSweep: Number(latest.n),
+      taker: seen.taker
+    });
+    console.log("EXIT_PREFLIGHT_RECOVERED_ACCEPTED");
+    process.exit(0);
+  }
+  const roomMessages = await readExport(ROOM);
+  const posted = roomMessages.find((m) => {
+    const b = parseBody(m);
+    return b?.t === "trade" && b?.season === SEASON &&
+      b?.terms?.id === state.id && b?.terms?.maker === did;
+  });
+  if (posted) {
+    await setState({ ...state, state: "exit_offer", postedSeq: Number(posted?.seq || 0) || null });
+    console.log("EXIT_PREFLIGHT_RECOVERED_OFFER");
+    process.exit(0);
+  }
+  if (Number(latest.n) > Number(state.requestedAtSweep || 0) + 1) {
+    const open = {
+      state: "open",
+      side: state.entrySide,
+      qty: Number(state.qty),
+      entryPx: Number(state.entryPx),
+      entrySweep: Number(state.entrySweep),
+      entryId: state.entryId || null,
+      lastPreflight: state.id
+    };
+    await setState(open);
+    console.log("EXIT_PREFLIGHT_CLEARED");
+    process.exit(0);
+  }
+  console.log("EXIT_PREFLIGHT_WAIT");
+  process.exit(0);
+}
 
 if (state.state === "entry_offer") {
   const accepted = await findAcceptance(state.id);
