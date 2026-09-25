@@ -6,15 +6,18 @@ import { readFile } from "node:fs/promises";
 
 const BASE = "https://technocore.chat";
 const ROOM = "close1";
-const STATE_ROOM = "mb-reddragon-agent";
-const STATE_MARKER = "REDDRAGON_CLOSE1_STATE_V4:";
+const STATE_PATH = "runtime/close1-state.enc";
+const STATE_MARKER = "REDDRAGON_CLOSE1_STATE_V5:";
 const SEASON = "close-1";
 const LOCK_MS = Date.parse("2026-10-04T09:00:00Z");
 const EXPECTED_DID = "did:key:z6MkuhrsP4tDZjWYdZLPxaur19WvrF1yuLGsGB2S8Q1gwS6K";
 const keyB64 = String(process.env.TECHNOCORE_PRIVATE_KEY_PKCS8_B64 || "").trim();
 const execute = String(process.env.CLOSE1_EXECUTE || "false").toLowerCase() === "true";
 const stateSelftest = String(process.env.CLOSE1_STATE_SELFTEST || "false").toLowerCase() === "true";
+const ghToken = String(process.env.GITHUB_TOKEN || "").trim();
+const ghRepo = String(process.env.GITHUB_REPOSITORY || "maho0638/reddragon-technocore").trim();
 if (!keyB64) throw new Error("Missing TECHNOCORE_PRIVATE_KEY_PKCS8_B64");
+if (!ghToken) throw new Error("Missing GITHUB_TOKEN for encrypted state persistence");
 
 function base58(bytes) {
   const alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
@@ -51,7 +54,7 @@ const stateEncKey = Buffer.from(
   hkdfSync(
     "sha256",
     secretSeed,
-    Buffer.from("reddragon-close1-state-v4"),
+    Buffer.from("reddragon-close1-state-v5"),
     Buffer.from("encrypted-room-state"),
     32
   )
@@ -206,23 +209,66 @@ function decryptState(text) {
     return null;
   }
 }
+function stateApiUrl() {
+  const safePath = STATE_PATH.split("/").map(encodeURIComponent).join("/");
+  return `https://api.github.com/repos/${ghRepo}/contents/${safePath}`;
+}
+async function fetchStateFile() {
+  const { r, text } = await request(
+    stateApiUrl() + "?ref=main",
+    {
+      headers: {
+        authorization: `Bearer ${ghToken}`,
+        accept: "application/vnd.github+json",
+        "x-github-api-version": "2022-11-28",
+        "cache-control": "no-cache"
+      }
+    },
+    1
+  );
+  if (r.status === 404) return { sha: null, text: null };
+  if (!r.ok) throw new Error(`STATE_GITHUB_READ_FAILED ${r.status}: ${text.slice(0, 300)}`);
+  const parsed = JSON.parse(text);
+  const raw = Buffer.from(String(parsed.content || "").replace(/\n/g, ""), "base64").toString("utf8");
+  return { sha: parsed.sha || null, text: raw };
+}
 async function getState() {
-  const messages = await readExport(STATE_ROOM);
-  for (let i = messages.length - 1; i >= 0; i--) {
-    if (messageDid(messages[i]) !== did) continue;
-    const state = decryptState(messageText(messages[i]));
-    if (state) return state;
-  }
-  return { state: "idle" };
+  const file = await fetchStateFile();
+  if (!file.text) return { state: "idle" };
+  const state = decryptState(file.text.trim());
+  if (!state) throw new Error("STATE_GITHUB_DECRYPT_FAILED");
+  return state;
 }
 async function setState(state, force = false) {
   if (!execute && !force) {
     console.log(`DRY_STATE=${state.state}`);
     return;
   }
-  const posted = await signedPost(STATE_ROOM, encryptState(state));
-  if (!posted.seq) throw new Error("STATE_POST_UNCONFIRMED");
-  console.log(`STATE=${state.state} seq=${posted.seq}`);
+
+  const current = await fetchStateFile();
+  const payload = {
+    message: "chore(close1): persist encrypted trader state",
+    content: Buffer.from(encryptState(state), "utf8").toString("base64"),
+    branch: "main"
+  };
+  if (current.sha) payload.sha = current.sha;
+
+  const { r, text } = await request(
+    stateApiUrl(),
+    {
+      method: "PUT",
+      headers: {
+        authorization: `Bearer ${ghToken}`,
+        accept: "application/vnd.github+json",
+        "content-type": "application/json",
+        "x-github-api-version": "2022-11-28"
+      },
+      body: JSON.stringify(payload)
+    },
+    1
+  );
+  if (!r.ok) throw new Error(`STATE_GITHUB_WRITE_FAILED ${r.status}: ${text.slice(0, 300)}`);
+  console.log(`STATE=${state.state} store=github`);
 }
 
 let lastNonce = 0;
