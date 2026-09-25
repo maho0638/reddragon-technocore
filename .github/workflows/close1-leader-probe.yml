@@ -20,4 +20,6 @@ jobs:
         with:
           node-version: "24"
           package-manager-cache: false
+      - name: Check trader syntax
+        run: node --check scripts/close1-trader-runner.mjs
       - run: node scripts/close1-leader-probe.mjs
