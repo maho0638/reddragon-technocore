@@ -9,8 +9,6 @@ on:
       - "scripts/close1-strategy.enc.json"
       - ".github/workflows/close1-trader.yml"
   workflow_dispatch:
-  schedule:
-    - cron: "2,7,12,17,22,27,32,37,42,47,52,57 * * * *"
 
 permissions:
   contents: write
@@ -22,7 +20,7 @@ concurrency:
 jobs:
   trade:
     runs-on: ubuntu-24.04
-    timeout-minutes: 4
+    timeout-minutes: 55
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -38,4 +36,15 @@ jobs:
           GITHUB_REPOSITORY: ${{ github.repository }}
           CLOSE1_EXECUTE: "true"
           CLOSE1_STATE_SELFTEST: "false"
-        run: node scripts/close1-trader-runner.mjs
+          CLOSE1_LOOP_COUNT: ${{ github.event_name == 'workflow_dispatch' && '10' || '1' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          count="${CLOSE1_LOOP_COUNT:-1}"
+          for i in $(seq 1 "$count"); do
+            echo "CLOSE1_LOOP=$i/$count"
+            node scripts/close1-trader-runner.mjs
+            if [[ "$i" -lt "$count" ]]; then
+              sleep 300
+            fi
+          done
