@@ -9,18 +9,20 @@ on:
       - "scripts/close1-strategy.enc.json"
       - ".github/workflows/close1-trader.yml"
   workflow_dispatch:
+  schedule:
+    - cron: "7 * * * *"
 
 permissions:
   contents: write
 
 concurrency:
   group: close1-reddragon-trader
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   trade:
     runs-on: ubuntu-24.04
-    timeout-minutes: 55
+    timeout-minutes: 65
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -36,7 +38,7 @@ jobs:
           GITHUB_REPOSITORY: ${{ github.repository }}
           CLOSE1_EXECUTE: "true"
           CLOSE1_STATE_SELFTEST: "false"
-          CLOSE1_LOOP_COUNT: ${{ github.event_name == 'workflow_dispatch' && '10' || '1' }}
+          CLOSE1_LOOP_COUNT: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && '12' || '1' }}
         shell: bash
         run: |
           set -euo pipefail
