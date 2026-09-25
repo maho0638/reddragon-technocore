@@ -361,6 +361,24 @@ async function ensureClose1Registration() {
   console.log(`CLOSE1_OWNER_REGISTERED=true room=${CLOSE1_ROOM} seq=${posted.seq || "?"}`);
 }
 
+async function checkClose1MintEvidence() {
+  const flow = await getRoomByName("d-close1-flow", true);
+  const flowMessages = messagesFrom(flow);
+  const visible = flowMessages
+    .filter((item) => messageText(item).includes(did) && messageText(item).includes('"mints"'))
+    .sort((a, b) => Number(b?.seq || 0) - Number(a?.seq || 0))[0] || null;
+
+  if (visible) {
+    console.log(`CLOSE1_MINT_VISIBLE=true flow_seq=${Number(visible?.seq || 0) || "?"}`);
+    return;
+  }
+
+  const latestFlowSeq = lastSeq(flowMessages);
+  console.log(
+    `CLOSE1_MINT_VISIBLE=false latest_flow_seq=${latestFlowSeq || "?"} note=public_flow_can_omit_mints_per_close_call_issue_6`
+  );
+}
+
 async function signedPost(text) {
   return signedPostTo(room, text, false);
 }
@@ -493,6 +511,7 @@ try {
 }
 
 await ensureClose1Registration();
+await checkClose1MintEvidence();
 
 if (!postEnabled) {
   console.log("Read/heartbeat run complete; signed posting disabled for this run.");
