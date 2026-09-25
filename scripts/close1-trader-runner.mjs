@@ -15,6 +15,7 @@ const EXPECTED_DID = "did:key:z6MkuhrsP4tDZjWYdZLPxaur19WvrF1yuLGsGB2S8Q1gwS6K";
 const keyB64 = String(process.env.TECHNOCORE_PRIVATE_KEY_PKCS8_B64 || "").trim();
 const execute = String(process.env.CLOSE1_EXECUTE || "false").toLowerCase() === "true";
 const stateSelftest = String(process.env.CLOSE1_STATE_SELFTEST || "false").toLowerCase() === "true";
+const raceSelftest = String(process.env.CLOSE1_RACE_SELFTEST || "false").toLowerCase() === "true";
 const ghToken = String(process.env.GITHUB_TOKEN || "").trim();
 const ghRepo = String(process.env.GITHUB_REPOSITORY || "maho0638/reddragon-technocore").trim();
 if (!keyB64) throw new Error("Missing TECHNOCORE_PRIVATE_KEY_PKCS8_B64");
@@ -465,6 +466,24 @@ function applyRaceSizing(decision, race, latestPx) {
       multiplier: Number(multiplier.toFixed(3))
     }
   };
+}
+
+if (raceSelftest) {
+  const base = { action: "enter", side: "buy", qty: 20, confidence: 0.9 };
+  const behindLate = applyRaceSizing(
+    base,
+    { leaderGap: 300, timeRemainingFrac: 0.1, hoursRemaining: 20 },
+    225
+  );
+  const ahead = applyRaceSizing(
+    base,
+    { leaderGap: -50, timeRemainingFrac: 0.4, hoursRemaining: 80 },
+    225
+  );
+  if (!(behindLate?.qty > 20)) throw new Error("RACE_SELFTEST_BEHIND_NOT_AGGRESSIVE");
+  if (!(ahead?.qty < 20)) throw new Error("RACE_SELFTEST_AHEAD_NOT_DEFENSIVE");
+  console.log("RACE_SIZING_SELFTEST_OK");
+  process.exit(0);
 }
 
 function canonicalTerms(terms) {
