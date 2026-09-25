@@ -6,7 +6,7 @@ import { readFile } from "node:fs/promises";
 
 const BASE = "https://technocore.chat";
 const ROOM = "close1";
-const STATE_ROOM = "mb-reddragon-agent";
+const STATE_ROOM = "d-reddragon-835ae177";
 const STATE_MARKER = "REDDRAGON_CLOSE1_STATE_V4:";
 const SEASON = "close-1";
 const LOCK_MS = Date.parse("2026-10-04T09:00:00Z");
