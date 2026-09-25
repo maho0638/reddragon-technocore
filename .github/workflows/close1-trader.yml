@@ -36,6 +36,6 @@ jobs:
           TECHNOCORE_PRIVATE_KEY_PKCS8_B64: ${{ secrets.TECHNOCORE_PRIVATE_KEY_PKCS8_B64 }}
           GITHUB_TOKEN: ${{ github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-          CLOSE1_EXECUTE: "false"
+          CLOSE1_EXECUTE: "true"
           CLOSE1_STATE_SELFTEST: "false"
         run: node scripts/close1-trader-runner.mjs
