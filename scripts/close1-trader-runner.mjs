@@ -13,6 +13,7 @@ const LOCK_MS = Date.parse("2026-10-04T09:00:00Z");
 const EXPECTED_DID = "did:key:z6MkuhrsP4tDZjWYdZLPxaur19WvrF1yuLGsGB2S8Q1gwS6K";
 const keyB64 = String(process.env.TECHNOCORE_PRIVATE_KEY_PKCS8_B64 || "").trim();
 const execute = String(process.env.CLOSE1_EXECUTE || "false").toLowerCase() === "true";
+const stateSelftest = String(process.env.CLOSE1_STATE_SELFTEST || "false").toLowerCase() === "true";
 if (!keyB64) throw new Error("Missing TECHNOCORE_PRIVATE_KEY_PKCS8_B64");
 
 function base58(bytes) {
@@ -214,8 +215,8 @@ async function getState() {
   }
   return { state: "idle" };
 }
-async function setState(state) {
-  if (!execute) {
+async function setState(state, force = false) {
+  if (!execute && !force) {
     console.log(`DRY_STATE=${state.state}`);
     return;
   }
@@ -447,6 +448,17 @@ const latest = series.at(-1);
 if (!latest) throw new Error("No referee price available");
 
 let state = await getState();
+if (stateSelftest) {
+  const token = "state-selftest-" + Date.now().toString(36);
+  await setState({ state: "selftest", token }, true);
+  const observed = await getState();
+  if (observed?.state !== "selftest" || observed?.token !== token) {
+    throw new Error("STATE_MAILBOX_SELFTEST_MISMATCH");
+  }
+  await setState({ state: "idle", selftestOkAt: new Date().toISOString() }, true);
+  console.log("STATE_MAILBOX_SELFTEST_OK");
+  process.exit(0);
+}
 const ownPos = currentOwnPosition(positions);
 console.log(
   `STATUS execute=${execute} n=${latest.n} ref=${latest.px} state=${state.state} ownTopPos=${ownPos ?? "na"}`
