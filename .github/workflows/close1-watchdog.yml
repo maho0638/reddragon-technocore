@@ -1,0 +1,123 @@
+name: Close-1 Trader Watchdog
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows: ["Close-1 RedDragon Trader"]
+    types: [completed]
+  schedule:
+    - cron: "4,14,24,34,44,54 * * * *"
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: close1-trader-watchdog
+  cancel-in-progress: true
+
+jobs:
+  heal:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - name: Check trader health and self-restart
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          EVENT_NAME: ${{ github.event_name }}
+          TRADER_WORKFLOW: close1-trader.yml
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          api="https://api.github.com/repos/$REPO"
+          auth=(-H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28")
+
+          now="$(date -u +%s)"
+          runs="$(curl -fsSL "${auth[@]}" "$api/actions/workflows/$TRADER_WORKFLOW/runs?per_page=12")"
+
+          mapfile -t rows < <(
+            python - <<'PY' "$runs"
+import json,sys,datetime
+data=json.loads(sys.argv[1])
+for r in data.get("workflow_runs",[]):
+    print("\t".join([
+        str(r.get("id","")),
+        str(r.get("status","")),
+        str(r.get("conclusion") or ""),
+        str(r.get("event","")),
+        str(r.get("created_at","")),
+    ]))
+PY
+          )
+
+          if (("${#rows[@]}" == 0)); then
+            echo "No trader runs found; dispatching recovery run."
+            curl -fsSL -X POST "${auth[@]}"               "$api/actions/workflows/$TRADER_WORKFLOW/dispatches"               -d '{"ref":"main"}'
+            exit 0
+          fi
+
+          latest_id=""
+          latest_status=""
+          latest_conclusion=""
+          latest_created=""
+          consecutive_bad=0
+
+          for row in "${rows[@]}"; do
+            IFS=$'\t' read -r rid status conclusion event created <<<"$row"
+            if [[ -z "$latest_id" ]]; then
+              latest_id="$rid"
+              latest_status="$status"
+              latest_conclusion="$conclusion"
+              latest_created="$created"
+            fi
+
+            if [[ "$status" == "completed" && "$conclusion" == "success" ]]; then
+              break
+            fi
+            if [[ "$status" == "completed" && "$conclusion" != "success" && "$conclusion" != "cancelled" ]]; then
+              consecutive_bad=$((consecutive_bad+1))
+            fi
+          done
+
+          created_epoch="$(python - <<'PY' "$latest_created"
+import sys,datetime
+s=sys.argv[1]
+try:
+    dt=datetime.datetime.fromisoformat(s.replace("Z","+00:00"))
+    print(int(dt.timestamp()))
+except Exception:
+    print(0)
+PY
+          )"
+          age=$(( now - created_epoch ))
+
+          echo "latest_id=$latest_id status=$latest_status conclusion=$latest_conclusion age_s=$age consecutive_bad=$consecutive_bad"
+
+          # Healthy: a run is in progress or a recent success exists.
+          if [[ "$latest_status" != "completed" ]]; then
+            echo "Trader run already active."
+            exit 0
+          fi
+          if [[ "$latest_conclusion" == "success" && "$age" -lt 900 ]]; then
+            echo "Trader healthy."
+            exit 0
+          fi
+
+          # A recent cancellation can be caused by a config push/concurrency handoff.
+          # Give the next scheduled turn a short grace period before forcing recovery.
+          if [[ "$latest_conclusion" == "cancelled" && "$age" -lt 420 ]]; then
+            echo "Recent cancellation inside grace window; no forced dispatch yet."
+            exit 0
+          fi
+
+          # Fail-safe: watchdog never edits strategy or secrets. It only restarts the known
+          # workflow. Repeated code/config failures therefore cannot mutate trading logic.
+          if [[ "$consecutive_bad" -ge 3 ]]; then
+            echo "::error::Trader has at least 3 consecutive hard failures. Not auto-mutating code; external monitor must inspect."
+            exit 1
+          fi
+
+          echo "Trader stale or failed; dispatching one recovery run."
+          curl -fsSL -X POST "${auth[@]}"             "$api/actions/workflows/$TRADER_WORKFLOW/dispatches"             -d '{"ref":"main"}'
