@@ -58,3 +58,17 @@ for (const m of liveMsgs) {
 offers.sort((a,b)=>b.seq-a.seq);
 console.log("LIVE_ANY_OFFERS currentN="+currentN+" count="+offers.length);
 for (const o of offers.slice(0,40)) console.log("OFFER "+JSON.stringify(o));
+
+// REDDRAGON_STATE_ROOM_PROBE
+for (const candidate of ["d-reddragon-835ae177","d-reddragon-lab","mb-reddragon-agent","close1"]) {
+  try {
+    const r = await fetch(BASE + "/r/" + encodeURIComponent(candidate) + "?format=json&limit=3", {
+      headers: { accept: "application/json", "cache-control": "no-cache" },
+      signal: AbortSignal.timeout(15000)
+    });
+    const body = await r.text();
+    console.log("STATE_ROOM_CANDIDATE " + candidate + " status=" + r.status + " body=" + body.slice(0,1200));
+  } catch (e) {
+    console.log("STATE_ROOM_CANDIDATE " + candidate + " ERROR " + String(e));
+  }
+}
