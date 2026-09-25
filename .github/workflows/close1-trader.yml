@@ -32,5 +32,5 @@ jobs:
       - name: Evaluate Close-1 strategy
         env:
           TECHNOCORE_PRIVATE_KEY_PKCS8_B64: ${{ secrets.TECHNOCORE_PRIVATE_KEY_PKCS8_B64 }}
-          CLOSE1_EXECUTE: "false"
+          CLOSE1_EXECUTE: "true"
         run: node scripts/close1-trader-runner.mjs
