@@ -1,4 +1,5 @@
 name: Close-1 Trader Watchdog
+# Seeds/restarts the trader when no active run exists.
 
 on:
   push:
