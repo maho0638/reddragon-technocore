@@ -25,3 +25,36 @@ for (const m of a) {
 }
 console.log("CLOSE1_WINDOW="+a.length+" INTERESTING="+interesting.length);
 for (const x of interesting.slice(-30)) console.log("MSG seq="+x.seq+" from="+x.from+" text="+x.text.slice(0,3500));
+
+
+const priceFull = await get("/r/d-close1-price?format=json&limit=80");
+const priceMsgs = items(priceFull.json);
+const refs = [];
+for (const m of priceMsgs) {
+  try {
+    const b = JSON.parse(txt(m));
+    if (b?.t === "price" && b?.ref?.px) refs.push({n:Number(b.n), px:Number(b.ref.px), time:b.ref.time, limits:b.limits});
+  } catch {}
+}
+refs.sort((a,b)=>a.n-b.n);
+if (refs.length) {
+  const pxs=refs.map(x=>x.px);
+  console.log("PRICE_SERIES count="+refs.length+" first="+refs[0].px+" last="+refs.at(-1).px+" low="+Math.min(...pxs)+" high="+Math.max(...pxs));
+  console.log("PRICE_LAST10="+JSON.stringify(refs.slice(-10)));
+}
+
+const currentN = refs.length ? refs.at(-1).n : 0;
+const live = await get("/r/close1?format=json&limit=1000");
+const liveMsgs = items(live.json);
+const offers=[];
+for (const m of liveMsgs) {
+  const raw=txt(m);
+  let b; try { b=JSON.parse(raw); } catch { continue; }
+  if (b?.t!=="trade" || b?.season!=="close-1" || !b?.terms || b?.taker!=="any" || b?.taker_sig) continue;
+  const u=Number(b.terms.until);
+  if (!Number.isFinite(u) || u < currentN+1) continue;
+  offers.push({seq:Number(m?.seq||0), maker:b.terms.maker, side:b.terms.side, px:b.terms.px, qty:b.terms.qty, until:u, id:b.terms.id, maker_sig:b.maker_sig});
+}
+offers.sort((a,b)=>b.seq-a.seq);
+console.log("LIVE_ANY_OFFERS currentN="+currentN+" count="+offers.length);
+for (const o of offers.slice(0,40)) console.log("OFFER "+JSON.stringify(o));
