@@ -161,21 +161,48 @@ async function readExport(room) {
   return out;
 }
 
-async function getState() {
+function noteValue(text) {
+  const trimmed = String(text || "").trim();
+  if (!trimmed) return "";
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (typeof parsed?.value === "string") return parsed.value;
+  } catch {}
+  return trimmed;
+}
+async function getNote(key) {
   const { r, text } = await request(
-    `${BASE}/kv/${encodeURIComponent(stateNs)}/${encodeURIComponent(stateKey)}`,
+    `${BASE}/kv/${encodeURIComponent(stateNs)}/${encodeURIComponent(key)}`,
     { headers: { accept: "text/plain,application/json", "cache-control": "no-cache" } },
     2
   );
-  if (r.status === 404 || !text.trim()) return { state: "idle" };
-  if (!r.ok) throw new Error(`state read failed ${r.status}`);
+  if (r.status === 404) return null;
+  if (!r.ok) throw new Error(`note read failed ${r.status}`);
+  return noteValue(text);
+}
+async function setNote(key, value) {
+  const encoded = encodeURIComponent(String(value));
+  const { r, text } = await request(
+    `${BASE}/kv/${encodeURIComponent(stateNs)}/${encodeURIComponent(key)}/set/${encoded}`,
+    { headers: { accept: "text/plain,application/json", "cache-control": "no-cache" } },
+    2
+  );
+  if (!r.ok) throw new Error(`note write failed ${r.status}: ${text.slice(0, 200)}`);
+}
+async function verifyStateLane(sweep) {
+  if (!execute) return;
+  const probe = `ok-${Number(sweep)}`;
+  await setNote("health", probe);
+  const observed = await getNote("health");
+  if (observed !== probe) throw new Error("STATE_HEALTH_MISMATCH");
+  console.log("STATE_HEALTH_OK");
+}
+async function getState() {
+  const raw = await getNote(stateKey);
+  if (!raw) return { state: "idle" };
   try {
-    const parsed = JSON.parse(text);
-    if (typeof parsed?.value === "string") return JSON.parse(parsed.value);
-    if (typeof parsed === "object" && parsed && parsed.state) return parsed;
-  } catch {}
-  try {
-    return JSON.parse(text);
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : { state: "idle" };
   } catch {
     return { state: "idle" };
   }
@@ -185,13 +212,7 @@ async function setState(state) {
     console.log(`DRY_STATE=${state.state}`);
     return;
   }
-  const value = encodeURIComponent(JSON.stringify(state));
-  const { r, text } = await request(
-    `${BASE}/kv/${encodeURIComponent(stateNs)}/${encodeURIComponent(stateKey)}/set/${value}`,
-    { headers: { accept: "text/plain,application/json" } },
-    2
-  );
-  if (!r.ok) throw new Error(`state write failed ${r.status}: ${text.slice(0, 200)}`);
+  await setNote(stateKey, JSON.stringify(state));
   console.log(`STATE=${state.state}`);
 }
 
@@ -414,6 +435,7 @@ const positions = await positionSnapshots();
 const latest = series.at(-1);
 if (!latest) throw new Error("No referee price available");
 
+await verifyStateLane(latest.n);
 let state = await getState();
 const ownPos = currentOwnPosition(positions);
 console.log(
