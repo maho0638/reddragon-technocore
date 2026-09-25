@@ -15,7 +15,7 @@ permissions:
 
 concurrency:
   group: close1-reddragon-trader
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   trade:
