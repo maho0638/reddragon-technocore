@@ -634,6 +634,147 @@ function validAcceptance(body) {
   }
 }
 
+function validMakerOffer(body) {
+  try {
+    const terms = body?.terms;
+    if (body?.t !== "trade" || body?.season !== SEASON || !terms || !body?.maker_sig) return false;
+    if (!terms?.maker || terms.maker === did) return false;
+    const payload = `${SEASON}|terms|${canonicalTerms(terms)}`;
+    return nodeVerify(
+      null,
+      Buffer.from(payload, "utf8"),
+      publicKeyFromDid(terms.maker),
+      Buffer.from(String(body.maker_sig), "base64url")
+    );
+  } catch {
+    return false;
+  }
+}
+
+async function findReliableOpposingOffer(decision, latest) {
+  const desiredSide = String(decision?.side || "");
+  const desiredQty = Number(decision?.qty);
+  if (!["buy", "sell"].includes(desiredSide) || !Number.isFinite(desiredQty)) return null;
+
+  const [roomMsgs, flowMsgs] = await Promise.all([
+    readExport(ROOM),
+    readRoom("d-close1-flow", 200)
+  ]);
+
+  const settledIds = new Set();
+  const voidById = new Map();
+  for (const msg of flowMsgs) {
+    const b = parseBody(msg);
+    if (b?.t !== "flow") continue;
+    for (const id of Array.isArray(b.settled) ? b.settled : []) settledIds.add(String(id));
+    for (const v of Array.isArray(b.void) ? b.void : []) {
+      if (Array.isArray(v) && v.length >= 2) voidById.set(String(v[0]), String(v[1]));
+    }
+  }
+
+  const tradeById = new Map();
+  const acceptedIds = new Set();
+  for (const msg of roomMsgs) {
+    const b = parseBody(msg);
+    const id = b?.terms?.id;
+    if (b?.t !== "trade" || !id) continue;
+    if (!tradeById.has(String(id)) || !b?.taker_sig) tradeById.set(String(id), b);
+    if (b?.taker_sig && validAcceptance(b)) acceptedIds.add(String(id));
+  }
+
+  const makerSettled = new Map();
+  const makerFundsVoid = new Map();
+  for (const [id, b] of tradeById.entries()) {
+    const maker = String(b?.terms?.maker || "");
+    if (!maker) continue;
+    if (settledIds.has(id)) makerSettled.set(maker, (makerSettled.get(maker) || 0) + 1);
+    if (voidById.get(id) === "funds") makerFundsVoid.set(maker, (makerFundsVoid.get(maker) || 0) + 1);
+  }
+
+  const oppositeMakerSide = desiredSide === "buy" ? "sell" : "buy";
+  const minQty = Math.max(0.1, desiredQty * 0.35);
+  const maxQty = Math.min(60, desiredQty * 1.35);
+  const refPx = Number(latest.px);
+  const candidates = [];
+  const seenIds = new Set();
+
+  for (let i = roomMsgs.length - 1; i >= 0; i--) {
+    const b = parseBody(roomMsgs[i]);
+    const terms = b?.terms;
+    const id = String(terms?.id || "");
+    if (!id || seenIds.has(id)) continue;
+    seenIds.add(id);
+
+    if (!validMakerOffer(b) || b?.taker_sig) continue;
+    if (settledIds.has(id) || voidById.has(id) || acceptedIds.has(id)) continue;
+    if (String(terms.side) !== oppositeMakerSide) continue;
+    if (!(terms.taker === "any" || terms.taker === did)) continue;
+    if (Number(terms.until) < Number(latest.n)) continue;
+
+    const qty = Number(terms.qty);
+    const px = Number(terms.px);
+    if (!Number.isFinite(qty) || qty < minQty || qty > maxQty) continue;
+    if (!Number.isFinite(px) || !Number.isFinite(refPx) || refPx <= 0) continue;
+    if (Math.abs(px - refPx) / refPx > 0.045) continue;
+
+    const maker = String(terms.maker);
+    const settledCount = makerSettled.get(maker) || 0;
+    const fundsFails = makerFundsVoid.get(maker) || 0;
+    if (settledCount < 1) continue;
+
+    const reliability = settledCount - 1.5 * fundsFails;
+    const sizeFit = -Math.abs(qty - desiredQty) / Math.max(1, desiredQty);
+    const priceFit = -Math.abs(px - refPx) / refPx;
+    const recency = Number(roomMsgs[i]?.seq || 0);
+    candidates.push({ b, qty, px, maker, score: reliability * 10 + sizeFit * 3 + priceFit + recency * 1e-9 });
+  }
+
+  candidates.sort((a, b) => b.score - a.score);
+  return candidates[0] || null;
+}
+
+async function takeReliableOffer(match, decision, latest, priorState = {}) {
+  const terms = match.b.terms;
+  const side = String(decision.side);
+  const qty = Number(terms.qty);
+  const px = Number(terms.px);
+  const taker_sig = signPayload(`${SEASON}|accept|${canonicalTerms(terms)}|${did}`);
+  const text = JSON.stringify({
+    t: "trade",
+    season: SEASON,
+    terms,
+    taker: did,
+    maker_sig: match.b.maker_sig,
+    taker_sig
+  });
+
+  const preflight = {
+    state: "entry_preflight",
+    id: String(terms.id),
+    side,
+    qty,
+    entryPx: px,
+    until: Number(terms.until),
+    entrySweep: Number(latest.n),
+    realizedScoreEst: Number(priorState.realizedScoreEst || 0),
+    liquidityRole: "taker",
+    maker: String(terms.maker)
+  };
+  await setState(preflight);
+  const posted = await signedPost(ROOM, text);
+  await setState({
+    ...preflight,
+    state: "entry_accepted",
+    postedSeq: posted.seq,
+    acceptedSeq: posted.seq,
+    acceptedAtSweep: Number(latest.n),
+    taker: did
+  });
+  console.log(
+    `ENTRY_TAKE side=${side} qty=${qty.toFixed(2)} px=${px.toFixed(2)} maker=${String(terms.maker).slice(0, 24)} seq=${posted.seq || "?"}`
+  );
+}
+
 async function findAcceptance(id) {
   const msgs = await readExport(ROOM);
   for (let i = msgs.length - 1; i >= 0; i--) {
@@ -674,6 +815,14 @@ async function findOutcome(id) {
 }
 
 async function postEntry(decision, latest, priorState = {}) {
+  if (execute) {
+    const match = await findReliableOpposingOffer(decision, latest);
+    if (match) {
+      await takeReliableOffer(match, decision, latest, priorState);
+      return;
+    }
+  }
+
   const offer = makeOffer(decision.side, Number(decision.qty), latest, "rd4e");
   if (!execute) {
     console.log(`DRY_ENTRY side=${decision.side} qty=${Number(decision.qty).toFixed(2)}`);
