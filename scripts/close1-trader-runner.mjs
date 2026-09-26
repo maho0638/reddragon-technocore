@@ -491,18 +491,18 @@ function controlledFallbackEntry(rawDecision, race, distinct, positionSnapshots,
 
   const gap = Number(race?.leaderGap);
   const hLeft = Number(race?.hoursRemaining);
-  if (!Number.isFinite(gap) || gap < 150) return rawDecision;
-  if (!Number.isFinite(hLeft) || hLeft > 196) return rawDecision;
+  if (!Number.isFinite(gap) || gap < 125) return rawDecision;
+  if (!Number.isFinite(hLeft) || hLeft > 198) return rawDecision;
   if (!Number.isFinite(Number(latest?.px))) return rawDecision;
 
   // Controlled scout entry only when a sustained price move and the visible
   // top-position consensus point in the same direction. This is intentionally
   // small; the encrypted strategy remains the primary entry/exit authority.
-  const refs = distinct.slice(-120);
-  if (refs.length < 24) return rawDecision;
+  const refs = distinct.slice(-72);
+  if (refs.length < 18) return rawDecision;
 
   const ys = refs.map((x) => Number(x.px)).filter(Number.isFinite);
-  if (ys.length !== refs.length || ys.length < 24) return rawDecision;
+  if (ys.length !== refs.length || ys.length < 18) return rawDecision;
 
   const n = ys.length;
   const xMean = (n - 1) / 2;
@@ -521,8 +521,8 @@ function controlledFallbackEntry(rawDecision, race, distinct, positionSnapshots,
   const move = ys.at(-1) - ys[0];
   const absMove = Math.abs(move);
   const r2 = varX > 0 && varY > 0 ? (cov * cov) / (varX * varY) : 0;
-  const minMove = hLeft > 144 ? 0.45 : hLeft > 72 ? 0.35 : 0.25;
-  if (absMove < minMove || r2 < 0.45) return rawDecision;
+  const minMove = hLeft > 144 ? 0.32 : hLeft > 72 ? 0.25 : 0.18;
+  if (absMove < minMove || r2 < 0.35) return rawDecision;
 
   const direction = Math.sign(move);
   if (!direction) return rawDecision;
@@ -534,10 +534,10 @@ function controlledFallbackEntry(rawDecision, race, distinct, positionSnapshots,
     return sum + (Number.isFinite(value) ? value : 0);
   }, 0);
 
-  if (!Number.isFinite(topNet) || Math.abs(topNet) < 10) return rawDecision;
+  if (!Number.isFinite(topNet) || Math.abs(topNet) < 8) return rawDecision;
   if (Math.sign(topNet) !== direction) return rawDecision;
 
-  const qty = hLeft > 144 ? 6 : hLeft > 72 ? 9 : 12;
+  const qty = hLeft > 144 ? 10 : hLeft > 72 ? 16 : 24;
   const side = direction > 0 ? "buy" : "sell";
   console.log(
     `FALLBACK_SIGNAL side=${side} move=${move.toFixed(2)} r2=${r2.toFixed(2)} topNet=${topNet.toFixed(2)} gap=${gap.toFixed(2)} hLeft=${hLeft.toFixed(1)}`
@@ -546,7 +546,7 @@ function controlledFallbackEntry(rawDecision, race, distinct, positionSnapshots,
     action: "enter",
     side,
     qty,
-    confidence: 0.84,
+    confidence: 0.90,
     reason: "race_trend_consensus_fallback"
   };
 }
