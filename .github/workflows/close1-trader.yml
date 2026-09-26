@@ -51,7 +51,7 @@ jobs:
           done
 
       - name: Queue next continuous cycle
-        if: ${{ success() && github.event_name == 'workflow_dispatch' }}
+        if: ${{ success() }}
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
