@@ -531,13 +531,19 @@ function controlledFallbackEntry(rawDecision, race, distinct, positionSnapshots,
   if (!Number.isFinite(Number(latest?.px))) return rawDecision;
 
   // Controlled scout entry only when a sustained price move and the visible
-  // top-position consensus point in the same direction. This is intentionally
-  // small; the encrypted strategy remains the primary entry/exit authority.
+  // top-position consensus point in the same direction. Keep the diagnostics
+  // visible so an idle bot can be distinguished from a broken bot.
   const refs = distinct.slice(-72);
-  if (refs.length < 18) return rawDecision;
+  if (refs.length < 18) {
+    console.log(`FALLBACK_SCAN blocked=refs refs=${refs.length} gap=${gap.toFixed(2)} hLeft=${hLeft.toFixed(1)}`);
+    return rawDecision;
+  }
 
   const ys = refs.map((x) => Number(x.px)).filter(Number.isFinite);
-  if (ys.length !== refs.length || ys.length < 18) return rawDecision;
+  if (ys.length !== refs.length || ys.length < 18) {
+    console.log(`FALLBACK_SCAN blocked=prices refs=${refs.length} valid=${ys.length}`);
+    return rawDecision;
+  }
 
   const n = ys.length;
   const xMean = (n - 1) / 2;
@@ -557,10 +563,6 @@ function controlledFallbackEntry(rawDecision, race, distinct, positionSnapshots,
   const absMove = Math.abs(move);
   const r2 = varX > 0 && varY > 0 ? (cov * cov) / (varX * varY) : 0;
   const minMove = hLeft > 144 ? 0.32 : hLeft > 72 ? 0.25 : 0.18;
-  if (absMove < minMove || r2 < 0.35) return rawDecision;
-
-  const direction = Math.sign(move);
-  if (!direction) return rawDecision;
 
   const latestPositions = positionSnapshots.at(-1);
   const top = Array.isArray(latestPositions?.top) ? latestPositions.top : [];
@@ -569,6 +571,14 @@ function controlledFallbackEntry(rawDecision, race, distinct, positionSnapshots,
     return sum + (Number.isFinite(value) ? value : 0);
   }, 0);
 
+  console.log(
+    `FALLBACK_SCAN move=${move.toFixed(2)} abs=${absMove.toFixed(2)} min=${minMove.toFixed(2)} r2=${r2.toFixed(2)} topNet=${Number.isFinite(topNet) ? topNet.toFixed(2) : "na"} gap=${gap.toFixed(2)} hLeft=${hLeft.toFixed(1)}`
+  );
+
+  if (absMove < minMove || r2 < 0.35) return rawDecision;
+
+  const direction = Math.sign(move);
+  if (!direction) return rawDecision;
   if (!Number.isFinite(topNet) || Math.abs(topNet) < 8) return rawDecision;
   if (Math.sign(topNet) !== direction) return rawDecision;
 
@@ -1020,7 +1030,7 @@ if (state.state === "entry_accepted") {
       lastVoid: outcome.reason,
       lastVoidId: state.id
     });
-    console.log("ENTRY_VOID");
+    console.log(`ENTRY_VOID reason=${outcome.reason} n=${outcome.n ?? "na"} id=${state.id}`);
     process.exit(0);
   }
   if (outcome?.outcome === "settled" || topEvidence) {
@@ -1069,7 +1079,7 @@ if (state.state === "entry_unverified") {
       lastVoid: outcome.reason,
       lastVoidId: state.id
     });
-    console.log("ENTRY_UNVERIFIED_RECOVERED_VOID");
+    console.log(`ENTRY_UNVERIFIED_RECOVERED_VOID reason=${outcome.reason} n=${outcome.n ?? "na"} id=${state.id}`);
     process.exit(0);
   } else if (Number(latest.n) > Number(state.until || 0) + 2) {
     await setState({
@@ -1140,7 +1150,7 @@ if (state.state === "exit_accepted") {
       entryFeeEst: Number(state.entryFeeEst || (0.01 * Number(state.qty) * Number(state.entryPx)))
     };
     await setState(open);
-    console.log("EXIT_VOID_REEVALUATE");
+    console.log(`EXIT_VOID_REEVALUATE reason=${outcome.reason} n=${outcome.n ?? "na"} id=${state.id}`);
     state = open;
   } else if (outcome?.outcome === "settled" || (!topStillOpen && Number(latest.n) >= Number(state.acceptedAtSweep || latest.n) + 1)) {
     const direction = state.entrySide === "buy" ? 1 : -1;
