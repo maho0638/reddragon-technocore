@@ -835,8 +835,9 @@ async function takeReliableOffer(match, decision, latest, priorState = {}) {
 
 async function findAcceptance(id) {
   const msgs = await readExport(ROOM);
-  for (let i = msgs.length - 1; i >= 0; i--) {
-    const b = parseBody(msgs[i]);
+  const candidates = [];
+  for (const msg of msgs) {
+    const b = parseBody(msg);
     if (
       b?.t === "trade" &&
       b?.season === SEASON &&
@@ -847,14 +848,15 @@ async function findAcceptance(id) {
       b.taker !== "any" &&
       validAcceptance(b)
     ) {
-      return {
-        seq: Number(msgs[i]?.seq || 0) || null,
+      candidates.push({
+        seq: Number(msg?.seq || 0) || Number.MAX_SAFE_INTEGER,
         taker: String(b.taker),
         body: b
-      };
+      });
     }
   }
-  return null;
+  candidates.sort((a, b) => a.seq - b.seq);
+  return candidates[0] || null;
 }
 async function logRecentRedDragonVoids() {
   const msgs = await readRoom("d-close1-flow", 200);
@@ -940,7 +942,16 @@ async function findOutcome(id, fromSweep = 0) {
     }
     if (Array.isArray(b.void)) {
       const hit = b.void.find((v) => Array.isArray(v) && v[0] === id);
-      if (hit) return { outcome: "void", reason: String(hit[1]), n };
+      if (hit) {
+        const reason = String(hit[1]);
+        // "settled" is emitted for a later duplicate of an id that already
+        // settled earlier. For the maker's economic state this is positive
+        // evidence that the trade id did settle.
+        if (reason === "settled") {
+          return { outcome: "settled", n, inferredFrom: "void:settled" };
+        }
+        return { outcome: "void", reason, n };
+      }
     }
 
     const os = Number(b?.omitted?.settled || 0);
