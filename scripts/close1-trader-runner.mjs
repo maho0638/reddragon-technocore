@@ -571,21 +571,32 @@ function controlledFallbackEntry(rawDecision, race, distinct, positionSnapshots,
     return sum + (Number.isFinite(value) ? value : 0);
   }, 0);
 
+  const strongConsensus = Number.isFinite(topNet) && Math.abs(topNet) >= 100;
+  const requiredR2 = strongConsensus ? 0.20 : 0.35;
+  const requiredMove = strongConsensus ? Math.max(0.25, minMove - 0.07) : minMove;
+
   console.log(
-    `FALLBACK_SCAN move=${move.toFixed(2)} abs=${absMove.toFixed(2)} min=${minMove.toFixed(2)} r2=${r2.toFixed(2)} topNet=${Number.isFinite(topNet) ? topNet.toFixed(2) : "na"} gap=${gap.toFixed(2)} hLeft=${hLeft.toFixed(1)}`
+    `FALLBACK_SCAN move=${move.toFixed(2)} abs=${absMove.toFixed(2)} min=${requiredMove.toFixed(2)} r2=${r2.toFixed(2)} needR2=${requiredR2.toFixed(2)} topNet=${Number.isFinite(topNet) ? topNet.toFixed(2) : "na"} strong=${strongConsensus} gap=${gap.toFixed(2)} hLeft=${hLeft.toFixed(1)}`
   );
 
-  if (absMove < minMove || r2 < 0.35) return rawDecision;
+  if (absMove < requiredMove || r2 < requiredR2) return rawDecision;
 
   const direction = Math.sign(move);
   if (!direction) return rawDecision;
   if (!Number.isFinite(topNet) || Math.abs(topNet) < 8) return rawDecision;
   if (Math.sign(topNet) !== direction) return rawDecision;
 
-  const qty = hLeft > 144 ? 10 : hLeft > 72 ? 16 : 24;
+  let qty;
+  if (hLeft > 144) {
+    qty = strongConsensus && gap >= 150 ? 30 : strongConsensus ? 22 : 10;
+  } else if (hLeft > 72) {
+    qty = strongConsensus ? 34 : 20;
+  } else {
+    qty = strongConsensus ? 40 : 28;
+  }
   const side = direction > 0 ? "buy" : "sell";
   console.log(
-    `FALLBACK_SIGNAL side=${side} move=${move.toFixed(2)} r2=${r2.toFixed(2)} topNet=${topNet.toFixed(2)} gap=${gap.toFixed(2)} hLeft=${hLeft.toFixed(1)}`
+    `FALLBACK_SIGNAL side=${side} move=${move.toFixed(2)} r2=${r2.toFixed(2)} topNet=${topNet.toFixed(2)} strong=${strongConsensus} gap=${gap.toFixed(2)} hLeft=${hLeft.toFixed(1)} qty=${qty.toFixed(2)}`
   );
   return {
     action: "enter",
