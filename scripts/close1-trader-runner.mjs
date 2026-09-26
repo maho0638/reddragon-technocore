@@ -819,18 +819,45 @@ async function findAcceptance(id) {
   }
   return null;
 }
-async function findOutcome(id) {
+async function findOutcome(id, fromSweep = 0) {
   const msgs = await readRoom("d-close1-flow", 200);
+  let omittedSettled = 0;
+  let omittedVoid = 0;
+  let firstOmittedSweep = null;
+  let lastOmittedSweep = null;
+
   for (let i = msgs.length - 1; i >= 0; i--) {
     const b = parseBody(msgs[i]);
     if (b?.t !== "flow") continue;
+    const n = Number(b.n);
+    if (Number.isFinite(Number(fromSweep)) && Number(fromSweep) > 0 && n < Number(fromSweep)) continue;
+
     if (Array.isArray(b.settled) && b.settled.includes(id)) {
-      return { outcome: "settled", n: Number(b.n) };
+      return { outcome: "settled", n };
     }
     if (Array.isArray(b.void)) {
       const hit = b.void.find((v) => Array.isArray(v) && v[0] === id);
-      if (hit) return { outcome: "void", reason: String(hit[1]), n: Number(b.n) };
+      if (hit) return { outcome: "void", reason: String(hit[1]), n };
     }
+
+    const os = Number(b?.omitted?.settled || 0);
+    const ov = Number(b?.omitted?.void || 0);
+    if (os > 0 || ov > 0) {
+      omittedSettled += Math.max(0, os);
+      omittedVoid += Math.max(0, ov);
+      firstOmittedSweep = firstOmittedSweep == null ? n : Math.min(firstOmittedSweep, n);
+      lastOmittedSweep = lastOmittedSweep == null ? n : Math.max(lastOmittedSweep, n);
+    }
+  }
+
+  if (omittedSettled > 0 || omittedVoid > 0) {
+    return {
+      outcome: "ambiguous_omitted",
+      omittedSettled,
+      omittedVoid,
+      firstOmittedSweep,
+      lastOmittedSweep
+    };
   }
   return null;
 }
@@ -1027,7 +1054,7 @@ if (state.state === "entry_offer") {
 }
 
 if (state.state === "entry_accepted") {
-  const outcome = await findOutcome(state.id);
+  const outcome = await findOutcome(state.id, Number(state.acceptedAtSweep || state.entrySweep || 0));
   const expectedSign = state.side === "buy" ? 1 : -1;
   const topEvidence =
     Number.isFinite(ownPos) &&
@@ -1044,6 +1071,26 @@ if (state.state === "entry_accepted") {
     console.log(`ENTRY_VOID reason=${outcome.reason} n=${outcome.n ?? "na"} id=${state.id}`);
     process.exit(0);
   }
+  if (outcome?.outcome === "ambiguous_omitted" && !topEvidence) {
+    if (Number(latest.n) >= Number(state.acceptedAtSweep || latest.n) + 4) {
+      await setState({
+        ...state,
+        state: "entry_unverified",
+        checkedThroughSweep: Number(latest.n),
+        omittedSettled: outcome.omittedSettled,
+        omittedVoid: outcome.omittedVoid
+      });
+      console.log(
+        `ENTRY_OUTCOME_AMBIGUOUS_OMITTED settled=${outcome.omittedSettled} void=${outcome.omittedVoid} sweeps=${outcome.firstOmittedSweep ?? "na"}-${outcome.lastOmittedSweep ?? "na"}`
+      );
+      process.exit(0);
+    }
+    console.log(
+      `ENTRY_PENDING_OMITTED settled=${outcome.omittedSettled} void=${outcome.omittedVoid}`
+    );
+    process.exit(0);
+  }
+
   if (outcome?.outcome === "settled" || topEvidence) {
     const open = {
       state: "open",
@@ -1068,8 +1115,13 @@ if (state.state === "entry_accepted") {
 }
 
 if (state.state === "entry_unverified") {
-  const outcome = await findOutcome(state.id);
-  if (outcome?.outcome === "settled") {
+  const outcome = await findOutcome(state.id, Number(state.acceptedAtSweep || state.entrySweep || 0));
+  const expectedSign = state.side === "buy" ? 1 : -1;
+  const topEvidence =
+    Number.isFinite(ownPos) &&
+    Math.sign(ownPos) === expectedSign &&
+    Math.abs(ownPos) >= Math.max(0.1, Number(state.qty) * 0.75);
+  if (outcome?.outcome === "settled" || topEvidence) {
     const open = {
       state: "open",
       side: state.side,
@@ -1092,13 +1144,20 @@ if (state.state === "entry_unverified") {
     });
     console.log(`ENTRY_UNVERIFIED_RECOVERED_VOID reason=${outcome.reason} n=${outcome.n ?? "na"} id=${state.id}`);
     process.exit(0);
+  } else if (outcome?.outcome === "ambiguous_omitted") {
+    console.log(
+      `ENTRY_OUTCOME_AMBIGUOUS_OMITTED settled=${outcome.omittedSettled} void=${outcome.omittedVoid} sweeps=${outcome.firstOmittedSweep ?? "na"}-${outcome.lastOmittedSweep ?? "na"}`
+    );
+    process.exit(0);
   } else if (Number(latest.n) > Number(state.until || 0) + 2) {
+    // Only clear when the public flow window is complete enough to prove that
+    // no outcome was omitted. With omitted outcome arrays, absence is not evidence.
     await setState({
       state: "idle",
       cooldownUntilSweep: Number(latest.n) + 1,
       lastIgnoredId: state.id
     });
-    console.log("ENTRY_UNVERIFIED_CLEARED_NO_FLOW_OUTCOME");
+    console.log("ENTRY_UNVERIFIED_CLEARED_COMPLETE_FLOW");
     process.exit(0);
   } else {
     console.log("ENTRY_UNVERIFIED_WAIT");
@@ -1163,7 +1222,10 @@ if (state.state === "exit_accepted") {
     await setState(open);
     console.log(`EXIT_VOID_REEVALUATE reason=${outcome.reason} n=${outcome.n ?? "na"} id=${state.id}`);
     state = open;
-  } else if (outcome?.outcome === "settled" || (!topStillOpen && Number(latest.n) >= Number(state.acceptedAtSweep || latest.n) + 1)) {
+  } else if (
+    outcome?.outcome === "settled" ||
+    (Number.isFinite(ownPos) && !topStillOpen && Number(latest.n) >= Number(state.acceptedAtSweep || latest.n) + 1)
+  ) {
     const direction = state.entrySide === "buy" ? 1 : -1;
     const gross = direction * Number(state.qty) * (Number(latest.px) - Number(state.entryPx));
     const fees = Number(state.entryFeeEst || (0.01 * Number(state.qty) * Number(state.entryPx))) +
