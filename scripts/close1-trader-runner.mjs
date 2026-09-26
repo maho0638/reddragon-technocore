@@ -726,7 +726,16 @@ async function findReliableOpposingOffer(decision, latest) {
     if (b?.t !== "flow") continue;
     for (const id of Array.isArray(b.settled) ? b.settled : []) settledIds.add(String(id));
     for (const v of Array.isArray(b.void) ? b.void : []) {
-      if (Array.isArray(v) && v.length >= 2) voidById.set(String(v[0]), String(v[1]));
+      if (!Array.isArray(v) || v.length < 2) continue;
+      const id = String(v[0]);
+      const reason = String(v[1]);
+      if (reason === "settled") {
+        // A later duplicate copy was rejected because this id had already
+        // settled. Count that as positive historical maker reliability.
+        settledIds.add(id);
+      } else {
+        voidById.set(id, reason);
+      }
     }
   }
 
