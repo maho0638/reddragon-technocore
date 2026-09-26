@@ -59,10 +59,10 @@ console.log("LEADERS="+JSON.stringify(rows.slice(0,15)));
 for(const x of recent.slice(-8)) console.log("BOARD "+x.n+" "+JSON.stringify(x.top.slice(0,8)));
 for(const x of poss.slice(-8)) console.log("POSITIONS "+x.n+" open="+x.open+" longs="+x.longs+" shorts="+x.shorts+" top="+JSON.stringify(x.top.slice(0,12)));
 
-const flowMsgs=await get("d-close1-flow",200);
+const flowMsgs=await get("d-close1-flow",500);
 const flows=flowMsgs.map(body).filter(x=>x?.t==="flow").sort((a,b)=>Number(a.n)-Number(b.n));
 for(const x of flows.slice(-12)) console.log("FLOW "+x.n+" "+JSON.stringify(x));
-const roomMsgs=await get("close1",200);
+const roomMsgs=await get("close1",2000);
 for(const m of roomMsgs){
   const b=body(m);
   if(b?.t==="trade" && (b?.terms?.maker==="did:key:z6MkuhrsP4tDZjWYdZLPxaur19WvrF1yuLGsGB2S8Q1gwS6K" || b?.taker==="did:key:z6MkuhrsP4tDZjWYdZLPxaur19WvrF1yuLGsGB2S8Q1gwS6K")){
