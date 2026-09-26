@@ -819,6 +819,29 @@ async function findAcceptance(id) {
   }
   return null;
 }
+async function logRecentRedDragonVoids() {
+  const msgs = await readRoom("d-close1-flow", 200);
+  const hits = [];
+  for (const msg of msgs) {
+    const b = parseBody(msg);
+    if (b?.t !== "flow" || !Array.isArray(b.void)) continue;
+    for (const row of b.void) {
+      if (!Array.isArray(row) || row.length < 2) continue;
+      const id = String(row[0] || "");
+      if (!id.startsWith("rd4e-") && !id.startsWith("rd4x-")) continue;
+      hits.push({ n: Number(b.n), id, reason: String(row[1]) });
+    }
+  }
+  if (hits.length) {
+    console.log(
+      "REDDRAGON_VOID_HISTORY " +
+      hits.slice(-8).map((x) => `n=${x.n} id=${x.id} reason=${x.reason}`).join(" | ")
+    );
+  } else {
+    console.log("REDDRAGON_VOID_HISTORY none_visible");
+  }
+}
+
 async function findOutcome(id, fromSweep = 0) {
   const msgs = await readRoom("d-close1-flow", 200);
   let omittedSettled = 0;
@@ -948,6 +971,7 @@ let race = raceContext({ now, pnlSnapshots: pnl, state, latest });
 console.log(
   `STATUS execute=${execute} n=${latest.n} ref=${latest.px} state=${state.state} ownTopPos=${ownPos ?? "na"} leader=${race.leaderScore ?? "na"} ownEst=${race.ownScoreEst.toFixed(2)} gap=${race.leaderGap ?? "na"} hLeft=${race.hoursRemaining.toFixed(1)}`
 );
+if (!execute) await logRecentRedDragonVoids();
 
 if (state.state === "entry_preflight") {
   const seen = await findAcceptance(state.id);
