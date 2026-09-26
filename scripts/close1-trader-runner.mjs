@@ -1,5 +1,5 @@
 import {
-  createPrivateKey, createPublicKey, sign as nodeSign, createHash,
+  createPrivateKey, createPublicKey, sign as nodeSign, verify as nodeVerify, createHash,
   diffieHellman, hkdfSync, createDecipheriv, createCipheriv, randomBytes
 } from "node:crypto";
 import { readFile } from "node:fs/promises";
@@ -40,6 +40,41 @@ function deriveDid(key) {
   const spki = createPublicKey(key).export({ format: "der", type: "spki" });
   const raw = spki.subarray(spki.length - 32);
   return `did:key:z${base58(Buffer.concat([Buffer.from([0xed, 0x01]), raw]))}`;
+}
+function base58Decode(text) {
+  const alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+  let x = 0n;
+  for (const ch of String(text)) {
+    const i = alphabet.indexOf(ch);
+    if (i < 0) throw new Error("invalid base58");
+    x = x * 58n + BigInt(i);
+  }
+  const bytes = [];
+  while (x > 0n) {
+    bytes.push(Number(x & 255n));
+    x >>= 8n;
+  }
+  bytes.reverse();
+  let leading = 0;
+  for (const ch of String(text)) {
+    if (ch === "1") leading++;
+    else break;
+  }
+  return Buffer.concat([Buffer.alloc(leading), Buffer.from(bytes)]);
+}
+function publicKeyFromDid(didText) {
+  const value = String(didText || "");
+  if (!value.startsWith("did:key:z")) throw new Error("unsupported did");
+  const decoded = base58Decode(value.slice("did:key:z".length));
+  if (decoded.length !== 34 || decoded[0] !== 0xed || decoded[1] !== 0x01) {
+    throw new Error("unsupported did key");
+  }
+  const raw = decoded.subarray(2);
+  const spki = Buffer.concat([
+    Buffer.from("302a300506032b6570032100", "hex"),
+    raw
+  ]);
+  return createPublicKey({ key: spki, format: "der", type: "spki" });
 }
 
 const privateKey = createPrivateKey({
@@ -584,6 +619,21 @@ function makeOffer(side, qty, latest, prefix) {
     text: JSON.stringify({ t: "trade", season: SEASON, terms, taker: "any", maker_sig })
   };
 }
+function validAcceptance(body) {
+  try {
+    if (!body?.taker_sig || !body?.taker || body.taker === "any" || !body?.terms) return false;
+    const payload = `${SEASON}|accept|${canonicalTerms(body.terms)}|${body.taker}`;
+    return nodeVerify(
+      null,
+      Buffer.from(payload, "utf8"),
+      publicKeyFromDid(body.taker),
+      Buffer.from(String(body.taker_sig), "base64url")
+    );
+  } catch {
+    return false;
+  }
+}
+
 async function findAcceptance(id) {
   const msgs = await readExport(ROOM);
   for (let i = msgs.length - 1; i >= 0; i--) {
@@ -595,7 +645,8 @@ async function findAcceptance(id) {
       b?.terms?.maker === did &&
       b?.taker_sig &&
       b?.taker &&
-      b.taker !== "any"
+      b.taker !== "any" &&
+      validAcceptance(b)
     ) {
       return {
         seq: Number(msgs[i]?.seq || 0) || null,
@@ -847,7 +898,42 @@ if (state.state === "entry_accepted") {
 }
 
 if (state.state === "entry_unverified") {
-  throw new Error("ENTRY_OUTCOME_UNVERIFIED");
+  const outcome = await findOutcome(state.id);
+  if (outcome?.outcome === "settled") {
+    const open = {
+      state: "open",
+      side: state.side,
+      qty: Number(state.qty),
+      entryPx: Number(state.entryPx),
+      entrySweep: Number(outcome.n),
+      entryId: state.id,
+      realizedScoreEst: Number(state.realizedScoreEst || 0),
+      entryFeeEst: Number(state.entryFeeEst || (0.01 * Number(state.qty) * Number(state.entryPx)))
+    };
+    await setState(open);
+    console.log("ENTRY_UNVERIFIED_RECOVERED_SETTLED");
+    state = open;
+  } else if (outcome?.outcome === "void") {
+    await setState({
+      state: "idle",
+      cooldownUntilSweep: Number(latest.n) + 1,
+      lastVoid: outcome.reason,
+      lastVoidId: state.id
+    });
+    console.log("ENTRY_UNVERIFIED_RECOVERED_VOID");
+    process.exit(0);
+  } else if (Number(latest.n) > Number(state.until || 0) + 2) {
+    await setState({
+      state: "idle",
+      cooldownUntilSweep: Number(latest.n) + 1,
+      lastIgnoredId: state.id
+    });
+    console.log("ENTRY_UNVERIFIED_CLEARED_NO_FLOW_OUTCOME");
+    process.exit(0);
+  } else {
+    console.log("ENTRY_UNVERIFIED_WAIT");
+    process.exit(0);
+  }
 }
 
 if (state.state === "exit_offer") {
