@@ -878,6 +878,49 @@ async function logRecentRedDragonVoids() {
     console.log("REDDRAGON_VOID_HISTORY none_visible");
   }
 }
+async function logPeerRecentHistory(peerDid) {
+  const peer = String(peerDid || "");
+  if (!peer) {
+    console.log("PEER_HISTORY none");
+    return;
+  }
+  const [roomMsgs, flowMsgs] = await Promise.all([
+    readExport(ROOM),
+    readRoom("d-close1-flow", 200)
+  ]);
+  const ids = new Set();
+  let offers = 0;
+  let accepts = 0;
+  for (const msg of roomMsgs) {
+    const b = parseBody(msg);
+    if (b?.t !== "trade" || !b?.terms?.id) continue;
+    if (String(b.terms.maker || "") === peer || String(b.taker || "") === peer) {
+      ids.add(String(b.terms.id));
+      if (String(b.terms.maker || "") === peer && !b.taker_sig) offers++;
+      if (String(b.taker || "") === peer && b.taker_sig) accepts++;
+    }
+  }
+
+  let settled = 0;
+  const voids = new Map();
+  for (const msg of flowMsgs) {
+    const b = parseBody(msg);
+    if (b?.t !== "flow") continue;
+    for (const id of Array.isArray(b.settled) ? b.settled : []) {
+      if (ids.has(String(id))) settled++;
+    }
+    for (const row of Array.isArray(b.void) ? b.void : []) {
+      if (!Array.isArray(row) || row.length < 2 || !ids.has(String(row[0]))) continue;
+      const reason = String(row[1]);
+      voids.set(reason, (voids.get(reason) || 0) + 1);
+    }
+  }
+  const voidText = [...voids.entries()].map(([k, v]) => `${k}:${v}`).join(",") || "none";
+  console.log(
+    `PEER_HISTORY did=${peer.slice(0, 24)} ids=${ids.size} offers=${offers} accepts=${accepts} listedSettled=${settled} listedVoids=${voidText}`
+  );
+}
+
 
 async function findOutcome(id, fromSweep = 0) {
   const msgs = await readRoom("d-close1-flow", 200);
@@ -1008,7 +1051,10 @@ let race = raceContext({ now, pnlSnapshots: pnl, state, latest });
 console.log(
   `STATUS execute=${execute} n=${latest.n} ref=${latest.px} state=${state.state} ownTopPos=${ownPos ?? "na"} leader=${race.leaderScore ?? "na"} ownEst=${race.ownScoreEst.toFixed(2)} gap=${race.leaderGap ?? "na"} hLeft=${race.hoursRemaining.toFixed(1)}`
 );
-if (!execute) await logRecentRedDragonVoids();
+if (!execute) {
+  await logRecentRedDragonVoids();
+  await logPeerRecentHistory(state?.taker);
+}
 
 if (state.state === "entry_preflight") {
   const seen = await findAcceptance(state.id);
