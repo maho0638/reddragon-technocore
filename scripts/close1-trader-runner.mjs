@@ -401,6 +401,43 @@ function currentOwnPosition(posSnapshots) {
   return hit ? Number(hit[1]) : null;
 }
 
+function visiblePositionAt(posSnapshots, key, sweep) {
+  if (!key || !Number.isFinite(Number(sweep))) return null;
+  for (let i = posSnapshots.length - 1; i >= 0; i--) {
+    const snap = posSnapshots[i];
+    if (Number(snap.n) > Number(sweep)) continue;
+    const hit = Array.isArray(snap.top) ? snap.top.find(([k]) => k === key) : null;
+    if (hit) return { n: Number(snap.n), pos: Number(hit[1]) };
+    if (Number(snap.n) === Number(sweep)) return null;
+  }
+  return null;
+}
+
+function peerSettlementEvidence(posSnapshots, state, latestSweep) {
+  const peer = String(state?.taker || "");
+  const acceptedAt = Number(state?.acceptedAtSweep || 0);
+  const qty = Number(state?.qty);
+  if (!peer || !acceptedAt || !Number.isFinite(qty) || qty <= 0) return null;
+  if (Number(latestSweep) <= acceptedAt) return null;
+
+  const before = visiblePositionAt(posSnapshots, peer, acceptedAt);
+  const after = visiblePositionAt(posSnapshots, peer, Number(latestSweep));
+  if (!before || !after) return null;
+
+  // Maker side is RedDragon's side; the taker receives the opposite delta.
+  const expectedDelta = state.side === "sell" ? qty : -qty;
+  const observedDelta = Number(after.pos) - Number(before.pos);
+  const tolerance = Math.max(0.02, qty * 0.002);
+  return {
+    peer,
+    before,
+    after,
+    expectedDelta,
+    observedDelta,
+    settled: Math.abs(observedDelta - expectedDelta) <= tolerance
+  };
+}
+
 function clamp(value, lo, hi) {
   return Math.min(hi, Math.max(lo, value));
 }
@@ -1084,6 +1121,12 @@ if (state.state === "entry_accepted") {
     Number.isFinite(ownPos) &&
     Math.sign(ownPos) === expectedSign &&
     Math.abs(ownPos) >= Math.max(0.1, Number(state.qty) * 0.75);
+  const peerEvidence = peerSettlementEvidence(positions, state, latest.n);
+  if (peerEvidence) {
+    console.log(
+      `PEER_POSITION_DELTA did=${peerEvidence.peer.slice(0, 24)} before=${peerEvidence.before.pos.toFixed(2)} after=${peerEvidence.after.pos.toFixed(2)} observed=${peerEvidence.observedDelta.toFixed(2)} expected=${peerEvidence.expectedDelta.toFixed(2)} settled=${peerEvidence.settled}`
+    );
+  }
 
   if (outcome?.outcome === "void") {
     await setState({
@@ -1095,7 +1138,7 @@ if (state.state === "entry_accepted") {
     console.log(`ENTRY_VOID reason=${outcome.reason} n=${outcome.n ?? "na"} id=${state.id}`);
     process.exit(0);
   }
-  if (outcome?.outcome === "ambiguous_omitted" && !topEvidence) {
+  if (outcome?.outcome === "ambiguous_omitted" && !topEvidence && !peerEvidence?.settled) {
     if (Number(latest.n) >= Number(state.acceptedAtSweep || latest.n) + 4) {
       await setState({
         ...state,
@@ -1115,7 +1158,7 @@ if (state.state === "entry_accepted") {
     process.exit(0);
   }
 
-  if (outcome?.outcome === "settled" || topEvidence) {
+  if (outcome?.outcome === "settled" || topEvidence || peerEvidence?.settled) {
     const open = {
       state: "open",
       side: state.side,
@@ -1145,7 +1188,13 @@ if (state.state === "entry_unverified") {
     Number.isFinite(ownPos) &&
     Math.sign(ownPos) === expectedSign &&
     Math.abs(ownPos) >= Math.max(0.1, Number(state.qty) * 0.75);
-  if (outcome?.outcome === "settled" || topEvidence) {
+  const peerEvidence = peerSettlementEvidence(positions, state, latest.n);
+  if (peerEvidence) {
+    console.log(
+      `PEER_POSITION_DELTA did=${peerEvidence.peer.slice(0, 24)} before=${peerEvidence.before.pos.toFixed(2)} after=${peerEvidence.after.pos.toFixed(2)} observed=${peerEvidence.observedDelta.toFixed(2)} expected=${peerEvidence.expectedDelta.toFixed(2)} settled=${peerEvidence.settled}`
+    );
+  }
+  if (outcome?.outcome === "settled" || topEvidence || peerEvidence?.settled) {
     const open = {
       state: "open",
       side: state.side,
