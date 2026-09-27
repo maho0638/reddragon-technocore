@@ -653,7 +653,7 @@ if (raceSelftest) {
   }
   const liveStyleFadingRefs = Array.from({ length: 24 }, (_, i) => {
     const base = 224.58 + i * (0.31 / 23);
-    const wobble = 0.055 * Math.sin(i * 1.7);
+    const wobble = 0.10 * Math.sin((2 * Math.PI * 3 * i) / 23);
     return { px: base + wobble };
   });
   const liveStyleFadingDecision = controlledFallbackEntry(
