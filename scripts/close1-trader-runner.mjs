@@ -623,6 +623,17 @@ if (raceSelftest) {
   if (!(cappedSame?.qty > 0.1 && cappedSame.qty < 12)) throw new Error("RACE_SELFTEST_UNCERTAIN_SAME_SIDE_CAP");
   if (!(allowedOpposite?.qty === 30)) throw new Error("RACE_SELFTEST_UNCERTAIN_OPPOSITE_BLOCKED");
   if (!(env.lo === -31.53 && env.hi === 0)) throw new Error("RACE_SELFTEST_UNCERTAIN_ENVELOPE");
+  const catchUpRefs = Array.from({ length: 24 }, (_, i) => ({ px: 224.50 + i * 0.001 }));
+  const catchUpDecision = controlledFallbackEntry(
+    null,
+    { leaderGap: 190, hoursRemaining: 170 },
+    catchUpRefs,
+    [{ top: [["did:key:z6MkLeader", -420]] }],
+    { px: 224.52 }
+  );
+  if (catchUpDecision?.action !== "enter" || catchUpDecision.side !== "sell") {
+    throw new Error("RACE_SELFTEST_CATCHUP_CONSENSUS");
+  }
   console.log("RACE_SIZING_SELFTEST_OK");
   process.exit(0);
 }
@@ -678,22 +689,42 @@ function controlledFallbackEntry(rawDecision, race, distinct, positionSnapshots,
   }, 0);
 
   const strongConsensus = Number.isFinite(topNet) && Math.abs(topNet) >= 100;
-  const requiredR2 = strongConsensus ? 0.20 : 0.35;
-  const requiredMove = strongConsensus ? Math.max(0.25, minMove - 0.07) : minMove;
+  const catchUpConsensus = Number.isFinite(topNet) && Math.abs(topNet) >= 300 && gap >= 175;
+  const gapPressure = clamp((gap - 125) / 175, 0, 1);
+  const requiredR2 = strongConsensus ? Math.max(0.12, 0.20 - 0.08 * gapPressure) : 0.35;
+  const requiredMove = strongConsensus
+    ? Math.max(0.14, Math.max(0.25, minMove - 0.07) - 0.11 * gapPressure)
+    : minMove;
 
   console.log(
-    `FALLBACK_SCAN move=${move.toFixed(2)} abs=${absMove.toFixed(2)} min=${requiredMove.toFixed(2)} r2=${r2.toFixed(2)} needR2=${requiredR2.toFixed(2)} topNet=${Number.isFinite(topNet) ? topNet.toFixed(2) : "na"} strong=${strongConsensus} gap=${gap.toFixed(2)} hLeft=${hLeft.toFixed(1)}`
+    `FALLBACK_SCAN move=${move.toFixed(2)} abs=${absMove.toFixed(2)} min=${requiredMove.toFixed(2)} r2=${r2.toFixed(2)} needR2=${requiredR2.toFixed(2)} topNet=${Number.isFinite(topNet) ? topNet.toFixed(2) : "na"} strong=${strongConsensus} catchUp=${catchUpConsensus} gap=${gap.toFixed(2)} hLeft=${hLeft.toFixed(1)}`
   );
 
-  if (absMove < requiredMove || r2 < requiredR2) return rawDecision;
+  let direction = Math.sign(move);
+  let reason = "race_trend_consensus_fallback";
+  let confidence = 0.90;
 
-  const direction = Math.sign(move);
+  if (absMove < requiredMove || r2 < requiredR2) {
+    // When the leader gap is already material, do not sit idle forever waiting for a
+    // textbook trend. A very strong visible position consensus may trigger a smaller
+    // catch-up scout if price is merely flat/noisy rather than clearly moving against it.
+    const consensusDirection = Math.sign(topNet);
+    const flatEnough = absMove <= 0.10;
+    const notAgainstConsensus = direction === 0 || direction === consensusDirection || flatEnough;
+    if (!catchUpConsensus || !notAgainstConsensus) return rawDecision;
+    direction = consensusDirection;
+    reason = "race_gap_consensus_scout";
+    confidence = 0.86;
+  }
+
   if (!direction) return rawDecision;
   if (!Number.isFinite(topNet) || Math.abs(topNet) < 8) return rawDecision;
-  if (Math.sign(topNet) !== direction) return rawDecision;
+  if (reason === "race_trend_consensus_fallback" && Math.sign(topNet) !== direction) return rawDecision;
 
   let qty;
-  if (hLeft > 144) {
+  if (reason === "race_gap_consensus_scout") {
+    qty = hLeft > 144 ? 18 : hLeft > 72 ? 24 : 30;
+  } else if (hLeft > 144) {
     qty = strongConsensus && gap >= 150 ? 30 : strongConsensus ? 22 : 10;
   } else if (hLeft > 72) {
     qty = strongConsensus ? 34 : 20;
@@ -702,14 +733,14 @@ function controlledFallbackEntry(rawDecision, race, distinct, positionSnapshots,
   }
   const side = direction > 0 ? "buy" : "sell";
   console.log(
-    `FALLBACK_SIGNAL side=${side} move=${move.toFixed(2)} r2=${r2.toFixed(2)} topNet=${topNet.toFixed(2)} strong=${strongConsensus} gap=${gap.toFixed(2)} hLeft=${hLeft.toFixed(1)} qty=${qty.toFixed(2)}`
+    `FALLBACK_SIGNAL side=${side} move=${move.toFixed(2)} r2=${r2.toFixed(2)} topNet=${topNet.toFixed(2)} strong=${strongConsensus} catchUp=${catchUpConsensus} gap=${gap.toFixed(2)} hLeft=${hLeft.toFixed(1)} qty=${qty.toFixed(2)} reason=${reason}`
   );
   return {
     action: "enter",
     side,
     qty,
-    confidence: 0.90,
-    reason: "race_trend_consensus_fallback"
+    confidence,
+    reason
   };
 }
 
