@@ -634,6 +634,21 @@ if (raceSelftest) {
   if (catchUpDecision?.action !== "enter" || catchUpDecision.side !== "sell") {
     throw new Error("RACE_SELFTEST_CATCHUP_CONSENSUS");
   }
+  const squeezeRefs = Array.from({ length: 24 }, (_, i) => ({ px: 224.40 + i * (0.60 / 23) }));
+  const squeezeDecision = controlledFallbackEntry(
+    null,
+    { leaderGap: 190, hoursRemaining: 166 },
+    squeezeRefs,
+    [{ top: [["did:key:z6MkCrowdedShort", -420]] }],
+    { px: 225.00 }
+  );
+  if (
+    squeezeDecision?.action !== "enter" ||
+    squeezeDecision.side !== "buy" ||
+    squeezeDecision.reason !== "race_squeeze_breakout_scout"
+  ) {
+    throw new Error("RACE_SELFTEST_SQUEEZE_BREAKOUT");
+  }
   console.log("RACE_SIZING_SELFTEST_OK");
   process.exit(0);
 }
@@ -719,11 +734,28 @@ function controlledFallbackEntry(rawDecision, race, distinct, positionSnapshots,
 
   if (!direction) return rawDecision;
   if (!Number.isFinite(topNet) || Math.abs(topNet) < 8) return rawDecision;
-  if (reason === "race_trend_consensus_fallback" && Math.sign(topNet) !== direction) return rawDecision;
+
+  // A persistent high-quality move against a crowded visible top position can be
+  // a squeeze/breakout rather than a reason to stay idle forever. When the race
+  // gap is already material, take a deliberately smaller scout in price direction.
+  // If the old uncertain position exists, an opposite scout also reduces its
+  // directional exposure; if it was void, the scout remains bounded on its own.
+  if (reason === "race_trend_consensus_fallback" && Math.sign(topNet) !== direction) {
+    const squeezeBreakout =
+      gap >= 175 &&
+      strongConsensus &&
+      absMove >= 0.35 &&
+      r2 >= 0.75;
+    if (!squeezeBreakout) return rawDecision;
+    reason = "race_squeeze_breakout_scout";
+    confidence = 0.84;
+  }
 
   let qty;
   if (reason === "race_gap_consensus_scout") {
     qty = hLeft > 144 ? 18 : hLeft > 72 ? 24 : 30;
+  } else if (reason === "race_squeeze_breakout_scout") {
+    qty = hLeft > 144 ? 12 : hLeft > 72 ? 16 : 22;
   } else if (hLeft > 144) {
     qty = strongConsensus && gap >= 150 ? 30 : strongConsensus ? 22 : 10;
   } else if (hLeft > 72) {
