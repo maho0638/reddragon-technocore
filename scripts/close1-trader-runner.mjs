@@ -1118,8 +1118,8 @@ async function logPeerRecentHistory(peerDid) {
 }
 
 
-async function findOutcome(id, fromSweep = 0) {
-  const msgs = await readRoom("d-close1-flow", 200);
+async function findOutcome(id, fromSweep = 0, flowMessages = null) {
+  const msgs = flowMessages || await readRoom("d-close1-flow", 200);
   let omittedSettled = 0;
   let omittedVoid = 0;
   let firstOmittedSweep = null;
@@ -1168,6 +1168,53 @@ async function findOutcome(id, fromSweep = 0) {
     };
   }
   return null;
+}
+
+async function reconcileUncertainEntries(state, posSnapshots, latestSweep) {
+  const entries = uncertainEntries(state);
+  if (!entries.length) return { state, changed: false };
+
+  // Old ambiguous trades can age out of the 200-message live view. Use the signed,
+  // read-only referee export to revisit their ids without posting a diagnostic trade.
+  const flowMessages = await readExport("d-close1-flow");
+  const kept = [];
+  let changed = false;
+
+  for (const entry of entries) {
+    const outcome = await findOutcome(
+      String(entry.id || ""),
+      Number(entry.acceptedAtSweep || 0),
+      flowMessages
+    );
+
+    if (outcome?.outcome === "void") {
+      changed = true;
+      console.log(
+        `UNCERTAIN_RESOLVED_VOID id=${entry.id} reason=${outcome.reason} n=${outcome.n ?? "na"}`
+      );
+      continue;
+    }
+
+    const peerEvidence = peerSettlementEvidence(posSnapshots, entry, latestSweep);
+    const settled = outcome?.outcome === "settled" || peerEvidence?.settled === true;
+    if (settled && entry.confirmedOutcome !== "settled") {
+      changed = true;
+      kept.push({
+        ...entry,
+        confirmedOutcome: "settled",
+        confirmedAtSweep: Number(outcome?.n || peerEvidence?.after?.n || latestSweep)
+      });
+      console.log(
+        `UNCERTAIN_CONFIRMED_SETTLED id=${entry.id} n=${outcome?.n ?? peerEvidence?.after?.n ?? "na"}`
+      );
+      continue;
+    }
+
+    kept.push(entry);
+  }
+
+  if (!changed) return { state, changed: false };
+  return { state: { ...state, uncertainEntries: kept }, changed: true };
 }
 
 async function postEntry(decision, latest, priorState = {}) {
@@ -1252,6 +1299,11 @@ if (stateSelftest) {
   await setState({ state: "idle", selftestOkAt: new Date().toISOString() }, true);
   console.log("STATE_MAILBOX_SELFTEST_OK");
   process.exit(0);
+}
+const reconciled = await reconcileUncertainEntries(state, positions, latest.n);
+if (reconciled.changed) {
+  state = reconciled.state;
+  await setState(state);
 }
 const ownPos = currentOwnPosition(positions);
 let race = raceContext({ now, pnlSnapshots: pnl, state, latest });
