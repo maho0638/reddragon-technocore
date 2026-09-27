@@ -651,6 +651,25 @@ if (raceSelftest) {
   ) {
     throw new Error("RACE_SELFTEST_FADING_OPPOSITE_MOVE");
   }
+  const liveStyleFadingRefs = Array.from({ length: 24 }, (_, i) => {
+    const base = 224.58 + i * (0.31 / 23);
+    const wobble = 0.055 * Math.sin(i * 1.7);
+    return { px: base + wobble };
+  });
+  const liveStyleFadingDecision = controlledFallbackEntry(
+    null,
+    { leaderGap: 180, hoursRemaining: 165 },
+    liveStyleFadingRefs,
+    [{ top: [["did:key:z6MkLeader", -448.7]] }],
+    { px: 224.89 }
+  );
+  if (
+    liveStyleFadingDecision?.action !== "enter" ||
+    liveStyleFadingDecision.side !== "sell" ||
+    liveStyleFadingDecision.reason !== "race_gap_consensus_scout"
+  ) {
+    throw new Error("RACE_SELFTEST_LIVE_STYLE_FADING_OPPOSITE");
+  }
   const squeezeRefs = Array.from({ length: 24 }, (_, i) => ({ px: 224.40 + i * (0.60 / 23) }));
   const squeezeDecision = controlledFallbackEntry(
     null,
@@ -768,9 +787,21 @@ function controlledFallbackEntry(rawDecision, race, distinct, positionSnapshots,
       strongConsensus &&
       absMove >= 0.35 &&
       r2 >= 0.75;
-    if (!squeezeBreakout) return rawDecision;
-    reason = "race_squeeze_breakout_scout";
-    confidence = 0.84;
+    const fadingOppositeMove =
+      catchUpConsensus &&
+      absMove <= 0.35 &&
+      r2 <= 0.65;
+
+    if (squeezeBreakout) {
+      reason = "race_squeeze_breakout_scout";
+      confidence = 0.84;
+    } else if (fadingOppositeMove) {
+      direction = Math.sign(topNet);
+      reason = "race_gap_consensus_scout";
+      confidence = 0.86;
+    } else {
+      return rawDecision;
+    }
   }
 
   let qty;
