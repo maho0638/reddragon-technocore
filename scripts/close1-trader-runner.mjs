@@ -634,6 +634,23 @@ if (raceSelftest) {
   if (catchUpDecision?.action !== "enter" || catchUpDecision.side !== "sell") {
     throw new Error("RACE_SELFTEST_CATCHUP_CONSENSUS");
   }
+  const fadingOppositeRefs = Array.from({ length: 24 }, (_, i) => ({
+    px: 224.50 + i * (0.11 / 23) + (i % 2 ? 0.10 : -0.10)
+  }));
+  const fadingOppositeDecision = controlledFallbackEntry(
+    null,
+    { leaderGap: 190, hoursRemaining: 165 },
+    fadingOppositeRefs,
+    [{ top: [["did:key:z6MkLeader", -420]] }],
+    { px: 224.81 }
+  );
+  if (
+    fadingOppositeDecision?.action !== "enter" ||
+    fadingOppositeDecision.side !== "sell" ||
+    fadingOppositeDecision.reason !== "race_gap_consensus_scout"
+  ) {
+    throw new Error("RACE_SELFTEST_FADING_OPPOSITE_MOVE");
+  }
   const squeezeRefs = Array.from({ length: 24 }, (_, i) => ({ px: 224.40 + i * (0.60 / 23) }));
   const squeezeDecision = controlledFallbackEntry(
     null,
@@ -725,7 +742,12 @@ function controlledFallbackEntry(rawDecision, race, distinct, positionSnapshots,
     // catch-up scout if price is merely flat/noisy rather than clearly moving against it.
     const consensusDirection = Math.sign(topNet);
     const flatEnough = absMove <= 0.10;
-    const notAgainstConsensus = direction === 0 || direction === consensusDirection || flatEnough;
+    const opposingMoveLosingStrength = absMove <= 0.35 && r2 <= 0.65;
+    const notAgainstConsensus =
+      direction === 0 ||
+      direction === consensusDirection ||
+      flatEnough ||
+      opposingMoveLosingStrength;
     if (!catchUpConsensus || !notAgainstConsensus) return rawDecision;
     direction = consensusDirection;
     reason = "race_gap_consensus_scout";
