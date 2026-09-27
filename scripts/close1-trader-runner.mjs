@@ -11,6 +11,8 @@ const STATE_MARKER = "REDDRAGON_CLOSE1_STATE_V5:";
 const SEASON = "close-1";
 const OPEN_MS = Date.parse("2026-09-25T12:00:00Z");
 const LOCK_MS = Date.parse("2026-10-04T09:00:00Z");
+const UNCERTAIN_RELEASE_SWEEPS = 6;
+const UNCERTAIN_MAX_ABS_QTY = 43;
 const EXPECTED_DID = "did:key:z6MkuhrsP4tDZjWYdZLPxaur19WvrF1yuLGsGB2S8Q1gwS6K";
 const keyB64 = String(process.env.TECHNOCORE_PRIVATE_KEY_PKCS8_B64 || "").trim();
 const execute = String(process.env.CLOSE1_EXECUTE || "false").toLowerCase() === "true";
@@ -449,19 +451,79 @@ function leaderScore(pnlSnapshots) {
   return scores.length ? Math.max(...scores) : null;
 }
 
+function uncertainEntries(state) {
+  return Array.isArray(state?.uncertainEntries)
+    ? state.uncertainEntries.filter((x) =>
+        x && ["buy", "sell"].includes(String(x.side)) &&
+        Number.isFinite(Number(x.qty)) && Number(x.qty) > 0)
+    : [];
+}
+
+function uncertaintyEnvelope(state) {
+  let lo = 0;
+  let hi = 0;
+  for (const x of uncertainEntries(state)) {
+    const delta = (x.side === "buy" ? 1 : -1) * Number(x.qty);
+    lo += Math.min(0, delta);
+    hi += Math.max(0, delta);
+  }
+  return { lo, hi, worst: Math.max(Math.abs(lo), Math.abs(hi)) };
+}
+
+function uncertainScoreFloor(state, latestMark) {
+  const mark = Number(latestMark);
+  if (!Number.isFinite(mark)) return 0;
+  let floor = 0;
+  for (const x of uncertainEntries(state)) {
+    const qty = Number(x.qty);
+    const entry = Number(x.entryPx);
+    if (!Number.isFinite(entry)) continue;
+    const direction = x.side === "buy" ? 1 : -1;
+    const settledEstimate = direction * qty * (mark - entry) - (0.01 * qty * entry);
+    floor += Math.min(0, settledEstimate);
+  }
+  return floor;
+}
+
+function applyUncertainRiskCap(decision, state, latestPx) {
+  if (!decision || decision.action !== "enter") return decision;
+  if (!uncertainEntries(state).length) return decision;
+
+  const px = Number(latestPx);
+  const cashCap = Number.isFinite(px) && px > 0
+    ? Math.max(0.1, 10000 / (px * 1.035))
+    : UNCERTAIN_MAX_ABS_QTY;
+  const cap = Math.min(UNCERTAIN_MAX_ABS_QTY, cashCap);
+  const env = uncertaintyEnvelope(state);
+  const side = String(decision.side);
+  const capacity = side === "buy" ? cap - env.hi : side === "sell" ? cap + env.lo : 0;
+  const requested = Number(decision.qty);
+  const qty = Math.min(requested, capacity);
+  if (!Number.isFinite(qty) || qty < 0.1) {
+    console.log(`UNCERTAIN_RISK_BLOCK side=${side} lo=${env.lo.toFixed(2)} hi=${env.hi.toFixed(2)} cap=${cap.toFixed(2)}`);
+    return null;
+  }
+  const clipped = Math.floor(qty * 100) / 100;
+  if (clipped < requested) {
+    console.log(`UNCERTAIN_RISK_CAP side=${side} requested=${requested.toFixed(2)} allowed=${clipped.toFixed(2)} lo=${env.lo.toFixed(2)} hi=${env.hi.toFixed(2)} cap=${cap.toFixed(2)}`);
+  }
+  return { ...decision, qty: clipped };
+}
+
 function ownScoreEstimate(state, latestMark) {
   const realized = Number(state?.realizedScoreEst || 0);
+  const uncertainFloor = uncertainScoreFloor(state, latestMark);
   if (state?.state !== "open" || !Number.isFinite(Number(state.qty)) || !Number.isFinite(Number(state.entryPx))) {
-    return realized;
+    return realized + uncertainFloor;
   }
   const qty = Number(state.qty);
   const entry = Number(state.entryPx);
   const mark = Number(latestMark);
-  if (!Number.isFinite(mark)) return realized;
+  if (!Number.isFinite(mark)) return realized + uncertainFloor;
   const direction = state.side === "buy" ? 1 : -1;
   const gross = direction * qty * (mark - entry);
   const entryFeeEst = Number(state.entryFeeEst || (0.01 * qty * entry));
-  return realized + gross - entryFeeEst;
+  return realized + uncertainFloor + gross - entryFeeEst;
 }
 
 function raceContext({ now, pnlSnapshots, state, latest }) {
@@ -554,6 +616,13 @@ if (raceSelftest) {
   );
   if (!(behindLate?.qty > 20)) throw new Error("RACE_SELFTEST_BEHIND_NOT_AGGRESSIVE");
   if (!(ahead?.qty < 20)) throw new Error("RACE_SELFTEST_AHEAD_NOT_DEFENSIVE");
+  const uncertain = { state: "idle", uncertainEntries: [{ id: "u1", side: "sell", qty: 31.53, entryPx: 224.26 }] };
+  const cappedSame = applyUncertainRiskCap({ action: "enter", side: "sell", qty: 30, confidence: 0.9 }, uncertain, 224.5);
+  const allowedOpposite = applyUncertainRiskCap({ action: "enter", side: "buy", qty: 30, confidence: 0.9 }, uncertain, 224.5);
+  const env = uncertaintyEnvelope(uncertain);
+  if (!(cappedSame?.qty > 0.1 && cappedSame.qty < 12)) throw new Error("RACE_SELFTEST_UNCERTAIN_SAME_SIDE_CAP");
+  if (!(allowedOpposite?.qty === 30)) throw new Error("RACE_SELFTEST_UNCERTAIN_OPPOSITE_BLOCKED");
+  if (!(env.lo === -31.53 && env.hi === 0)) throw new Error("RACE_SELFTEST_UNCERTAIN_ENVELOPE");
   console.log("RACE_SIZING_SELFTEST_OK");
   process.exit(0);
 }
@@ -1007,7 +1076,8 @@ async function postEntry(decision, latest, priorState = {}) {
     entryPx: Number(latest.px),
     until: offer.until,
     entrySweep: Number(latest.n),
-    realizedScoreEst: Number(priorState.realizedScoreEst || 0)
+    realizedScoreEst: Number(priorState.realizedScoreEst || 0),
+    uncertainEntries: uncertainEntries(priorState)
   };
   await setState(preflight);
   const posted = await signedPost(ROOM, offer.text);
@@ -1033,7 +1103,8 @@ async function postExit(openState, latest) {
     until: offer.until,
     requestedAtSweep: Number(latest.n),
     realizedScoreEst: Number(openState.realizedScoreEst || 0),
-    entryFeeEst: Number(openState.entryFeeEst || (0.01 * Number(openState.qty) * Number(openState.entryPx)))
+    entryFeeEst: Number(openState.entryFeeEst || (0.01 * Number(openState.qty) * Number(openState.entryPx))),
+    uncertainEntries: uncertainEntries(openState)
   };
   await setState(preflight);
   const posted = await signedPost(ROOM, offer.text);
@@ -1101,7 +1172,13 @@ if (state.state === "entry_preflight") {
     process.exit(0);
   }
   if (Number(latest.n) > Number(state.entrySweep || 0) + 1) {
-    await setState({ state: "idle", cooldownUntilSweep: Number(latest.n) + 1, lastPreflight: state.id });
+    await setState({
+      state: "idle",
+      cooldownUntilSweep: Number(latest.n) + 1,
+      lastPreflight: state.id,
+      realizedScoreEst: Number(state.realizedScoreEst || 0),
+      uncertainEntries: uncertainEntries(state)
+    });
     console.log("ENTRY_PREFLIGHT_CLEARED");
     process.exit(0);
   }
@@ -1143,7 +1220,8 @@ if (state.state === "exit_preflight") {
       entryId: state.entryId || null,
       lastPreflight: state.id,
       realizedScoreEst: Number(state.realizedScoreEst || 0),
-      entryFeeEst: Number(state.entryFeeEst || (0.01 * Number(state.qty) * Number(state.entryPx)))
+      entryFeeEst: Number(state.entryFeeEst || (0.01 * Number(state.qty) * Number(state.entryPx))),
+      uncertainEntries: uncertainEntries(state)
     };
     await setState(open);
     console.log("EXIT_PREFLIGHT_CLEARED");
@@ -1174,7 +1252,9 @@ if (state.state === "entry_offer") {
   await setState({
     state: "idle",
     cooldownUntilSweep: Number(latest.n) + 1,
-    lastExpiredId: state.id
+    lastExpiredId: state.id,
+    realizedScoreEst: Number(state.realizedScoreEst || 0),
+    uncertainEntries: uncertainEntries(state)
   });
   console.log("ENTRY_EXPIRED");
   process.exit(0);
@@ -1199,7 +1279,9 @@ if (state.state === "entry_accepted") {
       state: "idle",
       cooldownUntilSweep: Number(latest.n) + 1,
       lastVoid: outcome.reason,
-      lastVoidId: state.id
+      lastVoidId: state.id,
+      realizedScoreEst: Number(state.realizedScoreEst || 0),
+      uncertainEntries: uncertainEntries(state)
     });
     console.log(`ENTRY_VOID reason=${outcome.reason} n=${outcome.n ?? "na"} id=${state.id}`);
     process.exit(0);
@@ -1233,7 +1315,8 @@ if (state.state === "entry_accepted") {
       entrySweep: outcome?.n || Number(state.acceptedAtSweep || latest.n),
       entryId: state.id,
       realizedScoreEst: Number(state.realizedScoreEst || 0),
-      entryFeeEst: Number(state.entryFeeEst || (0.01 * Number(state.qty) * Number(state.entryPx)))
+      entryFeeEst: Number(state.entryFeeEst || (0.01 * Number(state.qty) * Number(state.entryPx))),
+      uncertainEntries: uncertainEntries(state)
     };
     await setState(open);
     console.log("POSITION_OPEN");
@@ -1269,7 +1352,8 @@ if (state.state === "entry_unverified") {
       entrySweep: Number(outcome.n),
       entryId: state.id,
       realizedScoreEst: Number(state.realizedScoreEst || 0),
-      entryFeeEst: Number(state.entryFeeEst || (0.01 * Number(state.qty) * Number(state.entryPx)))
+      entryFeeEst: Number(state.entryFeeEst || (0.01 * Number(state.qty) * Number(state.entryPx))),
+      uncertainEntries: uncertainEntries(state)
     };
     await setState(open);
     console.log("ENTRY_UNVERIFIED_RECOVERED_SETTLED");
@@ -1279,11 +1363,37 @@ if (state.state === "entry_unverified") {
       state: "idle",
       cooldownUntilSweep: Number(latest.n) + 1,
       lastVoid: outcome.reason,
-      lastVoidId: state.id
+      lastVoidId: state.id,
+      realizedScoreEst: Number(state.realizedScoreEst || 0),
+      uncertainEntries: uncertainEntries(state)
     });
     console.log(`ENTRY_UNVERIFIED_RECOVERED_VOID reason=${outcome.reason} n=${outcome.n ?? "na"} id=${state.id}`);
     process.exit(0);
   } else if (outcome?.outcome === "ambiguous_omitted") {
+    const acceptedAt = Number(state.acceptedAtSweep || state.entrySweep || latest.n);
+    if (Number(latest.n) >= acceptedAt + UNCERTAIN_RELEASE_SWEEPS) {
+      const entries = uncertainEntries(state);
+      if (!entries.some((x) => x.id === state.id)) {
+        entries.push({
+          id: state.id,
+          side: state.side,
+          qty: Number(state.qty),
+          entryPx: Number(state.entryPx),
+          acceptedAtSweep: acceptedAt,
+          taker: state.taker || null
+        });
+      }
+      const env = uncertaintyEnvelope({ uncertainEntries: entries });
+      await setState({
+        state: "idle",
+        cooldownUntilSweep: Number(latest.n) + 1,
+        realizedScoreEst: Number(state.realizedScoreEst || 0),
+        uncertainEntries: entries,
+        lastAmbiguousId: state.id
+      });
+      console.log(`ENTRY_UNVERIFIED_SHADOWED id=${state.id} side=${state.side} qty=${Number(state.qty).toFixed(2)} lo=${env.lo.toFixed(2)} hi=${env.hi.toFixed(2)}`);
+      process.exit(0);
+    }
     console.log(
       `ENTRY_OUTCOME_AMBIGUOUS_OMITTED settled=${outcome.omittedSettled} void=${outcome.omittedVoid} sweeps=${outcome.firstOmittedSweep ?? "na"}-${outcome.lastOmittedSweep ?? "na"}`
     );
@@ -1294,7 +1404,9 @@ if (state.state === "entry_unverified") {
     await setState({
       state: "idle",
       cooldownUntilSweep: Number(latest.n) + 1,
-      lastIgnoredId: state.id
+      lastIgnoredId: state.id,
+      realizedScoreEst: Number(state.realizedScoreEst || 0),
+      uncertainEntries: uncertainEntries(state)
     });
     console.log("ENTRY_UNVERIFIED_CLEARED_COMPLETE_FLOW");
     process.exit(0);
@@ -1331,7 +1443,8 @@ if (state.state === "exit_offer") {
     entryId: state.entryId || null,
     exitRetryAfterSweep: Number(latest.n),
     realizedScoreEst: Number(state.realizedScoreEst || 0),
-    entryFeeEst: Number(state.entryFeeEst || (0.01 * Number(state.qty) * Number(state.entryPx)))
+    entryFeeEst: Number(state.entryFeeEst || (0.01 * Number(state.qty) * Number(state.entryPx))),
+    uncertainEntries: uncertainEntries(state)
   };
   await setState(open);
   console.log("EXIT_EXPIRED_REEVALUATE");
@@ -1356,7 +1469,8 @@ if (state.state === "exit_accepted") {
       entryId: state.entryId || null,
       lastExitVoid: outcome.reason,
       realizedScoreEst: Number(state.realizedScoreEst || 0),
-      entryFeeEst: Number(state.entryFeeEst || (0.01 * Number(state.qty) * Number(state.entryPx)))
+      entryFeeEst: Number(state.entryFeeEst || (0.01 * Number(state.qty) * Number(state.entryPx))),
+      uncertainEntries: uncertainEntries(state)
     };
     await setState(open);
     console.log(`EXIT_VOID_REEVALUATE reason=${outcome.reason} n=${outcome.n ?? "na"} id=${state.id}`);
@@ -1373,7 +1487,8 @@ if (state.state === "exit_accepted") {
       state: "idle",
       cooldownUntilSweep: Number(latest.n) + 2,
       lastClosedId: state.id,
-      realizedScoreEst: Number(state.realizedScoreEst || 0) + gross - fees
+      realizedScoreEst: Number(state.realizedScoreEst || 0) + gross - fees,
+      uncertainEntries: uncertainEntries(state)
     });
     console.log("POSITION_CLOSED");
     process.exit(0);
@@ -1387,7 +1502,73 @@ if (state.state === "exit_accepted") {
 }
 
 if (state.state === "exit_unverified") {
-  throw new Error("EXIT_OUTCOME_UNVERIFIED");
+  const outcome = await findOutcome(state.id, Number(state.acceptedAtSweep || 0));
+  const expectedStillOpenSign = state.entrySide === "buy" ? 1 : -1;
+  const topStillOpen =
+    Number.isFinite(ownPos) &&
+    Math.sign(ownPos) === expectedStillOpenSign &&
+    Math.abs(ownPos) >= Math.max(0.1, Number(state.qty) * 0.5);
+
+  if (outcome?.outcome === "void" || topStillOpen) {
+    const open = {
+      state: "open",
+      side: state.entrySide,
+      qty: Number(state.qty),
+      entryPx: Number(state.entryPx),
+      entrySweep: Number(state.entrySweep),
+      entryId: state.entryId || null,
+      lastExitVoid: outcome?.reason || "position_visible",
+      realizedScoreEst: Number(state.realizedScoreEst || 0),
+      entryFeeEst: Number(state.entryFeeEst || (0.01 * Number(state.qty) * Number(state.entryPx))),
+      uncertainEntries: uncertainEntries(state)
+    };
+    await setState(open);
+    console.log(`EXIT_UNVERIFIED_RECOVERED_OPEN reason=${outcome?.reason || "position_visible"}`);
+    state = open;
+  } else if (outcome?.outcome === "settled") {
+    const direction = state.entrySide === "buy" ? 1 : -1;
+    const gross = direction * Number(state.qty) * (Number(latest.px) - Number(state.entryPx));
+    const fees = Number(state.entryFeeEst || (0.01 * Number(state.qty) * Number(state.entryPx))) +
+      (0.01 * Number(state.qty) * Number(latest.px));
+    await setState({
+      state: "idle",
+      cooldownUntilSweep: Number(latest.n) + 2,
+      lastClosedId: state.id,
+      realizedScoreEst: Number(state.realizedScoreEst || 0) + gross - fees,
+      uncertainEntries: uncertainEntries(state)
+    });
+    console.log("EXIT_UNVERIFIED_RECOVERED_CLOSED");
+    process.exit(0);
+  } else if (
+    outcome?.outcome === "ambiguous_omitted" &&
+    Number(latest.n) >= Number(state.acceptedAtSweep || latest.n) + UNCERTAIN_RELEASE_SWEEPS
+  ) {
+    const entries = uncertainEntries(state);
+    const shadowId = state.entryId || `open-before-${state.id}`;
+    if (!entries.some((x) => x.id === shadowId)) {
+      entries.push({
+        id: shadowId,
+        side: state.entrySide,
+        qty: Number(state.qty),
+        entryPx: Number(state.entryPx),
+        acceptedAtSweep: Number(state.entrySweep || state.acceptedAtSweep || latest.n),
+        exitAmbiguousId: state.id
+      });
+    }
+    const env = uncertaintyEnvelope({ uncertainEntries: entries });
+    await setState({
+      state: "idle",
+      cooldownUntilSweep: Number(latest.n) + 1,
+      realizedScoreEst: Number(state.realizedScoreEst || 0),
+      uncertainEntries: entries,
+      lastAmbiguousExitId: state.id
+    });
+    console.log(`EXIT_UNVERIFIED_SHADOWED id=${state.id} qty=${Number(state.qty).toFixed(2)} lo=${env.lo.toFixed(2)} hi=${env.hi.toFixed(2)}`);
+    process.exit(0);
+  } else {
+    console.log("EXIT_UNVERIFIED_WAIT");
+    process.exit(0);
+  }
 }
 
 if (state.state === "open") {
@@ -1437,7 +1618,8 @@ const entryDecision = controlledFallbackEntry(
   positions,
   latest
 );
-const decision = applyRaceSizing(entryDecision, race, latest.px);
+const sizedDecision = applyRaceSizing(entryDecision, race, latest.px);
+const decision = applyUncertainRiskCap(sizedDecision, state, latest.px);
 if (decision?.action === "enter") {
   console.log(
     `RACE_SIZE leaderGap=${decision.race?.leaderGap ?? "na"} hLeft=${decision.race?.hoursRemaining ?? "na"} mult=${decision.race?.multiplier ?? "na"} qty=${Number(decision.qty).toFixed(2)}`
