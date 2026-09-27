@@ -470,7 +470,22 @@ function uncertaintyEnvelope(state) {
   return { lo, hi, worst: Math.max(Math.abs(lo), Math.abs(hi)) };
 }
 
-function uncertainScoreFloor(state, latestMark) {
+function uncertainConfirmedMark(state, latestMark) {
+  const mark = Number(latestMark);
+  if (!Number.isFinite(mark)) return 0;
+  let score = 0;
+  for (const x of uncertainEntries(state)) {
+    if (x.confirmedOutcome !== "settled") continue;
+    const qty = Number(x.qty);
+    const entry = Number(x.entryPx);
+    if (!Number.isFinite(entry)) continue;
+    const direction = x.side === "buy" ? 1 : -1;
+    score += direction * qty * (mark - entry) - (0.01 * qty * entry);
+  }
+  return score;
+}
+
+function uncertainDownsideFloor(state, latestMark) {
   const mark = Number(latestMark);
   if (!Number.isFinite(mark)) return 0;
   let floor = 0;
@@ -480,7 +495,7 @@ function uncertainScoreFloor(state, latestMark) {
     if (!Number.isFinite(entry)) continue;
     const direction = x.side === "buy" ? 1 : -1;
     const settledEstimate = direction * qty * (mark - entry) - (0.01 * qty * entry);
-    floor += Math.min(0, settledEstimate);
+    floor += x.confirmedOutcome === "settled" ? settledEstimate : Math.min(0, settledEstimate);
   }
   return floor;
 }
@@ -512,23 +527,25 @@ function applyUncertainRiskCap(decision, state, latestPx) {
 
 function ownScoreEstimate(state, latestMark) {
   const realized = Number(state?.realizedScoreEst || 0);
-  const uncertainFloor = uncertainScoreFloor(state, latestMark);
+  const confirmedShadow = uncertainConfirmedMark(state, latestMark);
   if (state?.state !== "open" || !Number.isFinite(Number(state.qty)) || !Number.isFinite(Number(state.entryPx))) {
-    return realized + uncertainFloor;
+    return realized + confirmedShadow;
   }
   const qty = Number(state.qty);
   const entry = Number(state.entryPx);
   const mark = Number(latestMark);
-  if (!Number.isFinite(mark)) return realized + uncertainFloor;
+  if (!Number.isFinite(mark)) return realized + confirmedShadow;
   const direction = state.side === "buy" ? 1 : -1;
   const gross = direction * qty * (mark - entry);
   const entryFeeEst = Number(state.entryFeeEst || (0.01 * qty * entry));
-  return realized + uncertainFloor + gross - entryFeeEst;
+  return realized + confirmedShadow + gross - entryFeeEst;
 }
 
 function raceContext({ now, pnlSnapshots, state, latest }) {
   const leader = leaderScore(pnlSnapshots);
   const own = ownScoreEstimate(state, latest?.px);
+  const downsideFloor =
+    own + uncertainDownsideFloor(state, latest?.px) - uncertainConfirmedMark(state, latest?.px);
   const remainingMs = Math.max(0, LOCK_MS - now);
   const totalMs = LOCK_MS - OPEN_MS;
   const timeRemainingFrac = clamp(remainingMs / totalMs, 0, 1);
@@ -537,6 +554,7 @@ function raceContext({ now, pnlSnapshots, state, latest }) {
   return {
     leaderScore: leader,
     ownScoreEst: own,
+    ownDownsideFloor: downsideFloor,
     leaderGap: gap,
     timeRemainingFrac,
     elapsedFrac,
@@ -631,8 +649,8 @@ if (raceSelftest) {
     [{ top: [["did:key:z6MkLeader", -420]] }],
     { px: 224.52 }
   );
-  if (catchUpDecision?.action !== "enter" || catchUpDecision.side !== "sell") {
-    throw new Error("RACE_SELFTEST_CATCHUP_CONSENSUS");
+  if (catchUpDecision?.action === "enter") {
+    throw new Error("RACE_SELFTEST_FEE_NOISE_NOT_BLOCKED");
   }
   const fadingOppositeRefs = Array.from({ length: 24 }, (_, i) => ({
     px: 224.50 + i * (0.11 / 23) + (i % 2 ? 0.10 : -0.10)
@@ -644,12 +662,8 @@ if (raceSelftest) {
     [{ top: [["did:key:z6MkLeader", -420]] }],
     { px: 224.81 }
   );
-  if (
-    fadingOppositeDecision?.action !== "enter" ||
-    fadingOppositeDecision.side !== "sell" ||
-    fadingOppositeDecision.reason !== "race_gap_consensus_scout"
-  ) {
-    throw new Error("RACE_SELFTEST_FADING_OPPOSITE_MOVE");
+  if (fadingOppositeDecision?.action === "enter") {
+    throw new Error("RACE_SELFTEST_STALE_CONSENSUS_REVERSAL");
   }
   const liveStyleFadingRefs = Array.from({ length: 24 }, (_, i) => {
     const base = 224.58 + i * (0.31 / 23);
@@ -663,14 +677,10 @@ if (raceSelftest) {
     [{ top: [["did:key:z6MkLeader", -448.7]] }],
     { px: 224.89 }
   );
-  if (
-    liveStyleFadingDecision?.action !== "enter" ||
-    liveStyleFadingDecision.side !== "sell" ||
-    liveStyleFadingDecision.reason !== "race_gap_consensus_scout"
-  ) {
-    throw new Error("RACE_SELFTEST_LIVE_STYLE_FADING_OPPOSITE");
+  if (liveStyleFadingDecision?.action === "enter") {
+    throw new Error("RACE_SELFTEST_LIVE_STYLE_STALE_CONSENSUS");
   }
-  const squeezeRefs = Array.from({ length: 24 }, (_, i) => ({ px: 224.40 + i * (0.60 / 23) }));
+  const squeezeRefs = Array.from({ length: 24 }, (_, i) => ({ px: 224.20 + i * (1.25 / 23) }));
   const squeezeDecision = controlledFallbackEntry(
     null,
     { leaderGap: 190, hoursRemaining: 166 },
@@ -731,6 +741,8 @@ function controlledFallbackEntry(rawDecision, race, distinct, positionSnapshots,
   const absMove = Math.abs(move);
   const r2 = varX > 0 && varY > 0 ? (cov * cov) / (varX * varY) : 0;
   const minMove = hLeft > 144 ? 0.32 : hLeft > 72 ? 0.25 : 0.18;
+  const feePerContract = Math.abs(Number(latest.px)) * 0.01;
+  const feeSignalFloor = feePerContract * (hLeft > 72 ? 0.35 : 0.25);
 
   const latestPositions = positionSnapshots.at(-1);
   const top = Array.isArray(latestPositions?.top) ? latestPositions.top : [];
@@ -743,12 +755,13 @@ function controlledFallbackEntry(rawDecision, race, distinct, positionSnapshots,
   const catchUpConsensus = Number.isFinite(topNet) && Math.abs(topNet) >= 300 && gap >= 175;
   const gapPressure = clamp((gap - 125) / 175, 0, 1);
   const requiredR2 = strongConsensus ? Math.max(0.12, 0.20 - 0.08 * gapPressure) : 0.35;
-  const requiredMove = strongConsensus
+  const technicalMoveFloor = strongConsensus
     ? Math.max(0.14, Math.max(0.25, minMove - 0.07) - 0.11 * gapPressure)
     : minMove;
+  const requiredMove = Math.max(technicalMoveFloor, feeSignalFloor);
 
   console.log(
-    `FALLBACK_SCAN move=${move.toFixed(2)} abs=${absMove.toFixed(2)} min=${requiredMove.toFixed(2)} r2=${r2.toFixed(2)} needR2=${requiredR2.toFixed(2)} topNet=${Number.isFinite(topNet) ? topNet.toFixed(2) : "na"} strong=${strongConsensus} catchUp=${catchUpConsensus} gap=${gap.toFixed(2)} hLeft=${hLeft.toFixed(1)}`
+    `FALLBACK_SCAN move=${move.toFixed(2)} abs=${absMove.toFixed(2)} min=${requiredMove.toFixed(2)} feeFloor=${feeSignalFloor.toFixed(2)} r2=${r2.toFixed(2)} needR2=${requiredR2.toFixed(2)} topNet=${Number.isFinite(topNet) ? topNet.toFixed(2) : "na"} strong=${strongConsensus} catchUp=${catchUpConsensus} gap=${gap.toFixed(2)} hLeft=${hLeft.toFixed(1)}`
   );
 
   let direction = Math.sign(move);
@@ -756,21 +769,9 @@ function controlledFallbackEntry(rawDecision, race, distinct, positionSnapshots,
   let confidence = 0.90;
 
   if (absMove < requiredMove || r2 < requiredR2) {
-    // When the leader gap is already material, do not sit idle forever waiting for a
-    // textbook trend. A very strong visible position consensus may trigger a smaller
-    // catch-up scout if price is merely flat/noisy rather than clearly moving against it.
-    const consensusDirection = Math.sign(topNet);
-    const flatEnough = absMove <= 0.10;
-    const opposingMoveLosingStrength = absMove <= 0.35 && r2 <= 0.65;
-    const notAgainstConsensus =
-      direction === 0 ||
-      direction === consensusDirection ||
-      flatEnough ||
-      opposingMoveLosingStrength;
-    if (!catchUpConsensus || !notAgainstConsensus) return rawDecision;
-    direction = consensusDirection;
-    reason = "race_gap_consensus_scout";
-    confidence = 0.86;
+    // Visible top positions are stale holdings, not an entry oracle. Never flip the
+    // trade direction just to copy them when the current move is weak or opposite.
+    return rawDecision;
   }
 
   if (!direction) return rawDecision;
@@ -785,20 +786,12 @@ function controlledFallbackEntry(rawDecision, race, distinct, positionSnapshots,
     const squeezeBreakout =
       gap >= 175 &&
       strongConsensus &&
-      absMove >= 0.35 &&
-      r2 >= 0.75;
-    const fadingOppositeMove =
-      catchUpConsensus &&
-      absMove <= 0.35 &&
-      r2 <= 0.65;
+      absMove >= Math.max(requiredMove, feePerContract * 0.45) &&
+      r2 >= 0.72;
 
     if (squeezeBreakout) {
       reason = "race_squeeze_breakout_scout";
       confidence = 0.84;
-    } else if (fadingOppositeMove) {
-      direction = Math.sign(topNet);
-      reason = "race_gap_consensus_scout";
-      confidence = 0.86;
     } else {
       return rawDecision;
     }
@@ -1308,7 +1301,7 @@ if (reconciled.changed) {
 const ownPos = currentOwnPosition(positions);
 let race = raceContext({ now, pnlSnapshots: pnl, state, latest });
 console.log(
-  `STATUS execute=${execute} n=${latest.n} ref=${latest.px} state=${state.state} ownTopPos=${ownPos ?? "na"} leader=${race.leaderScore ?? "na"} ownEst=${race.ownScoreEst.toFixed(2)} gap=${race.leaderGap ?? "na"} hLeft=${race.hoursRemaining.toFixed(1)}`
+  `STATUS execute=${execute} n=${latest.n} ref=${latest.px} state=${state.state} ownTopPos=${ownPos ?? "na"} leader=${race.leaderScore ?? "na"} ownEst=${race.ownScoreEst.toFixed(2)} downside=${race.ownDownsideFloor.toFixed(2)} gap=${race.leaderGap ?? "na"} hLeft=${race.hoursRemaining.toFixed(1)}`
 );
 if (!execute) {
   await logRecentRedDragonVoids();
