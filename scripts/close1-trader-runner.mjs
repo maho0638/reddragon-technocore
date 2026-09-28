@@ -15,6 +15,7 @@ const OPEN_MS = Date.parse("2026-09-25T12:00:00Z");
 const LOCK_MS = Date.parse("2026-10-04T09:00:00Z");
 const UNCERTAIN_RELEASE_SWEEPS = 6;
 const UNCERTAIN_MAX_ABS_QTY = 43;
+const CONFIRMED_SHADOW_EXIT_MIN_NET = 15;
 const EXPECTED_DID = "did:key:z6MkuhrsP4tDZjWYdZLPxaur19WvrF1yuLGsGB2S8Q1gwS6K";
 const keyB64 = String(process.env.TECHNOCORE_PRIVATE_KEY_PKCS8_B64 || "").trim();
 const execute = String(process.env.CLOSE1_EXECUTE || "false").toLowerCase() === "true";
@@ -611,6 +612,28 @@ function uncertaintyEnvelope(state) {
     hi += Math.max(0, delta);
   }
   return { lo, hi, worst: Math.max(Math.abs(lo), Math.abs(hi)) };
+}
+
+function confirmedShadowCloseNet(entry, mark) {
+  const qty = Number(entry?.qty);
+  const entryPx = Number(entry?.entryPx);
+  const current = Number(mark);
+  if (
+    entry?.confirmedOutcome !== "settled" ||
+    !["buy", "sell"].includes(String(entry?.side)) ||
+    !Number.isFinite(qty) || qty <= 0 ||
+    !Number.isFinite(entryPx) || entryPx <= 0 ||
+    !Number.isFinite(current) || current <= 0
+  ) return null;
+  const direction = entry.side === "buy" ? 1 : -1;
+  const gross = direction * qty * (current - entryPx);
+  const entryFee = 0.01 * qty * entryPx;
+  const exitFee = 0.01 * qty * current;
+  return gross - entryFee - exitFee;
+}
+
+function removeUncertainEntry(state, id) {
+  return uncertainEntries(state).filter((x) => String(x.id || "") !== String(id || ""));
 }
 
 function uncertainConfirmedMark(state, latestMark) {
@@ -1620,6 +1643,7 @@ async function postExit(openState, latest) {
     requestedAtSweep: Number(latest.n),
     realizedScoreEst: Number(openState.realizedScoreEst || 0),
     entryFeeEst: Number(openState.entryFeeEst || (0.01 * Number(openState.qty) * Number(openState.entryPx))),
+    closingShadowId: openState.closingShadowId || null,
     uncertainEntries: uncertainEntries(openState)
   };
   await setState(preflight);
@@ -1955,6 +1979,17 @@ if (state.state === "exit_offer") {
     console.log("EXIT_OFFER_LIVE");
     process.exit(0);
   }
+  if (state.closingShadowId) {
+    await setState({
+      state: "idle",
+      cooldownUntilSweep: Number(latest.n) + 1,
+      realizedScoreEst: Number(state.realizedScoreEst || 0),
+      uncertainEntries: uncertainEntries(state),
+      lastShadowExitExpiredId: state.id
+    });
+    console.log(`SHADOW_EXIT_EXPIRED_REEVALUATE shadow=${state.closingShadowId}`);
+    process.exit(0);
+  }
   const open = {
     state: "open",
     side: state.entrySide,
@@ -1981,6 +2016,17 @@ if (state.state === "exit_accepted") {
     Math.abs(ownPos) >= Math.max(0.1, Number(state.qty) * 0.5);
 
   if (outcome?.outcome === "void") {
+    if (state.closingShadowId) {
+      await setState({
+        state: "idle",
+        cooldownUntilSweep: Number(latest.n) + 1,
+        realizedScoreEst: Number(state.realizedScoreEst || 0),
+        uncertainEntries: uncertainEntries(state),
+        lastShadowExitVoid: outcome.reason
+      });
+      console.log(`SHADOW_EXIT_VOID_REEVALUATE reason=${outcome.reason} n=${outcome.n ?? "na"} id=${state.id}`);
+      process.exit(0);
+    }
     const open = {
       state: "open",
       side: state.entrySide,
@@ -2009,7 +2055,9 @@ if (state.state === "exit_accepted") {
       cooldownUntilSweep: Number(latest.n) + 2,
       lastClosedId: state.id,
       realizedScoreEst: Number(state.realizedScoreEst || 0) + gross - fees,
-      uncertainEntries: uncertainEntries(state)
+      uncertainEntries: state.closingShadowId
+        ? removeUncertainEntry(state, state.closingShadowId)
+        : uncertainEntries(state)
     });
     console.log("POSITION_CLOSED");
     process.exit(0);
@@ -2031,6 +2079,17 @@ if (state.state === "exit_unverified") {
     Math.abs(ownPos) >= Math.max(0.1, Number(state.qty) * 0.5);
 
   if (outcome?.outcome === "void" || topStillOpen) {
+    if (state.closingShadowId) {
+      await setState({
+        state: "idle",
+        cooldownUntilSweep: Number(latest.n) + 1,
+        realizedScoreEst: Number(state.realizedScoreEst || 0),
+        uncertainEntries: uncertainEntries(state),
+        lastShadowExitVoid: outcome?.reason || "position_visible"
+      });
+      console.log(`SHADOW_EXIT_UNVERIFIED_STILL_OPEN reason=${outcome?.reason || "position_visible"}`);
+      process.exit(0);
+    }
     const open = {
       state: "open",
       side: state.entrySide,
@@ -2056,7 +2115,9 @@ if (state.state === "exit_unverified") {
       cooldownUntilSweep: Number(latest.n) + 2,
       lastClosedId: state.id,
       realizedScoreEst: Number(state.realizedScoreEst || 0) + gross - fees,
-      uncertainEntries: uncertainEntries(state)
+      uncertainEntries: state.closingShadowId
+        ? removeUncertainEntry(state, state.closingShadowId)
+        : uncertainEntries(state)
     });
     console.log("EXIT_UNVERIFIED_RECOVERED_CLOSED");
     process.exit(0);
@@ -2064,6 +2125,17 @@ if (state.state === "exit_unverified") {
     outcome?.outcome === "ambiguous_omitted" &&
     Number(latest.n) >= Number(state.acceptedAtSweep || latest.n) + UNCERTAIN_RELEASE_SWEEPS
   ) {
+    if (state.closingShadowId) {
+      await setState({
+        state: "idle",
+        cooldownUntilSweep: Number(latest.n) + 1,
+        realizedScoreEst: Number(state.realizedScoreEst || 0),
+        uncertainEntries: uncertainEntries(state),
+        lastAmbiguousExitId: state.id
+      });
+      console.log(`SHADOW_EXIT_UNVERIFIED_WAIT shadow=${state.closingShadowId} exit=${state.id}`);
+      process.exit(0);
+    }
     const entries = uncertainEntries(state);
     const shadowId = state.entryId || `open-before-${state.id}`;
     if (!entries.some((x) => x.id === shadowId)) {
@@ -2117,6 +2189,34 @@ if (state.state !== "idle") {
 }
 if (Number(state.cooldownUntilSweep || 0) > Number(latest.n)) {
   console.log("COOLDOWN");
+  process.exit(0);
+}
+
+const profitableConfirmedShadow = uncertainEntries(state)
+  .filter((x) => x.confirmedOutcome === "settled")
+  .map((entry) => ({ entry, net: confirmedShadowCloseNet(entry, latest.px) }))
+  .filter((x) => Number.isFinite(x.net) && x.net >= CONFIRMED_SHADOW_EXIT_MIN_NET)
+  .sort((a, b) => b.net - a.net)[0];
+
+if (profitableConfirmedShadow) {
+  const entry = profitableConfirmedShadow.entry;
+  console.log(
+    `CONFIRMED_SHADOW_PROFIT_EXIT id=${entry.id} side=${entry.side} qty=${Number(entry.qty).toFixed(2)} ` +
+    `entry=${Number(entry.entryPx).toFixed(2)} mark=${Number(latest.px).toFixed(2)} net=${profitableConfirmedShadow.net.toFixed(2)} ` +
+    `min=${CONFIRMED_SHADOW_EXIT_MIN_NET.toFixed(2)}`
+  );
+  await postExit({
+    state: "open",
+    side: entry.side,
+    qty: Number(entry.qty),
+    entryPx: Number(entry.entryPx),
+    entrySweep: Number(entry.confirmedAtSweep || entry.acceptedAtSweep || latest.n),
+    entryId: entry.id,
+    closingShadowId: entry.id,
+    realizedScoreEst: Number(state.realizedScoreEst || 0),
+    entryFeeEst: 0.01 * Number(entry.qty) * Number(entry.entryPx),
+    uncertainEntries: uncertainEntries(state)
+  }, latest);
   process.exit(0);
 }
 
