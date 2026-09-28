@@ -101,7 +101,7 @@ try {
     console.log("ARCHIVE_INDEX_SAMPLE=" + JSON.stringify(index, null, 2).slice(0,16000));
     const sweeps = Array.isArray(index.sweeps) ? index.sweeps : [];
     const redDragonDid = "did:key:z6MkuhrsP4tDZjWYdZLPxaur19WvrF1yuLGsGB2S8Q1gwS6K";
-    for (const n of [38, 305, 306, 307, 575, 576, 577, 578]) {
+    for (const n of [38, 305, 306, 307, 575, 576, 577, 578, 672, 673, 674, 675, 676, 677, 678, 679, 680]) {
       const meta = sweeps.find((x) => Number(x.n) === n);
       if (!meta?.path) {
         console.log("ARCHIVE_SWEEP_MISSING n=" + n);
