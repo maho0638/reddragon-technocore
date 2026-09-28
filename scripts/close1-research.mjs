@@ -131,3 +131,47 @@ try {
 } catch (e) {
   console.log("ARCHIVE_PROBE_ERROR " + String(e));
 }
+
+
+// REAL_NVDA_PUBLIC_MARKET_PROBE
+try {
+  const url = "https://query1.finance.yahoo.com/v8/finance/chart/NVDA?interval=1m&range=1d&includePrePost=true";
+  const rr = await fetch(url, {
+    headers: {
+      accept: "application/json",
+      "user-agent": "Mozilla/5.0 close1-market-probe"
+    },
+    signal: AbortSignal.timeout(20000)
+  });
+  const body = await rr.text();
+  console.log("REAL_NVDA_FETCH status=" + rr.status + " bytes=" + body.length);
+  if (rr.ok) {
+    const y = JSON.parse(body);
+    const q = y?.chart?.result?.[0];
+    const ts = Array.isArray(q?.timestamp) ? q.timestamp : [];
+    const closes = Array.isArray(q?.indicators?.quote?.[0]?.close) ? q.indicators.quote[0].close : [];
+    const pts = [];
+    for (let i=0;i<Math.min(ts.length,closes.length);i++) {
+      const px = Number(closes[i]);
+      if (Number.isFinite(px)) pts.push({ t:Number(ts[i]), px });
+    }
+    const last = pts.at(-1);
+    const nowSec = Math.floor(Date.now()/1000);
+    const age = last ? nowSec-last.t : null;
+    const p5 = pts.length >= 6 ? pts.at(-6).px : null;
+    const p30 = pts.length >= 31 ? pts.at(-31).px : null;
+    console.log("REAL_NVDA_META " + JSON.stringify({
+      marketState:q?.meta?.marketState,
+      regularMarketPrice:q?.meta?.regularMarketPrice,
+      previousClose:q?.meta?.previousClose,
+      exchangeTimezoneName:q?.meta?.exchangeTimezoneName,
+      last,
+      age_s:age,
+      move5:last&&p5?last.px-p5:null,
+      move30:last&&p30?last.px-p30:null,
+      points:pts.length
+    }));
+  }
+} catch (e) {
+  console.log("REAL_NVDA_PROBE_ERROR " + String(e));
+}
