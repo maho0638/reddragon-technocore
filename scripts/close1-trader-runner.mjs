@@ -1167,6 +1167,31 @@ if (raceSelftest) {
   if (!(shadowLossNet < CONFIRMED_SHADOW_EXIT_MIN_NET)) throw new Error("RACE_SELFTEST_SHADOW_LOSS_HOLD");
   const shadowRemoved = removeUncertainEntry({ uncertainEntries: [confirmedShadow, { id: "keep", side: "buy", qty: 1, entryPx: 220 }] }, "legacy-short");
   if (!(shadowRemoved.length === 1 && shadowRemoved[0].id === "keep")) throw new Error("RACE_SELFTEST_SHADOW_REMOVE");
+  const strongDownSignal = { fresh: true, move5: -0.30, move15: -0.60, move30: -1.00, move60: -1.60, move240: -3.20 };
+  const strongUpSignal = { fresh: true, move5: 0.30, move15: 0.60, move30: 1.00, move60: 1.60, move240: 3.20 };
+  const downTrend = multiTimeframeTrend(strongDownSignal);
+  const upTrend = multiTimeframeTrend(strongUpSignal);
+  if (!(downTrend.veryStrongDown && upTrend.veryStrongUp)) throw new Error("RACE_SELFTEST_MTF_DIRECTION");
+  const prePce = catalystContext(Date.parse("2026-09-30T12:00:00Z"));
+  const postPce = catalystContext(Date.parse("2026-09-30T12:45:00Z"));
+  if (!(prePce.blockNewEntries && prePce.active?.name === "PCE_GDP")) throw new Error("RACE_SELFTEST_CATALYST_PRE");
+  if (!(postPce.requireVeryStrong && postPce.active?.name === "PCE_GDP")) throw new Error("RACE_SELFTEST_CATALYST_POST");
+  const upperSell = tacticalRangeEntry(strongDownSignal, { px: 232.20 }, { hoursRemaining: 100 }, { active: null, blockNewEntries: false, requireVeryStrong: false });
+  const lowerBuy = tacticalRangeEntry(strongUpSignal, { px: 221.80 }, { hoursRemaining: 100 }, { active: null, blockNewEntries: false, requireVeryStrong: false });
+  if (!(upperSell?.side === "sell" && upperSell.reason === "upper_band_reversal")) throw new Error("RACE_SELFTEST_UPPER_BAND_SELL");
+  if (!(lowerBuy?.side === "buy" && lowerBuy.reason === "lower_band_reversal")) throw new Error("RACE_SELFTEST_LOWER_BAND_BUY");
+  const preBlocked = applyCalendarRiskGate({ action: "enter", side: "buy", qty: 10, confidence: 0.99 }, strongUpSignal, { hoursRemaining: 100 }, prePce);
+  if (preBlocked !== null) throw new Error("RACE_SELFTEST_EVENT_ENTRY_BLOCK");
+  const finalBlocked = applyCalendarRiskGate({ action: "enter", side: "buy", qty: 10, confidence: 0.99 }, strongUpSignal, { hoursRemaining: 10 }, { active: null, blockNewEntries: false, requireVeryStrong: false });
+  if (finalBlocked !== null) throw new Error("RACE_SELFTEST_FINAL_ENTRY_BLOCK");
+  const shadowRun = confirmedShadowExitDecision(confirmedShadow, strongDownSignal, { px: 219.30 }, { hoursRemaining: 100 }, { active: null });
+  const shadowRescue = confirmedShadowExitDecision(confirmedShadow, strongUpSignal, { px: 222.00 }, { hoursRemaining: 100 }, { active: null });
+  const shadowHardTake = confirmedShadowExitDecision(confirmedShadow, strongDownSignal, { px: 218.00 }, { hoursRemaining: 100 }, { active: null });
+  if (!(shadowRun?.exit === false && shadowRun.reason === "shadow_profit_run")) throw new Error("RACE_SELFTEST_SHADOW_PROFIT_RUN");
+  if (!(shadowRescue?.exit === true && shadowRescue.reason === "shadow_lower_band_reversal")) throw new Error("RACE_SELFTEST_SHADOW_RESCUE");
+  if (!(shadowHardTake?.exit === true && shadowHardTake.reason === "shadow_hard_take")) throw new Error("RACE_SELFTEST_SHADOW_HARD_TAKE");
+  const openStop = tacticalExitDecision({ state: "open", side: "sell", qty: 10, entryPx: 232, entryFeeEst: 23.2 }, strongUpSignal, { px: 235 }, { hoursRemaining: 100 }, { active: null });
+  if (!(openStop?.exit === true && openStop.reason === "short_breakout_stop")) throw new Error("RACE_SELFTEST_OPEN_STOP");
   const catchUpRefs = Array.from({ length: 24 }, (_, i) => ({ px: 224.50 + i * 0.001 }));
   const catchUpDecision = controlledFallbackEntry(
     null,
