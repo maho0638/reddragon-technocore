@@ -1001,7 +1001,7 @@ if (raceSelftest) {
   }
   const realFreshBuy = applyRealNvdaSignal(
     null,
-    { fresh: true, move15: 0.55, move30: 0.90 },
+    { fresh: true, move15: 0.90, move30: 1.50 },
     { leaderGap: 250 },
     [{ px: 224.00 }, { px: 224.04 }, { px: 224.08 }, { px: 224.10 }],
     { px: 224.10 }
@@ -1023,7 +1023,7 @@ if (raceSelftest) {
   if (realStaleIgnored !== null) throw new Error("RACE_SELFTEST_REAL_NVDA_STALE");
   const realVeto = applyRealNvdaSignal(
     { action: "enter", side: "sell", qty: 20, confidence: 0.90, reason: "test" },
-    { fresh: true, move15: 0.60, move30: 0.85 },
+    { fresh: true, move15: 0.90, move30: 1.50 },
     { leaderGap: 220 },
     [{ px: 224 }, { px: 224.05 }, { px: 224.10 }, { px: 224.15 }],
     { px: 224.15 }
