@@ -72,3 +72,34 @@ for (const candidate of ["d-reddragon-835ae177","d-reddragon-lab","mb-reddragon-
     console.log("STATE_ROOM_CANDIDATE " + candidate + " ERROR " + String(e));
   }
 }
+
+
+// OFFICIAL_CLOSE1_ARCHIVE_PROBE
+const ARCHIVE = "https://challenges.technocore.chat/close-1";
+async function archiveGet(name) {
+  const r = await fetch(ARCHIVE + "/" + name, {
+    headers: { accept: "application/json,text/plain", "cache-control": "no-cache" },
+    signal: AbortSignal.timeout(20000)
+  });
+  const text = await r.text();
+  console.log("ARCHIVE_FETCH name=" + name + " status=" + r.status + " bytes=" + text.length);
+  if (!r.ok) throw new Error("archive " + name + " -> " + r.status);
+  return text;
+}
+try {
+  const readme = await archiveGet("README.txt");
+  console.log("ARCHIVE_README\n" + readme.slice(0,12000));
+  const indexText = await archiveGet("index.json");
+  const index = JSON.parse(indexText);
+  console.log("ARCHIVE_INDEX_TYPE=" + (Array.isArray(index) ? "array" : typeof index));
+  if (Array.isArray(index)) {
+    console.log("ARCHIVE_INDEX_COUNT=" + index.length);
+    console.log("ARCHIVE_INDEX_FIRST=" + JSON.stringify(index.slice(0,3), null, 2));
+    console.log("ARCHIVE_INDEX_LAST=" + JSON.stringify(index.slice(-3), null, 2));
+  } else {
+    console.log("ARCHIVE_INDEX_KEYS=" + JSON.stringify(Object.keys(index).slice(0,50)));
+    console.log("ARCHIVE_INDEX_SAMPLE=" + JSON.stringify(index, null, 2).slice(0,16000));
+  }
+} catch (e) {
+  console.log("ARCHIVE_PROBE_ERROR " + String(e));
+}
