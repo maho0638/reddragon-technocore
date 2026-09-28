@@ -5,6 +5,8 @@ import {
 import { readFile } from "node:fs/promises";
 
 const BASE = "https://technocore.chat";
+const ARCHIVE_BASE = "https://challenges.technocore.chat/close-1";
+const ARCHIVE_SCAN_SWEEPS = 8;
 const ROOM = "close1";
 const STATE_PATH = "runtime/close1-state.enc";
 const STATE_MARKER = "REDDRAGON_CLOSE1_STATE_V5:";
@@ -212,6 +214,147 @@ async function readExport(room) {
     } catch {}
   }
   return out;
+}
+
+let archiveIndexCache = null;
+const archiveRecordCache = new Map();
+
+async function close1ArchiveIndex() {
+  if (archiveIndexCache) return archiveIndexCache;
+  const { r, text } = await request(
+    `${ARCHIVE_BASE}/index.json`,
+    { headers: { accept: "application/json", "cache-control": "no-cache" } },
+    2
+  );
+  if (!r.ok) return null;
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  if (parsed?.contest !== SEASON || !Array.isArray(parsed?.sweeps)) return null;
+
+  const byN = new Map();
+  let maxN = 0;
+  for (const row of parsed.sweeps) {
+    const n = Number(row?.n);
+    const path = String(row?.path || "");
+    const file = String(row?.file || "");
+    const status = String(row?.status || "");
+    if (
+      !Number.isInteger(n) || n < 1 ||
+      !/^(?:sweeps|redacted)\/[0-9a-f]{64}\.json$/.test(path) ||
+      !/^[0-9a-f]{64}$/.test(file) ||
+      !["full", "redacted"].includes(status)
+    ) continue;
+    byN.set(n, row);
+    maxN = Math.max(maxN, n);
+  }
+  archiveIndexCache = { byN, maxN };
+  return archiveIndexCache;
+}
+
+async function close1ArchiveRecord(meta) {
+  const n = Number(meta?.n);
+  if (archiveRecordCache.has(n)) return archiveRecordCache.get(n);
+  const path = String(meta?.path || "");
+  if (!/^(?:sweeps|redacted)\/[0-9a-f]{64}\.json$/.test(path)) return null;
+
+  const { r, text } = await request(
+    `${ARCHIVE_BASE}/${path}`,
+    { headers: { accept: "application/json", "cache-control": "no-cache" } },
+    2
+  );
+  if (!r.ok || text.length > 12_000_000) return null;
+
+  const expected =
+    meta.status === "full" ? String(meta.file || "") : String(meta.sha256 || "");
+  if (!/^[0-9a-f]{64}$/.test(expected)) return null;
+  const actual = createHash("sha256").update(Buffer.from(text, "utf8")).digest("hex");
+  if (actual !== expected) {
+    console.log(`ARCHIVE_HASH_MISMATCH n=${n} expected=${expected} actual=${actual}`);
+    return null;
+  }
+
+  let record;
+  try {
+    record = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  if (Number(record?.input?.n) !== n || Number(record?.output?.sweep) !== n) return null;
+  archiveRecordCache.set(n, record);
+  return record;
+}
+
+function classifyArchiveMatches(matches, coveredThrough) {
+  if (!Array.isArray(matches) || !matches.length) return null;
+  const settled = matches.find((x) =>
+    x?.output?.outcome === "settled" ||
+    (x?.output?.outcome === "void" && x?.output?.reason === "settled")
+  );
+  if (settled) {
+    return {
+      outcome: "settled",
+      n: Number(settled.n),
+      inferredFrom: "official_archive"
+    };
+  }
+
+  const voids = matches.filter((x) => x?.output?.outcome === "void");
+  if (!voids.length) return null;
+  const maxUntil = Math.max(
+    ...voids
+      .map((x) => Number(x?.input?.until))
+      .filter(Number.isFinite),
+    0
+  );
+  if (maxUntil > 0 && Number(coveredThrough) < maxUntil + 1) return null;
+
+  const reasons = [...new Set(voids.map((x) => String(x?.output?.reason || "void")))];
+  return {
+    outcome: "void",
+    reason: reasons.join("/") || "void",
+    n: Number(voids.at(-1)?.n),
+    inferredFrom: "official_archive"
+  };
+}
+
+async function findArchiveOutcome(id, fromSweep = 0) {
+  const start = Number(fromSweep);
+  if (!id || !Number.isFinite(start) || start <= 0) return null;
+
+  const index = await close1ArchiveIndex();
+  if (!index || index.maxN < start + 1) return null;
+  const end = Math.min(index.maxN, start + ARCHIVE_SCAN_SWEEPS);
+  const matches = [];
+
+  for (let n = start; n <= end; n++) {
+    const meta = index.byN.get(n);
+    if (!meta) continue;
+    const record = await close1ArchiveRecord(meta);
+    if (!record) continue;
+    const inputTrades = Array.isArray(record?.input?.trades) ? record.input.trades : [];
+    const outputTrades = Array.isArray(record?.output?.trades) ? record.output.trades : [];
+    const count = Math.max(inputTrades.length, outputTrades.length);
+    for (let i = 0; i < count; i++) {
+      const input = inputTrades[i];
+      const output = outputTrades[i];
+      const tradeId = String(input?.id || output?.id || "");
+      if (tradeId !== id) continue;
+      if (input?.maker && String(input.maker) !== did) continue;
+      matches.push({ n, input, output });
+    }
+  }
+
+  const result = classifyArchiveMatches(matches, end);
+  if (result) {
+    console.log(
+      `ARCHIVE_OUTCOME id=${id} outcome=${result.outcome} reason=${result.reason || "na"} n=${result.n ?? "na"}`
+    );
+  }
+  return result;
 }
 
 function toB64u(value) {
@@ -695,6 +838,24 @@ if (raceSelftest) {
   ) {
     throw new Error("RACE_SELFTEST_SQUEEZE_BREAKOUT");
   }
+  const archivedSettled = classifyArchiveMatches([
+    { n: 306, input: { id: "a", maker: did, until: 308 }, output: { id: "a", outcome: "settled" } },
+    { n: 306, input: { id: "a", maker: did, until: 308 }, output: { id: "a", outcome: "void", reason: "settled" } }
+  ], 310);
+  if (archivedSettled?.outcome !== "settled" || archivedSettled?.n !== 306) {
+    throw new Error("RACE_SELFTEST_ARCHIVE_SETTLED");
+  }
+  const archivedVoidPending = classifyArchiveMatches([
+    { n: 577, input: { id: "b", maker: did, until: 579 }, output: { id: "b", outcome: "void", reason: "funds" } }
+  ], 579);
+  if (archivedVoidPending !== null) throw new Error("RACE_SELFTEST_ARCHIVE_VOID_EARLY");
+  const archivedVoid = classifyArchiveMatches([
+    { n: 577, input: { id: "b", maker: did, until: 579 }, output: { id: "b", outcome: "void", reason: "not_owner" } },
+    { n: 577, input: { id: "b", maker: did, until: 579 }, output: { id: "b", outcome: "void", reason: "funds" } }
+  ], 580);
+  if (archivedVoid?.outcome !== "void" || archivedVoid?.reason !== "not_owner/funds") {
+    throw new Error("RACE_SELFTEST_ARCHIVE_VOID");
+  }
   console.log("RACE_SIZING_SELFTEST_OK");
   process.exit(0);
 }
@@ -1152,6 +1313,14 @@ async function findOutcome(id, fromSweep = 0, flowMessages = null) {
   }
 
   if (omittedSettled > 0 || omittedVoid > 0) {
+    if (Number(fromSweep) > 0) {
+      try {
+        const archived = await findArchiveOutcome(id, Number(fromSweep));
+        if (archived) return archived;
+      } catch (error) {
+        console.log(`ARCHIVE_OUTCOME_LOOKUP_FAILED id=${id} error=${String(error).slice(0,200)}`);
+      }
+    }
     return {
       outcome: "ambiguous_omitted",
       omittedSettled,
