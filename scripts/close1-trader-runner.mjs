@@ -16,6 +16,22 @@ const LOCK_MS = Date.parse("2026-10-04T09:00:00Z");
 const UNCERTAIN_RELEASE_SWEEPS = 6;
 const UNCERTAIN_MAX_ABS_QTY = 43;
 const CONFIRMED_SHADOW_EXIT_MIN_NET = 15;
+const CONFIRMED_SHADOW_HARD_TAKE_NET = 50;
+const FINAL_DEFENSIVE_HOURS = 36;
+const FINAL_NO_NEW_ENTRY_HOURS = 12;
+const CORE_RANGE_LOW = 221;
+const CORE_RANGE_HIGH = 233;
+const RANGE_BREAK_LOW = 220.5;
+const RANGE_BREAK_HIGH = 234.5;
+const MAJOR_CATALYSTS = [
+  { name: "PCE_GDP", at: Date.parse("2026-09-30T12:30:00Z"), preMin: 90, postMin: 45 },
+  { name: "MICRON_EARNINGS", at: Date.parse("2026-09-30T20:30:00Z"), preMin: 90, postMin: 180 },
+  { name: "FED_WALLER", at: Date.parse("2026-10-01T14:00:00Z"), preMin: 30, postMin: 45 },
+  { name: "FED_JEFFERSON", at: Date.parse("2026-10-01T17:30:00Z"), preMin: 30, postMin: 45 },
+  { name: "FED_BOWMAN", at: Date.parse("2026-10-01T19:00:00Z"), preMin: 30, postMin: 45 },
+  { name: "FED_COOK", at: Date.parse("2026-10-01T19:30:00Z"), preMin: 30, postMin: 45 },
+  { name: "US_JOBS", at: Date.parse("2026-10-02T12:30:00Z"), preMin: 90, postMin: 60 }
+];
 const EXPECTED_DID = "did:key:z6MkuhrsP4tDZjWYdZLPxaur19WvrF1yuLGsGB2S8Q1gwS6K";
 const keyB64 = String(process.env.TECHNOCORE_PRIVATE_KEY_PKCS8_B64 || "").trim();
 const execute = String(process.env.CLOSE1_EXECUTE || "false").toLowerCase() === "true";
@@ -732,10 +748,188 @@ function raceContext({ now, pnlSnapshots, state, latest }) {
 // This overlay only sizes an already-approved entry for the race objective:
 // preserve optionality early, scale conviction when behind late, and protect a lead.
 
+function catalystContext(nowMs = Date.now()) {
+  let active = null;
+  let next = null;
+  for (const event of MAJOR_CATALYSTS) {
+    const deltaMin = (nowMs - event.at) / 60000;
+    if (deltaMin >= -event.preMin && deltaMin < 0) {
+      active = { ...event, phase: "pre", deltaMin };
+      break;
+    }
+    if (deltaMin >= 0 && deltaMin <= event.postMin) {
+      active = { ...event, phase: "post", deltaMin };
+      break;
+    }
+    if (event.at > nowMs && (!next || event.at < next.at)) next = event;
+  }
+  return {
+    active,
+    next,
+    blockNewEntries: active?.phase === "pre",
+    requireVeryStrong: active?.phase === "post"
+  };
+}
+
+function multiTimeframeTrend(signal) {
+  const frames = [
+    ["move5", 0.12, 1],
+    ["move15", 0.25, 2],
+    ["move30", 0.40, 3],
+    ["move60", 0.65, 4],
+    ["move240", 1.20, 5]
+  ];
+  let score = 0;
+  let weight = 0;
+  const votes = {};
+  for (const [key, threshold, w] of frames) {
+    const value = Number(signal?.[key]);
+    if (!Number.isFinite(value)) continue;
+    const vote = Math.abs(value) >= threshold ? Math.sign(value) : 0;
+    votes[key] = vote;
+    score += vote * w;
+    weight += w;
+  }
+  const ratio = weight > 0 ? score / weight : 0;
+  const m30 = Number(signal?.move30);
+  const m60 = Number(signal?.move60);
+  const m240 = Number(signal?.move240);
+  const strongUp = ratio >= 0.55 && (!Number.isFinite(m30) || m30 > 0) && (!Number.isFinite(m60) || m60 > 0);
+  const strongDown = ratio <= -0.55 && (!Number.isFinite(m30) || m30 < 0) && (!Number.isFinite(m60) || m60 < 0);
+  const veryStrongUp = ratio >= 0.72 && (!Number.isFinite(m60) || m60 > 0) && (!Number.isFinite(m240) || m240 > 0);
+  const veryStrongDown = ratio <= -0.72 && (!Number.isFinite(m60) || m60 < 0) && (!Number.isFinite(m240) || m240 < 0);
+  return {
+    score,
+    weight,
+    ratio,
+    votes,
+    strongUp,
+    strongDown,
+    veryStrongUp,
+    veryStrongDown,
+    label: veryStrongUp ? "very_up" : strongUp ? "up" : veryStrongDown ? "very_down" : strongDown ? "down" : "mixed"
+  };
+}
+
+function openPositionCloseNet(openState, mark) {
+  const qty = Number(openState?.qty);
+  const entry = Number(openState?.entryPx);
+  const current = Number(mark);
+  if (!Number.isFinite(qty) || qty <= 0 || !Number.isFinite(entry) || !Number.isFinite(current)) return null;
+  const direction = openState.side === "buy" ? 1 : -1;
+  const gross = direction * qty * (current - entry);
+  const entryFee = Number(openState.entryFeeEst || (0.01 * qty * entry));
+  const exitFee = 0.01 * qty * current;
+  return gross - entryFee - exitFee;
+}
+
+function tacticalExitDecision(openState, signal, latest, race, catalyst) {
+  const net = openPositionCloseNet(openState, latest?.px);
+  if (!Number.isFinite(net)) return null;
+  const trend = multiTimeframeTrend(signal);
+  const px = Number(latest?.px);
+  const short = openState.side === "sell";
+  const favorableStrong = short ? trend.strongDown : trend.strongUp;
+  const adverseStrong = short ? trend.strongUp : trend.strongDown;
+  const adverseVeryStrong = short ? trend.veryStrongUp : trend.veryStrongDown;
+  if (net >= 60) return { exit: true, reason: "hard_take_profit", net, trend };
+  if (net >= 30 && (!favorableStrong || catalyst?.active?.phase === "pre" || Number(race?.hoursRemaining) <= FINAL_DEFENSIVE_HOURS)) {
+    return { exit: true, reason: "protect_profit", net, trend };
+  }
+  if (net >= 15 && (adverseStrong || catalyst?.active?.phase === "pre" || Number(race?.hoursRemaining) <= FINAL_NO_NEW_ENTRY_HOURS)) {
+    return { exit: true, reason: "early_profit_lock", net, trend };
+  }
+  if (short && px >= RANGE_BREAK_HIGH && adverseStrong) return { exit: true, reason: "short_breakout_stop", net, trend };
+  if (!short && px <= RANGE_BREAK_LOW && adverseStrong) return { exit: true, reason: "long_breakdown_stop", net, trend };
+  if (net <= -90 && adverseVeryStrong) return { exit: true, reason: "momentum_stop", net, trend };
+  return { exit: false, reason: "hold", net, trend };
+}
+
+function confirmedShadowExitDecision(entry, signal, latest, race, catalyst) {
+  const net = confirmedShadowCloseNet(entry, latest?.px);
+  if (!Number.isFinite(net)) return null;
+  const trend = multiTimeframeTrend(signal);
+  const px = Number(latest?.px);
+  const short = entry.side === "sell";
+  const favorableStrong = short ? trend.strongDown : trend.strongUp;
+  const adverseStrong = short ? trend.strongUp : trend.strongDown;
+  if (net >= CONFIRMED_SHADOW_HARD_TAKE_NET) {
+    return { exit: true, reason: "shadow_hard_take", net, trend };
+  }
+  if (net >= CONFIRMED_SHADOW_EXIT_MIN_NET && !favorableStrong) {
+    return { exit: true, reason: "shadow_profit_protect", net, trend };
+  }
+  if (net >= CONFIRMED_SHADOW_EXIT_MIN_NET && favorableStrong) {
+    return { exit: false, reason: "shadow_profit_run", net, trend };
+  }
+  if (catalyst?.active?.phase === "pre" && net >= 0) {
+    return { exit: true, reason: "shadow_event_protect", net, trend };
+  }
+  if (Number(race?.hoursRemaining) <= FINAL_NO_NEW_ENTRY_HOURS && net >= 0) {
+    return { exit: true, reason: "shadow_final_protect", net, trend };
+  }
+  if (short && px <= 223 && adverseStrong) return { exit: true, reason: "shadow_lower_band_reversal", net, trend };
+  if (short && px >= RANGE_BREAK_HIGH && adverseStrong) return { exit: true, reason: "shadow_breakout_stop", net, trend };
+  if (!short && px >= 231 && adverseStrong) return { exit: true, reason: "shadow_upper_band_reversal", net, trend };
+  if (!short && px <= RANGE_BREAK_LOW && adverseStrong) return { exit: true, reason: "shadow_breakdown_stop", net, trend };
+  return { exit: false, reason: "shadow_hold", net, trend };
+}
+
+function tacticalRangeEntry(signal, latest, race, catalyst) {
+  if (!signal?.fresh) return null;
+  if (catalyst?.blockNewEntries) return null;
+  const hours = Number(race?.hoursRemaining);
+  if (Number.isFinite(hours) && hours <= FINAL_NO_NEW_ENTRY_HOURS) return null;
+  const trend = multiTimeframeTrend(signal);
+  if (catalyst?.requireVeryStrong && !(trend.veryStrongUp || trend.veryStrongDown)) return null;
+  if (Number.isFinite(hours) && hours <= FINAL_DEFENSIVE_HOURS && !(trend.veryStrongUp || trend.veryStrongDown)) return null;
+
+  const px = Number(latest?.px);
+  if (!Number.isFinite(px) || px <= 0) return null;
+  const roundTripFeeMove = 0.02 * px;
+  const viable = (target) => Math.abs(Number(target) - px) >= roundTripFeeMove + 0.75;
+
+  if (px >= 231.5 && px <= 234.5 && trend.strongDown && viable(223)) {
+    return { action: "enter", side: "sell", qty: 10, confidence: trend.veryStrongDown ? 0.97 : 0.94, reason: "upper_band_reversal" };
+  }
+  if (px >= 219 && px <= 222.5 && trend.strongUp && viable(230)) {
+    return { action: "enter", side: "buy", qty: 10, confidence: trend.veryStrongUp ? 0.97 : 0.94, reason: "lower_band_reversal" };
+  }
+  if (px > RANGE_BREAK_HIGH && px <= 239 && trend.veryStrongUp && viable(241)) {
+    return { action: "enter", side: "buy", qty: 8, confidence: 0.97, reason: "range_breakout_up" };
+  }
+  if (px < RANGE_BREAK_LOW && px >= 213.5 && trend.veryStrongDown && viable(214)) {
+    return { action: "enter", side: "sell", qty: 8, confidence: 0.97, reason: "range_breakdown_down" };
+  }
+  return null;
+}
+
+function applyCalendarRiskGate(decision, signal, race, catalyst) {
+  if (!decision || decision.action !== "enter") return decision;
+  const trend = multiTimeframeTrend(signal);
+  if (catalyst?.blockNewEntries) {
+    console.log(`CATALYST_ENTRY_BLOCK name=${catalyst.active?.name || "unknown"} phase=pre`);
+    return null;
+  }
+  if (catalyst?.requireVeryStrong && !(trend.veryStrongUp || trend.veryStrongDown)) {
+    console.log(`CATALYST_POST_WAIT name=${catalyst.active?.name || "unknown"} trend=${trend.label} ratio=${trend.ratio.toFixed(2)}`);
+    return null;
+  }
+  if (Number(race?.hoursRemaining) <= FINAL_NO_NEW_ENTRY_HOURS) {
+    console.log(`FINAL_ENTRY_BLOCK hLeft=${Number(race.hoursRemaining).toFixed(1)}`);
+    return null;
+  }
+  if (Number(race?.hoursRemaining) <= FINAL_DEFENSIVE_HOURS && !(trend.veryStrongUp || trend.veryStrongDown)) {
+    console.log(`FINAL_STRONG_ONLY hLeft=${Number(race.hoursRemaining).toFixed(1)} trend=${trend.label}`);
+    return null;
+  }
+  return decision;
+}
+
 async function fetchRealNvdaSignal(nowMs = Date.now()) {
   try {
     const { r, text } = await request(
-      "https://query1.finance.yahoo.com/v8/finance/chart/NVDA?interval=1m&range=1d&includePrePost=true",
+      "https://query1.finance.yahoo.com/v8/finance/chart/NVDA?interval=5m&range=5d&includePrePost=true",
       {
         headers: {
           accept: "application/json",
@@ -773,19 +967,23 @@ async function fetchRealNvdaSignal(nowMs = Date.now()) {
     const p5 = atMinutesAgo(5);
     const p15 = atMinutesAgo(15);
     const p30 = atMinutesAgo(30);
+    const p60 = atMinutesAgo(60);
+    const p240 = atMinutesAgo(240);
     const move = (p) => Number.isFinite(p) ? last.px - p : null;
     const signal = {
-      fresh: ageSec >= -30 && ageSec <= 300,
+      fresh: ageSec >= -30 && ageSec <= 600,
       px: last.px,
       ageSec,
       move5: move(p5),
       move15: move(p15),
       move30: move(p30),
+      move60: move(p60),
+      move240: move(p240),
       previousClose: Number(q?.meta?.previousClose),
       regularMarketPrice: Number(q?.meta?.regularMarketPrice)
     };
     console.log(
-      `REAL_NVDA fresh=${signal.fresh} px=${signal.px.toFixed(2)} age_s=${signal.ageSec} m5=${Number.isFinite(signal.move5) ? signal.move5.toFixed(2) : "na"} m15=${Number.isFinite(signal.move15) ? signal.move15.toFixed(2) : "na"} m30=${Number.isFinite(signal.move30) ? signal.move30.toFixed(2) : "na"}`
+      `REAL_NVDA fresh=${signal.fresh} px=${signal.px.toFixed(2)} age_s=${signal.ageSec} m5=${Number.isFinite(signal.move5) ? signal.move5.toFixed(2) : "na"} m15=${Number.isFinite(signal.move15) ? signal.move15.toFixed(2) : "na"} m30=${Number.isFinite(signal.move30) ? signal.move30.toFixed(2) : "na"} m60=${Number.isFinite(signal.move60) ? signal.move60.toFixed(2) : "na"} m240=${Number.isFinite(signal.move240) ? signal.move240.toFixed(2) : "na"}`
     );
     return signal;
   } catch (error) {
@@ -799,17 +997,11 @@ function applyRealNvdaSignal(decision, signal, race, distinct, latest) {
 
   const m15 = Number(signal.move15);
   const m30 = Number(signal.move30);
+  const trend = multiTimeframeTrend(signal);
   if (!Number.isFinite(m15) || !Number.isFinite(m30)) return decision;
+  if (!(trend.strongUp || trend.strongDown)) return decision;
 
-  const d15 = Math.sign(m15);
-  const d30 = Math.sign(m30);
-  const coherent = d15 !== 0 && d15 === d30;
-  const latestPx = Number(latest?.px);
-  const oneWayFeeMove = Number.isFinite(latestPx) && latestPx > 0 ? latestPx * 0.01 : 2.25;
-  const min15 = Math.max(0.45, oneWayFeeMove * 0.35);
-  const min30 = Math.max(0.70, oneWayFeeMove * 0.60);
-  const strong = coherent && Math.abs(m15) >= min15 && Math.abs(m30) >= min30;
-  if (!strong) return decision;
+  const d30 = trend.strongUp ? 1 : -1;
 
   const refs = Array.isArray(distinct) ? distinct : [];
   const lookback = refs.length >= 4 ? Number(refs.at(-4)?.px) : null;
@@ -823,7 +1015,7 @@ function applyRealNvdaSignal(decision, signal, race, distinct, latest) {
     xyzDirection === d30 ||
     Math.abs(xyzMove15) <= 0.25;
 
-  const side = d30 > 0 ? "buy" : "sell";
+  const side = trend.strongUp ? "buy" : "sell";
   const gap = Number(race?.leaderGap);
 
   if (decision?.action === "enter") {
@@ -832,12 +1024,12 @@ function applyRealNvdaSignal(decision, signal, race, distinct, latest) {
         ? Number(decision.qty) * 1.15
         : decision.qty;
       console.log(
-        `REAL_NVDA_CONFIRM side=${side} m15=${m15.toFixed(2)} m30=${m30.toFixed(2)} xyz15=${xyzMove15.toFixed(2)}`
+        `REAL_NVDA_CONFIRM side=${side} trend=${trend.label} ratio=${trend.ratio.toFixed(2)} m15=${m15.toFixed(2)} m30=${m30.toFixed(2)} xyz15=${xyzMove15.toFixed(2)}`
       );
       return {
         ...decision,
         qty: boostedQty,
-        confidence: Math.max(0.94, Number(decision.confidence) || 0),
+        confidence: Math.max(trend.veryStrongUp || trend.veryStrongDown ? 0.97 : 0.94, Number(decision.confidence) || 0),
         reason: String(decision.reason || "entry") + "+real_nvda"
       };
     }
@@ -845,7 +1037,7 @@ function applyRealNvdaSignal(decision, signal, race, distinct, latest) {
     const confidence = Number(decision.confidence);
     if (!Number.isFinite(confidence) || confidence < 0.95) {
       console.log(
-        `REAL_NVDA_VETO decision=${decision.side} real=${side} m15=${m15.toFixed(2)} m30=${m30.toFixed(2)}`
+        `REAL_NVDA_VETO decision=${decision.side} real=${side} trend=${trend.label} ratio=${trend.ratio.toFixed(2)} m15=${m15.toFixed(2)} m30=${m30.toFixed(2)}`
       );
       return null;
     }
@@ -856,7 +1048,7 @@ function applyRealNvdaSignal(decision, signal, race, distinct, latest) {
 
   const qty = gap >= 300 ? 16 : 12;
   console.log(
-    `REAL_NVDA_SCOUT side=${side} qty=${qty.toFixed(2)} m15=${m15.toFixed(2)} m30=${m30.toFixed(2)} xyz15=${xyzMove15.toFixed(2)} gap=${gap.toFixed(2)}`
+    `REAL_NVDA_SCOUT side=${side} qty=${qty.toFixed(2)} trend=${trend.label} ratio=${trend.ratio.toFixed(2)} m15=${m15.toFixed(2)} m30=${m30.toFixed(2)} xyz15=${xyzMove15.toFixed(2)} gap=${gap.toFixed(2)}`
   );
   return {
     action: "enter",
@@ -1699,6 +1891,21 @@ if (!execute) {
   await logPeerRecentHistory(state?.taker);
 }
 
+const catalyst = catalystContext(now);
+if (catalyst.active) {
+  console.log(`CATALYST name=${catalyst.active.name} phase=${catalyst.active.phase} deltaMin=${catalyst.active.deltaMin.toFixed(1)}`);
+} else if (catalyst.next) {
+  console.log(`CATALYST_NEXT name=${catalyst.next.name} hours=${((catalyst.next.at - now) / 3600000).toFixed(1)}`);
+}
+let realNvdaSignal = null;
+if (state.state === "open" || state.state === "idle") {
+  realNvdaSignal = await fetchRealNvdaSignal(now);
+  if (realNvdaSignal?.fresh) {
+    const trend = multiTimeframeTrend(realNvdaSignal);
+    console.log(`MTF trend=${trend.label} ratio=${trend.ratio.toFixed(2)} score=${trend.score}/${trend.weight}`);
+  }
+}
+
 if (state.state === "entry_preflight") {
   const seen = await findAcceptance(state.id);
   if (seen) {
@@ -2172,6 +2379,12 @@ if (state.state === "exit_unverified") {
 }
 
 if (state.state === "open") {
+  const tacticalExit = tacticalExitDecision(state, realNvdaSignal, latest, race, catalyst);
+  if (tacticalExit?.exit) {
+    console.log(`TACTICAL_EXIT reason=${tacticalExit.reason} net=${tacticalExit.net.toFixed(2)} trend=${tacticalExit.trend.label}`);
+    await postExit(state, latest);
+    process.exit(0);
+  }
   const decision = decide({
     now,
     mode: "manage",
@@ -2186,7 +2399,7 @@ if (state.state === "open") {
   if (decision?.action === "exit") {
     await postExit(state, latest);
   } else {
-    console.log("HOLD");
+    console.log(`HOLD tactical=${tacticalExit?.reason || "na"} net=${Number.isFinite(tacticalExit?.net) ? tacticalExit.net.toFixed(2) : "na"}`);
   }
   process.exit(0);
 }
@@ -2199,18 +2412,18 @@ if (Number(state.cooldownUntilSweep || 0) > Number(latest.n)) {
   process.exit(0);
 }
 
-const profitableConfirmedShadow = uncertainEntries(state)
+const confirmedShadowActions = uncertainEntries(state)
   .filter((x) => x.confirmedOutcome === "settled")
-  .map((entry) => ({ entry, net: confirmedShadowCloseNet(entry, latest.px) }))
-  .filter((x) => Number.isFinite(x.net) && x.net >= CONFIRMED_SHADOW_EXIT_MIN_NET)
-  .sort((a, b) => b.net - a.net)[0];
+  .map((entry) => ({ entry, decision: confirmedShadowExitDecision(entry, realNvdaSignal, latest, race, catalyst) }))
+  .filter((x) => x.decision?.exit)
+  .sort((a, b) => Number(b.decision.net) - Number(a.decision.net));
 
-if (profitableConfirmedShadow) {
-  const entry = profitableConfirmedShadow.entry;
+if (confirmedShadowActions.length) {
+  const { entry, decision: shadowDecision } = confirmedShadowActions[0];
   console.log(
-    `CONFIRMED_SHADOW_PROFIT_EXIT id=${entry.id} side=${entry.side} qty=${Number(entry.qty).toFixed(2)} ` +
-    `entry=${Number(entry.entryPx).toFixed(2)} mark=${Number(latest.px).toFixed(2)} net=${profitableConfirmedShadow.net.toFixed(2)} ` +
-    `min=${CONFIRMED_SHADOW_EXIT_MIN_NET.toFixed(2)}`
+    `CONFIRMED_SHADOW_EXIT id=${entry.id} side=${entry.side} qty=${Number(entry.qty).toFixed(2)} ` +
+    `entry=${Number(entry.entryPx).toFixed(2)} mark=${Number(latest.px).toFixed(2)} net=${shadowDecision.net.toFixed(2)} ` +
+    `reason=${shadowDecision.reason} trend=${shadowDecision.trend.label}`
   );
   await postExit({
     state: "open",
@@ -2246,15 +2459,16 @@ const fallbackDecision = controlledFallbackEntry(
   positions,
   latest
 );
-const realNvdaSignal = await fetchRealNvdaSignal(now);
-const entryDecision = applyRealNvdaSignal(
-  fallbackDecision,
+const tacticalDecision = fallbackDecision || tacticalRangeEntry(realNvdaSignal, latest, race, catalyst);
+const realConfirmedDecision = applyRealNvdaSignal(
+  tacticalDecision,
   realNvdaSignal,
   race,
   distinct,
   latest
 );
-const sizedDecision = applyRaceSizing(entryDecision, race, latest.px);
+const calendarDecision = applyCalendarRiskGate(realConfirmedDecision, realNvdaSignal, race, catalyst);
+const sizedDecision = applyRaceSizing(calendarDecision, race, latest.px);
 const decision = applyUncertainRiskCap(sizedDecision, state, latest.px);
 if (decision?.action === "enter") {
   console.log(
