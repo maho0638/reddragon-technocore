@@ -99,6 +99,34 @@ try {
   } else {
     console.log("ARCHIVE_INDEX_KEYS=" + JSON.stringify(Object.keys(index).slice(0,50)));
     console.log("ARCHIVE_INDEX_SAMPLE=" + JSON.stringify(index, null, 2).slice(0,16000));
+    const sweeps = Array.isArray(index.sweeps) ? index.sweeps : [];
+    const redDragonDid = "did:key:z6MkuhrsP4tDZjWYdZLPxaur19WvrF1yuLGsGB2S8Q1gwS6K";
+    for (const n of [38, 305, 306, 307, 575, 576, 577, 578]) {
+      const meta = sweeps.find((x) => Number(x.n) === n);
+      if (!meta?.path) {
+        console.log("ARCHIVE_SWEEP_MISSING n=" + n);
+        continue;
+      }
+      const body = await archiveGet(meta.path);
+      const record = JSON.parse(body);
+      const minted = Array.isArray(record?.output?.minted) ? record.output.minted : [];
+      const inputTrades = Array.isArray(record?.input?.trades) ? record.input.trades : [];
+      const outputTrades = Array.isArray(record?.output?.trades) ? record.output.trades : [];
+      console.log(
+        "ARCHIVE_SWEEP n=" + n +
+        " status=" + meta.status +
+        " mintedRedDragon=" + minted.includes(redDragonDid) +
+        " inputTrades=" + inputTrades.length +
+        " outputTrades=" + outputTrades.length
+      );
+      for (let i = 0; i < Math.max(inputTrades.length, outputTrades.length); i++) {
+        const pair = { input: inputTrades[i], output: outputTrades[i] };
+        const raw = JSON.stringify(pair);
+        if (raw.includes(redDragonDid) || raw.includes("rd4e-305-uifc397")) {
+          console.log("ARCHIVE_REDDRAGON_TRADE n=" + n + " i=" + i + " " + raw.slice(0,6000));
+        }
+      }
+    }
   }
 } catch (e) {
   console.log("ARCHIVE_PROBE_ERROR " + String(e));
