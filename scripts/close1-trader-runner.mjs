@@ -968,6 +968,13 @@ if (raceSelftest) {
   if (!(cappedSame?.qty > 0.1 && cappedSame.qty < 12)) throw new Error("RACE_SELFTEST_UNCERTAIN_SAME_SIDE_CAP");
   if (!(allowedOpposite?.qty === 30)) throw new Error("RACE_SELFTEST_UNCERTAIN_OPPOSITE_BLOCKED");
   if (!(env.lo === -31.53 && env.hi === 0)) throw new Error("RACE_SELFTEST_UNCERTAIN_ENVELOPE");
+  const confirmedShadow = { id: "legacy-short", side: "sell", qty: 31.53, entryPx: 224.26, confirmedOutcome: "settled" };
+  const shadowProfitNet = confirmedShadowCloseNet(confirmedShadow, 219.30);
+  const shadowLossNet = confirmedShadowCloseNet(confirmedShadow, 230.00);
+  if (!(shadowProfitNet >= CONFIRMED_SHADOW_EXIT_MIN_NET)) throw new Error("RACE_SELFTEST_SHADOW_PROFIT_EXIT");
+  if (!(shadowLossNet < CONFIRMED_SHADOW_EXIT_MIN_NET)) throw new Error("RACE_SELFTEST_SHADOW_LOSS_HOLD");
+  const shadowRemoved = removeUncertainEntry({ uncertainEntries: [confirmedShadow, { id: "keep", side: "buy", qty: 1, entryPx: 220 }] }, "legacy-short");
+  if (!(shadowRemoved.length === 1 && shadowRemoved[0].id === "keep")) throw new Error("RACE_SELFTEST_SHADOW_REMOVE");
   const catchUpRefs = Array.from({ length: 24 }, (_, i) => ({ px: 224.50 + i * 0.001 }));
   const catchUpDecision = controlledFallbackEntry(
     null,
