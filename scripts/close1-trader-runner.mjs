@@ -708,6 +708,138 @@ function raceContext({ now, pnlSnapshots, state, latest }) {
 // The encrypted strategy decides whether a setup is good enough to trade.
 // This overlay only sizes an already-approved entry for the race objective:
 // preserve optionality early, scale conviction when behind late, and protect a lead.
+
+async function fetchRealNvdaSignal(nowMs = Date.now()) {
+  try {
+    const { r, text } = await request(
+      "https://query1.finance.yahoo.com/v8/finance/chart/NVDA?interval=1m&range=1d&includePrePost=true",
+      {
+        headers: {
+          accept: "application/json",
+          "cache-control": "no-cache",
+          "user-agent": "Mozilla/5.0 close1-reddragon"
+        }
+      },
+      2
+    );
+    if (!r.ok) return { fresh: false, reason: "http_" + r.status };
+
+    const parsed = JSON.parse(text);
+    const q = parsed?.chart?.result?.[0];
+    const ts = Array.isArray(q?.timestamp) ? q.timestamp : [];
+    const closes = Array.isArray(q?.indicators?.quote?.[0]?.close)
+      ? q.indicators.quote[0].close
+      : [];
+    const pts = [];
+    for (let i = 0; i < Math.min(ts.length, closes.length); i++) {
+      const t = Number(ts[i]);
+      const px = Number(closes[i]);
+      if (Number.isFinite(t) && Number.isFinite(px) && px > 0) pts.push({ t, px });
+    }
+    if (pts.length < 2) return { fresh: false, reason: "no_points" };
+
+    const last = pts.at(-1);
+    const ageSec = Math.floor(nowMs / 1000) - last.t;
+    const atMinutesAgo = (minutes) => {
+      const target = last.t - minutes * 60;
+      for (let i = pts.length - 1; i >= 0; i--) {
+        if (pts[i].t <= target) return pts[i].px;
+      }
+      return null;
+    };
+    const p5 = atMinutesAgo(5);
+    const p15 = atMinutesAgo(15);
+    const p30 = atMinutesAgo(30);
+    const move = (p) => Number.isFinite(p) ? last.px - p : null;
+    const signal = {
+      fresh: ageSec >= -30 && ageSec <= 300,
+      px: last.px,
+      ageSec,
+      move5: move(p5),
+      move15: move(p15),
+      move30: move(p30),
+      previousClose: Number(q?.meta?.previousClose),
+      regularMarketPrice: Number(q?.meta?.regularMarketPrice)
+    };
+    console.log(
+      `REAL_NVDA fresh=${signal.fresh} px=${signal.px.toFixed(2)} age_s=${signal.ageSec} m5=${Number.isFinite(signal.move5) ? signal.move5.toFixed(2) : "na"} m15=${Number.isFinite(signal.move15) ? signal.move15.toFixed(2) : "na"} m30=${Number.isFinite(signal.move30) ? signal.move30.toFixed(2) : "na"}`
+    );
+    return signal;
+  } catch (error) {
+    console.log(`REAL_NVDA_UNAVAILABLE error=${String(error).slice(0,180)}`);
+    return { fresh: false, reason: "fetch_error" };
+  }
+}
+
+function applyRealNvdaSignal(decision, signal, race, distinct, latest) {
+  if (!signal?.fresh) return decision;
+
+  const m15 = Number(signal.move15);
+  const m30 = Number(signal.move30);
+  if (!Number.isFinite(m15) || !Number.isFinite(m30)) return decision;
+
+  const d15 = Math.sign(m15);
+  const d30 = Math.sign(m30);
+  const coherent = d15 !== 0 && d15 === d30;
+  const strong = coherent && Math.abs(m15) >= 0.45 && Math.abs(m30) >= 0.70;
+  if (!strong) return decision;
+
+  const refs = Array.isArray(distinct) ? distinct : [];
+  const lookback = refs.length >= 4 ? Number(refs.at(-4)?.px) : null;
+  const xyzMove15 =
+    Number.isFinite(lookback) && Number.isFinite(Number(latest?.px))
+      ? Number(latest.px) - lookback
+      : 0;
+  const xyzDirection = Math.sign(xyzMove15);
+  const alignedOrLagging =
+    xyzDirection === 0 ||
+    xyzDirection === d30 ||
+    Math.abs(xyzMove15) <= 0.25;
+
+  const side = d30 > 0 ? "buy" : "sell";
+  const gap = Number(race?.leaderGap);
+
+  if (decision?.action === "enter") {
+    if (String(decision.side) === side) {
+      const boostedQty = Number.isFinite(Number(decision.qty))
+        ? Number(decision.qty) * 1.15
+        : decision.qty;
+      console.log(
+        `REAL_NVDA_CONFIRM side=${side} m15=${m15.toFixed(2)} m30=${m30.toFixed(2)} xyz15=${xyzMove15.toFixed(2)}`
+      );
+      return {
+        ...decision,
+        qty: boostedQty,
+        confidence: Math.max(0.94, Number(decision.confidence) || 0),
+        reason: String(decision.reason || "entry") + "+real_nvda"
+      };
+    }
+
+    const confidence = Number(decision.confidence);
+    if (!Number.isFinite(confidence) || confidence < 0.95) {
+      console.log(
+        `REAL_NVDA_VETO decision=${decision.side} real=${side} m15=${m15.toFixed(2)} m30=${m30.toFixed(2)}`
+      );
+      return null;
+    }
+    return decision;
+  }
+
+  if (!Number.isFinite(gap) || gap < 175 || !alignedOrLagging) return decision;
+
+  const qty = gap >= 300 ? 16 : 12;
+  console.log(
+    `REAL_NVDA_SCOUT side=${side} qty=${qty.toFixed(2)} m15=${m15.toFixed(2)} m30=${m30.toFixed(2)} xyz15=${xyzMove15.toFixed(2)} gap=${gap.toFixed(2)}`
+  );
+  return {
+    action: "enter",
+    side,
+    qty,
+    confidence: 0.92,
+    reason: "real_nvda_lead_confirmation"
+  };
+}
+
 function applyRaceSizing(decision, race, latestPx) {
   if (!decision || decision.action !== "enter") return decision;
   let qty = Number(decision.qty);
@@ -838,6 +970,36 @@ if (raceSelftest) {
   ) {
     throw new Error("RACE_SELFTEST_SQUEEZE_BREAKOUT");
   }
+  const realFreshBuy = applyRealNvdaSignal(
+    null,
+    { fresh: true, move15: 0.55, move30: 0.90 },
+    { leaderGap: 250 },
+    [{ px: 224.00 }, { px: 224.04 }, { px: 224.08 }, { px: 224.10 }],
+    { px: 224.10 }
+  );
+  if (
+    realFreshBuy?.action !== "enter" ||
+    realFreshBuy.side !== "buy" ||
+    realFreshBuy.reason !== "real_nvda_lead_confirmation"
+  ) {
+    throw new Error("RACE_SELFTEST_REAL_NVDA_SCOUT");
+  }
+  const realStaleIgnored = applyRealNvdaSignal(
+    null,
+    { fresh: false, move15: 1.00, move30: 1.50 },
+    { leaderGap: 400 },
+    [{ px: 224 }, { px: 224 }, { px: 224 }, { px: 224 }],
+    { px: 224 }
+  );
+  if (realStaleIgnored !== null) throw new Error("RACE_SELFTEST_REAL_NVDA_STALE");
+  const realVeto = applyRealNvdaSignal(
+    { action: "enter", side: "sell", qty: 20, confidence: 0.90, reason: "test" },
+    { fresh: true, move15: 0.60, move30: 0.85 },
+    { leaderGap: 220 },
+    [{ px: 224 }, { px: 224.05 }, { px: 224.10 }, { px: 224.15 }],
+    { px: 224.15 }
+  );
+  if (realVeto !== null) throw new Error("RACE_SELFTEST_REAL_NVDA_VETO");
   const archivedSettled = classifyArchiveMatches([
     { n: 306, input: { id: "a", maker: did, until: 308 }, output: { id: "a", outcome: "settled" } },
     { n: 306, input: { id: "a", maker: did, until: 308 }, output: { id: "a", outcome: "void", reason: "settled" } }
@@ -1941,11 +2103,19 @@ const rawDecision = decide({
   latest,
   race
 });
-const entryDecision = controlledFallbackEntry(
+const fallbackDecision = controlledFallbackEntry(
   rawDecision,
   race,
   distinct,
   positions,
+  latest
+);
+const realNvdaSignal = await fetchRealNvdaSignal(now);
+const entryDecision = applyRealNvdaSignal(
+  fallbackDecision,
+  realNvdaSignal,
+  race,
+  distinct,
   latest
 );
 const sizedDecision = applyRaceSizing(entryDecision, race, latest.px);
