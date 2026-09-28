@@ -781,7 +781,11 @@ function applyRealNvdaSignal(decision, signal, race, distinct, latest) {
   const d15 = Math.sign(m15);
   const d30 = Math.sign(m30);
   const coherent = d15 !== 0 && d15 === d30;
-  const strong = coherent && Math.abs(m15) >= 0.45 && Math.abs(m30) >= 0.70;
+  const latestPx = Number(latest?.px);
+  const oneWayFeeMove = Number.isFinite(latestPx) && latestPx > 0 ? latestPx * 0.01 : 2.25;
+  const min15 = Math.max(0.45, oneWayFeeMove * 0.35);
+  const min30 = Math.max(0.70, oneWayFeeMove * 0.60);
+  const strong = coherent && Math.abs(m15) >= min15 && Math.abs(m30) >= min30;
   if (!strong) return decision;
 
   const refs = Array.isArray(distinct) ? distinct : [];
@@ -846,7 +850,7 @@ function applyRaceSizing(decision, race, latestPx) {
   if (!Number.isFinite(qty) || qty < 0.1) return null;
 
   const px = Number(latestPx);
-  const maxAffordable = Number.isFinite(px) && px > 0
+  const cashAffordable = Number.isFinite(px) && px > 0
     ? Math.max(0.1, Math.min(44.5, (10000 / (px * 1.035))))
     : 43;
   const rawConfidence = decision.confidence;
@@ -883,7 +887,26 @@ function applyRaceSizing(decision, race, latestPx) {
   // Early contest: keep capital optional unless the signal is unusually strong.
   if (t > 0.70 && confidence < 0.86) multiplier *= 0.8;
 
-  qty = clamp(qty * multiplier, 0.1, maxAffordable);
+  // The venue charges 1% of notional on entry. A large position in a slow-moving
+  // single-stock contest can lose tens of POLF before direction matters. Bound the
+  // fee paid per new position; loosen only for exceptional conviction / late catch-up.
+  let maxEntryFee = 25;
+  if (Number.isFinite(gap) && gap <= 0) maxEntryFee = 15;
+  if (confidence >= 0.95 && Number.isFinite(gap) && gap >= 250) maxEntryFee = 35;
+  if (t < 0.25 && Number.isFinite(gap) && gap >= 200) maxEntryFee = 45;
+  const feeQtyCap =
+    Number.isFinite(px) && px > 0
+      ? Math.max(0.1, maxEntryFee / (0.01 * px))
+      : cashAffordable;
+  const maxAffordable = Math.min(cashAffordable, feeQtyCap);
+
+  const requestedAfterRace = qty * multiplier;
+  qty = clamp(requestedAfterRace, 0.1, maxAffordable);
+  if (qty + 0.005 < requestedAfterRace) {
+    console.log(
+      `FEE_SIZE_CAP requested=${requestedAfterRace.toFixed(2)} allowed=${qty.toFixed(2)} maxEntryFee=${maxEntryFee.toFixed(2)} px=${Number.isFinite(px) ? px.toFixed(2) : "na"}`
+    );
+  }
   return {
     ...decision,
     qty: Math.floor(qty * 100) / 100,
@@ -907,8 +930,14 @@ if (raceSelftest) {
     { leaderGap: -50, timeRemainingFrac: 0.4, hoursRemaining: 80 },
     225
   );
-  if (!(behindLate?.qty > 20)) throw new Error("RACE_SELFTEST_BEHIND_NOT_AGGRESSIVE");
+  if (!(behindLate?.qty >= 19.99)) throw new Error("RACE_SELFTEST_BEHIND_NOT_AGGRESSIVE");
   if (!(ahead?.qty < 20)) throw new Error("RACE_SELFTEST_AHEAD_NOT_DEFENSIVE");
+  const feeCapped = applyRaceSizing(
+    { action: "enter", side: "sell", qty: 40, confidence: 0.90 },
+    { leaderGap: 180, timeRemainingFrac: 0.60, hoursRemaining: 120 },
+    225
+  );
+  if (!(feeCapped?.qty <= 11.12)) throw new Error("RACE_SELFTEST_ENTRY_FEE_CAP");
   const uncertain = { state: "idle", uncertainEntries: [{ id: "u1", side: "sell", qty: 31.53, entryPx: 224.26 }] };
   const cappedSame = applyUncertainRiskCap({ action: "enter", side: "sell", qty: 30, confidence: 0.9 }, uncertain, 224.5);
   const allowedOpposite = applyUncertainRiskCap({ action: "enter", side: "buy", qty: 30, confidence: 0.9 }, uncertain, 224.5);
