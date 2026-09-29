@@ -850,8 +850,8 @@ function aggressiveDirectionalEntry(signal, latest, race, catalyst) {
   const roundTripFeeMove = 0.02 * px;
   const viable = (target) => Math.abs(Number(target) - px) >= roundTripFeeMove + 0.55;
   const highPressure = Number.isFinite(gap) && gap >= 750;
-  const qtyStrong = highPressure ? 28 : Number.isFinite(gap) && gap >= 350 ? 24 : 20;
-  const qtyTurn = highPressure ? 24 : 18;
+  const qtyStrong = highPressure ? 38 : Number.isFinite(gap) && gap >= 350 ? 30 : 22;
+  const qtyTurn = highPressure ? 30 : 20;
 
   // After a major event, require continuation rather than a one-bar reversal.
   if (catalyst?.requireVeryStrong && !(s.continuationUp || s.continuationDown)) return null;
@@ -882,10 +882,10 @@ function aggressiveDirectionalEntry(signal, latest, race, catalyst) {
 
   // Breakouts: 4h may still lag; 5/15 trigger plus 30/60 continuation is enough.
   if (px > RANGE_BREAK_HIGH && px <= 239.5 && s.continuationUp && viable(242)) {
-    return { action: "enter", side: "buy", qty: highPressure ? 30 : 24, confidence: 0.98, reason: "aggr_breakout_long" };
+    return { action: "enter", side: "buy", qty: highPressure ? 40 : 30, confidence: 0.98, reason: "aggr_breakout_long" };
   }
   if (px < RANGE_BREAK_LOW && px >= 213 && s.continuationDown && viable(212.5)) {
-    return { action: "enter", side: "sell", qty: highPressure ? 30 : 24, confidence: 0.98, reason: "aggr_breakdown_short" };
+    return { action: "enter", side: "sell", qty: highPressure ? 40 : 30, confidence: 0.98, reason: "aggr_breakdown_short" };
   }
   return null;
 }
@@ -1201,14 +1201,14 @@ function applyRaceSizing(decision, race, latestPx) {
     Number.isFinite(gap) && gap >= 750 &&
     Number(race?.hoursRemaining) <= 144
   ) {
-    maxEntryFee = Math.max(maxEntryFee, 80);
+    maxEntryFee = Math.max(maxEntryFee, 100);
   }
   if (
     confidence >= 0.97 &&
     Number.isFinite(gap) && gap >= 1000 &&
     Number(race?.hoursRemaining) <= 72
   ) {
-    maxEntryFee = Math.max(maxEntryFee, 90);
+    maxEntryFee = Math.max(maxEntryFee, 105);
   }
   if (t < 0.25 && Number.isFinite(gap) && gap >= 200) maxEntryFee = Math.max(maxEntryFee, 45);
   const feeQtyCap =
@@ -1286,8 +1286,8 @@ if (raceSelftest) {
   const earlyDownSignal = { fresh: true, move5: -0.22, move15: -0.48, move30: -0.62, move60: -0.20, move240: 1.40 };
   const earlyLong = aggressiveDirectionalEntry(earlyUpSignal, { px: 226.0 }, { leaderGap: 1200, hoursRemaining: 100 }, { blockNewEntries: false, requireVeryStrong: false });
   const earlyShort = aggressiveDirectionalEntry(earlyDownSignal, { px: 230.8 }, { leaderGap: 1200, hoursRemaining: 100 }, { blockNewEntries: false, requireVeryStrong: false });
-  if (!(earlyLong?.side === "buy" && earlyLong.qty >= 28)) throw new Error("RACE_SELFTEST_EARLY_LONG");
-  if (!(earlyShort?.side === "sell" && earlyShort.qty >= 24)) throw new Error("RACE_SELFTEST_EARLY_SHORT");
+  if (!(earlyLong?.side === "buy" && earlyLong.qty >= 38)) throw new Error("RACE_SELFTEST_EARLY_LONG");
+  if (!(earlyShort?.side === "sell" && earlyShort.qty >= 30)) throw new Error("RACE_SELFTEST_EARLY_SHORT");
   const profitLock = tacticalExitDecision(
     { state: "open", side: "buy", qty: 30, entryPx: 220, entryFeeEst: 66 },
     { fresh: true, move5: -0.25, move15: -0.45, move30: 0.10, move60: 0.40, move240: 1.20 },
