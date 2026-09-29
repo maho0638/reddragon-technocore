@@ -1443,7 +1443,7 @@ if (raceSelftest) {
   if (directionalFeeRoom("sell", 222.0)) throw new Error("RACE_SELFTEST_FEE_ROOM_BLOCK_NEAR_TARGET");
   const activeLong = activeContestEntry(
     { fresh: true, move5: 0.10, move15: 0.24, move30: 0.18, move60: 0.00, move240: -0.60 },
-    { px: 231.0 },
+    { px: 228.0 },
     { leaderGap: 1200, hoursRemaining: 100 },
     { blockNewEntries: false }
   );
