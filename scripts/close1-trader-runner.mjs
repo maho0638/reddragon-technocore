@@ -2521,6 +2521,7 @@ if (state.state === "entry_offer") {
 }
 
 if (state.state === "entry_accepted") {
+  let releasedAmbiguousEntry = false;
   const outcome = await findOutcome(state.id, Number(state.acceptedAtSweep || state.entrySweep || 0));
   const expectedSign = state.side === "buy" ? 1 : -1;
   const expectedVisibleQty = state.priorOpen ? Number(state.priorOpen.qty || 0) + Number(state.qty) * 0.75 : Number(state.qty) * 0.75;
@@ -2576,6 +2577,7 @@ if (state.state === "entry_accepted") {
         lastAmbiguousId: state.id
       };
       await setState(state);
+      releasedAmbiguousEntry = true;
       console.log(
         `ENTRY_AMBIGUOUS_RELEASED id=${entries.at(-1)?.id || "?"} lo=${env.lo.toFixed(2)} hi=${env.hi.toFixed(2)}`
       );
@@ -2592,7 +2594,7 @@ if (state.state === "entry_accepted") {
     }
   }
 
-  if (outcome?.outcome === "settled" || topEvidence || peerEvidence?.settled) {
+  if (!releasedAmbiguousEntry && (outcome?.outcome === "settled" || topEvidence || peerEvidence?.settled)) {
     const open = state.priorOpen
       ? mergeOpenPosition(state.priorOpen, state, outcome?.n || Number(state.acceptedAtSweep || latest.n))
       : {
@@ -2610,7 +2612,7 @@ if (state.state === "entry_accepted") {
     await setState(open);
     console.log("POSITION_OPEN");
     state = open;
-  } else if (Number(latest.n) >= Number(state.acceptedAtSweep || latest.n) + 2) {
+  } else if (!releasedAmbiguousEntry && Number(latest.n) >= Number(state.acceptedAtSweep || latest.n) + 2) {
     const acceptedAt = Number(state.acceptedAtSweep || state.entrySweep || latest.n);
     const entries = uncertainEntries(state);
     if (!entries.some((x) => x.id === state.id)) {
@@ -2632,7 +2634,7 @@ if (state.state === "entry_accepted") {
     };
     await setState(state);
     console.log("ENTRY_UNVERIFIED_RELEASED");
-  } else {
+  } else if (!releasedAmbiguousEntry) {
     console.log("ENTRY_PENDING_SWEEP");
     process.exit(0);
   }
