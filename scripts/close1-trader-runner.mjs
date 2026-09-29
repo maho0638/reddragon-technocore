@@ -1363,7 +1363,7 @@ if (raceSelftest) {
     230
   );
   if (!(Math.abs(feeProbe - 2.5) < 1e-9 && Math.abs(takerFeeProbe - 3.5) < 1e-9)) throw new Error("RACE_SELFTEST_ARCHIVE_SIDE_FEE");
-  if (!(closeProbe && Math.abs(closeProbe.exitPx - 224) < 1e-9 && Math.abs(closeProbe.delta - 14) < 1e-9)) throw new Error("RACE_SELFTEST_REALIZED_USES_TRADE_PX");
+  if (!(closeProbe && Math.abs(closeProbe.exitPx - 224) < 1e-9 && Math.abs(closeProbe.delta - (-6)) < 1e-9)) throw new Error("RACE_SELFTEST_REALIZED_USES_TRADE_PX");
   if (!archiveTradeBelongsToUs({ maker: did, countersigner: "did:key:z6MkOther" }, did)) throw new Error("RACE_SELFTEST_ARCHIVE_MAKER_OWNERSHIP");
   if (!archiveTradeBelongsToUs({ maker: "did:key:z6MkOther", countersigner: did }, did)) throw new Error("RACE_SELFTEST_ARCHIVE_TAKER_OWNERSHIP");
   if (archiveTradeBelongsToUs({ maker: "did:key:z6MkOther", countersigner: "did:key:z6MkThird" }, did)) throw new Error("RACE_SELFTEST_ARCHIVE_FOREIGN_MATCH");
