@@ -965,6 +965,11 @@ function confirmedShadowExitDecision(entry, signal, latest, race, catalyst) {
   const short = entry.side === "sell";
   const favorableStrong = short ? trend.strongDown : trend.strongUp;
   const adverseStrong = short ? trend.strongUp : trend.strongDown;
+  const shape = directionalShape(signal);
+  const direction = short ? -1 : 1;
+  const favorableMove = direction * (px - Number(entry.entryPx));
+  const fastAdverse = short ? shape.fastUp : shape.fastDown;
+  const continuationAdverse = short ? shape.continuationUp : shape.continuationDown;
   const profit = profitThresholds(entry.qty, entry.entryPx, px);
   if (net >= profit.bank) {
     return { exit: true, reason: "shadow_bank_meaningful_profit", net, trend, profit };
@@ -977,6 +982,12 @@ function confirmedShadowExitDecision(entry, signal, latest, race, catalyst) {
   }
   if (Number(race?.hoursRemaining) <= FINAL_NO_NEW_ENTRY_HOURS && net >= 0) {
     return { exit: true, reason: "shadow_final_protect", net, trend };
+  }
+  if (favorableMove <= -0.80 && fastAdverse && continuationAdverse) {
+    return { exit: true, reason: "shadow_fast_directional_stop", net, trend };
+  }
+  if (favorableMove <= -1.50 && continuationAdverse) {
+    return { exit: true, reason: "shadow_directional_stop", net, trend };
   }
   if (short && px <= 223 && adverseStrong) return { exit: true, reason: "shadow_lower_band_reversal", net, trend };
   if (short && px >= RANGE_BREAK_HIGH && adverseStrong) return { exit: true, reason: "shadow_breakout_stop", net, trend };
@@ -1261,6 +1272,8 @@ function applyRaceSizing(decision, race, latestPx) {
 }
 
 if (raceSelftest) {
+  const ttlProbe = makeOffer("buy", 1, { n: 100, px: 225 }, "test");
+  if (ttlProbe.until !== 101) throw new Error("RACE_SELFTEST_FAST_REPRICE_TTL");
   const base = { action: "enter", side: "buy", qty: 20, confidence: 0.9 };
   const behindLate = applyRaceSizing(
     base,
@@ -1404,9 +1417,17 @@ if (raceSelftest) {
   const finalBlocked = applyCalendarRiskGate({ action: "enter", side: "buy", qty: 10, confidence: 0.99 }, strongUpSignal, { hoursRemaining: 10 }, { active: null, blockNewEntries: false, requireVeryStrong: false });
   if (finalBlocked !== null) throw new Error("RACE_SELFTEST_FINAL_ENTRY_BLOCK");
   const shadowRun = confirmedShadowExitDecision(confirmedShadow, strongDownSignal, { px: 219.30 }, { hoursRemaining: 100 }, { active: null });
+  const shadowFastStop = confirmedShadowExitDecision(
+    confirmedShadow,
+    { fresh: true, move5: 0.30, move15: 0.60, move30: 0.90, move60: 0.70, move240: -0.20 },
+    { px: 225.20 },
+    { hoursRemaining: 100 },
+    { active: null }
+  );
   const shadowRescue = confirmedShadowExitDecision(confirmedShadow, strongUpSignal, { px: 222.00 }, { hoursRemaining: 100 }, { active: null });
   const shadowHardTake = confirmedShadowExitDecision(confirmedShadow, strongDownSignal, { px: 218.00 }, { hoursRemaining: 100 }, { active: null });
   if (!(shadowRun?.exit === false && shadowRun.reason === "shadow_hold")) throw new Error("RACE_SELFTEST_SHADOW_PROFIT_RUN");
+  if (!(shadowFastStop?.exit === true && shadowFastStop.reason === "shadow_fast_directional_stop")) throw new Error("RACE_SELFTEST_SHADOW_FAST_STOP");
   if (!(shadowRescue?.exit === true && shadowRescue.reason === "shadow_lower_band_reversal")) throw new Error("RACE_SELFTEST_SHADOW_RESCUE");
   if (!(shadowHardTake?.exit === true && shadowHardTake.reason === "shadow_bank_meaningful_profit")) throw new Error("RACE_SELFTEST_SHADOW_HARD_TAKE");
   const openStop = tacticalExitDecision({ state: "open", side: "sell", qty: 10, entryPx: 232, entryFeeEst: 23.2 }, strongUpSignal, { px: 235 }, { hoursRemaining: 100 }, { active: null });
@@ -1655,7 +1676,7 @@ function makeOffer(side, qty, latest, prefix) {
   if (!["buy", "sell"].includes(side)) throw new Error("invalid side");
   if (!Number.isFinite(qty) || qty < 0.1 || qty > 60) throw new Error("invalid qty");
   const id = `${prefix}-${latest.n}-${Date.now().toString(36).slice(-7)}`;
-  const until = Number(latest.n) + 3;
+  const until = Number(latest.n) + 1;
   const terms = {
     id,
     maker: did,
@@ -1783,9 +1804,16 @@ async function findReliableOpposingOffer(decision, latest) {
     const maker = String(terms.maker);
     const settledCount = makerSettled.get(maker) || 0;
     const fundsFails = makerFundsVoid.get(maker) || 0;
-    if (settledCount < 1) continue;
+    const confidence = Number(decision?.confidence || 0);
+    const pristineHighConviction =
+      settledCount === 0 &&
+      fundsFails === 0 &&
+      confidence >= 0.97 &&
+      Math.abs(px - refPx) / refPx <= 0.015 &&
+      qty <= desiredQty * 1.10;
+    if (settledCount < 1 && !pristineHighConviction) continue;
 
-    const reliability = settledCount - 1.5 * fundsFails;
+    const reliability = settledCount - 1.5 * fundsFails + (pristineHighConviction ? 0.25 : 0);
     const sizeFit = -Math.abs(qty - desiredQty) / Math.max(1, desiredQty);
     const priceFit = -Math.abs(px - refPx) / refPx;
     const recency = Number(roomMsgs[i]?.seq || 0);
