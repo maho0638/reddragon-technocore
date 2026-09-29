@@ -840,6 +840,45 @@ function directionalShape(signal) {
   };
 }
 
+function activeContestEntry(signal, latest, race, catalyst) {
+  if (!signal?.fresh || catalyst?.blockNewEntries) return null;
+  const hours = Number(race?.hoursRemaining);
+  if (!Number.isFinite(hours) || hours <= FINAL_NO_NEW_ENTRY_HOURS) return null;
+  const px = Number(latest?.px);
+  const gap = Number(race?.leaderGap);
+  if (!Number.isFinite(px) || px <= 0) return null;
+
+  const m5 = Number(signal.move5);
+  const m15 = Number(signal.move15);
+  const m30 = Number(signal.move30);
+  const m60 = Number(signal.move60);
+  if (![m5, m15].every(Number.isFinite)) return null;
+
+  const up = m5 >= 0.08 && m15 >= 0.20;
+  const down = m5 <= -0.08 && m15 <= -0.20;
+  if (!up && !down) return null;
+
+  const notOpposed = up
+    ? (!Number.isFinite(m30) || m30 >= -0.25) && (!Number.isFinite(m60) || m60 >= -0.50)
+    : (!Number.isFinite(m30) || m30 <= 0.25) && (!Number.isFinite(m60) || m60 <= 0.50);
+  if (!notOpposed) return null;
+
+  const supported = up
+    ? (!Number.isFinite(m30) || m30 >= 0.15) && (!Number.isFinite(m60) || m60 >= -0.10)
+    : (!Number.isFinite(m30) || m30 <= -0.15) && (!Number.isFinite(m60) || m60 <= 0.10);
+
+  const highPressure = Number.isFinite(gap) && gap >= 750;
+  const qty = highPressure ? (supported ? 40 : 34) : (supported ? 30 : 24);
+  const confidence = highPressure ? 0.97 : supported ? 0.96 : 0.94;
+  return {
+    action: "enter",
+    side: up ? "buy" : "sell",
+    qty,
+    confidence,
+    reason: supported ? "active_direction_supported" : "active_direction_early"
+  };
+}
+
 function aggressiveDirectionalEntry(signal, latest, race, catalyst) {
   if (!signal?.fresh) return null;
   if (catalyst?.blockNewEntries) return null;
@@ -971,6 +1010,9 @@ function confirmedShadowExitDecision(entry, signal, latest, race, catalyst) {
   const fastAdverse = short ? shape.fastUp : shape.fastDown;
   const continuationAdverse = short ? shape.continuationUp : shape.continuationDown;
   const profit = profitThresholds(entry.qty, entry.entryPx, px);
+  if (net <= -120 && !favorableStrong) {
+    return { exit: true, reason: "shadow_capital_release_stop", net, trend };
+  }
   if (net >= profit.bank) {
     return { exit: true, reason: "shadow_bank_meaningful_profit", net, trend, profit };
   }
@@ -1233,7 +1275,7 @@ function applyRaceSizing(decision, race, latestPx) {
   if (Number.isFinite(gap) && gap <= 0) maxEntryFee = 15;
   if (confidence >= 0.95 && Number.isFinite(gap) && gap >= 250) maxEntryFee = Math.max(maxEntryFee, 45);
   if (
-    confidence >= 0.97 &&
+    confidence >= 0.95 &&
     Number.isFinite(gap) && gap >= 750 &&
     Number(race?.hoursRemaining) <= 144
   ) {
@@ -1328,6 +1370,22 @@ if (raceSelftest) {
   const downTrend = multiTimeframeTrend(strongDownSignal);
   const upTrend = multiTimeframeTrend(strongUpSignal);
   if (!(downTrend.veryStrongDown && upTrend.veryStrongUp)) throw new Error("RACE_SELFTEST_MTF_DIRECTION");
+  const activeLong = activeContestEntry(
+    { fresh: true, move5: 0.10, move15: 0.24, move30: 0.18, move60: 0.00, move240: -0.60 },
+    { px: 231.0 },
+    { leaderGap: 1200, hoursRemaining: 100 },
+    { blockNewEntries: false }
+  );
+  const activeBlocked = activeContestEntry(
+    { fresh: true, move5: 0.10, move15: 0.24, move30: -0.60, move60: -0.80, move240: -1.20 },
+    { px: 231.0 },
+    { leaderGap: 1200, hoursRemaining: 100 },
+    { blockNewEntries: false }
+  );
+  if (!(activeLong?.side === "buy" && activeLong.qty >= 34 && activeLong.confidence >= 0.97)) {
+    throw new Error("RACE_SELFTEST_ACTIVE_CONTEST_ENTRY");
+  }
+  if (activeBlocked !== null) throw new Error("RACE_SELFTEST_ACTIVE_OPPOSITION_BLOCK");
   const earlyUpSignal = { fresh: true, move5: 0.22, move15: 0.48, move30: 0.62, move60: 0.20, move240: -1.40 };
   const earlyDownSignal = { fresh: true, move5: -0.22, move15: -0.48, move30: -0.62, move60: -0.20, move240: 1.40 };
   const earlyLong = aggressiveDirectionalEntry(earlyUpSignal, { px: 226.0 }, { leaderGap: 1200, hoursRemaining: 100 }, { blockNewEntries: false, requireVeryStrong: false });
@@ -1426,10 +1484,18 @@ if (raceSelftest) {
   );
   const shadowRescue = confirmedShadowExitDecision(confirmedShadow, strongUpSignal, { px: 222.00 }, { hoursRemaining: 100 }, { active: null });
   const shadowHardTake = confirmedShadowExitDecision(confirmedShadow, strongDownSignal, { px: 218.00 }, { hoursRemaining: 100 }, { active: null });
+  const shadowRelease = confirmedShadowExitDecision(
+    confirmedShadow,
+    { fresh: true, move5: 0.00, move15: 0.00, move30: 0.10, move60: 0.20, move240: 0.50 },
+    { px: 231.0 },
+    { hoursRemaining: 100 },
+    { active: null }
+  );
   if (!(shadowRun?.exit === false && shadowRun.reason === "shadow_hold")) throw new Error("RACE_SELFTEST_SHADOW_PROFIT_RUN");
   if (!(shadowFastStop?.exit === true && shadowFastStop.reason === "shadow_fast_directional_stop")) throw new Error("RACE_SELFTEST_SHADOW_FAST_STOP");
   if (!(shadowRescue?.exit === true && shadowRescue.reason === "shadow_lower_band_reversal")) throw new Error("RACE_SELFTEST_SHADOW_RESCUE");
   if (!(shadowHardTake?.exit === true && shadowHardTake.reason === "shadow_bank_meaningful_profit")) throw new Error("RACE_SELFTEST_SHADOW_HARD_TAKE");
+  if (!(shadowRelease?.exit === true && shadowRelease.reason === "shadow_capital_release_stop")) throw new Error("RACE_SELFTEST_SHADOW_CAPITAL_RELEASE");
   const openStop = tacticalExitDecision({ state: "open", side: "sell", qty: 10, entryPx: 232, entryFeeEst: 23.2 }, strongUpSignal, { px: 235 }, { hoursRemaining: 100 }, { active: null });
   if (!(openStop?.exit === true && ["fast_directional_stop", "directional_stop"].includes(openStop.reason))) throw new Error("RACE_SELFTEST_OPEN_STOP");
   const catchUpRefs = Array.from({ length: 24 }, (_, i) => ({ px: 224.50 + i * 0.001 }));
@@ -2925,8 +2991,9 @@ const rawDecision = decide({
   latest,
   race
 });
+const activeDecision = activeContestEntry(realNvdaSignal, latest, race, catalyst);
 const aggressiveDecision = aggressiveDirectionalEntry(realNvdaSignal, latest, race, catalyst);
-const tacticalDecision = aggressiveDecision || tacticalRangeEntry(realNvdaSignal, latest, race, catalyst) || rawDecision;
+const tacticalDecision = activeDecision || aggressiveDecision || tacticalRangeEntry(realNvdaSignal, latest, race, catalyst) || rawDecision;
 const fallbackDecision = controlledFallbackEntry(
   tacticalDecision,
   race,
