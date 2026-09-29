@@ -890,16 +890,16 @@ function tacticalRangeEntry(signal, latest, race, catalyst) {
   const viable = (target) => Math.abs(Number(target) - px) >= roundTripFeeMove + 0.75;
 
   if (px >= 231.5 && px <= 234.5 && trend.strongDown && viable(223)) {
-    return { action: "enter", side: "sell", qty: 10, confidence: trend.veryStrongDown ? 0.97 : 0.94, reason: "upper_band_reversal" };
+    return { action: "enter", side: "sell", qty: trend.veryStrongDown ? 20 : 12, confidence: trend.veryStrongDown ? 0.97 : 0.94, reason: "upper_band_reversal" };
   }
   if (px >= 219 && px <= 222.5 && trend.strongUp && viable(230)) {
-    return { action: "enter", side: "buy", qty: 10, confidence: trend.veryStrongUp ? 0.97 : 0.94, reason: "lower_band_reversal" };
+    return { action: "enter", side: "buy", qty: trend.veryStrongUp ? 20 : 12, confidence: trend.veryStrongUp ? 0.97 : 0.94, reason: "lower_band_reversal" };
   }
   if (px > RANGE_BREAK_HIGH && px <= 239 && trend.veryStrongUp && viable(241)) {
-    return { action: "enter", side: "buy", qty: 8, confidence: 0.97, reason: "range_breakout_up" };
+    return { action: "enter", side: "buy", qty: 18, confidence: 0.97, reason: "range_breakout_up" };
   }
   if (px < RANGE_BREAK_LOW && px >= 213.5 && trend.veryStrongDown && viable(214)) {
-    return { action: "enter", side: "sell", qty: 8, confidence: 0.97, reason: "range_breakdown_down" };
+    return { action: "enter", side: "sell", qty: 18, confidence: 0.97, reason: "range_breakdown_down" };
   }
   return null;
 }
@@ -1021,7 +1021,7 @@ function applyRealNvdaSignal(decision, signal, race, distinct, latest) {
   if (decision?.action === "enter") {
     if (String(decision.side) === side) {
       const boostedQty = Number.isFinite(Number(decision.qty))
-        ? Number(decision.qty) * 1.15
+        ? Number(decision.qty) * (trend.veryStrongUp || trend.veryStrongDown ? 1.35 : 1.15)
         : decision.qty;
       console.log(
         `REAL_NVDA_CONFIRM side=${side} trend=${trend.label} ratio=${trend.ratio.toFixed(2)} m15=${m15.toFixed(2)} m30=${m30.toFixed(2)} xyz15=${xyzMove15.toFixed(2)}`
@@ -1046,7 +1046,8 @@ function applyRealNvdaSignal(decision, signal, race, distinct, latest) {
 
   if (!Number.isFinite(gap) || gap < 175 || !alignedOrLagging) return decision;
 
-  const qty = gap >= 300 ? 16 : 12;
+  const veryStrong = trend.veryStrongUp || trend.veryStrongDown;
+  const qty = veryStrong && gap >= 750 ? 24 : gap >= 300 ? 16 : 12;
   console.log(
     `REAL_NVDA_SCOUT side=${side} qty=${qty.toFixed(2)} trend=${trend.label} ratio=${trend.ratio.toFixed(2)} m15=${m15.toFixed(2)} m30=${m30.toFixed(2)} xyz15=${xyzMove15.toFixed(2)} gap=${gap.toFixed(2)}`
   );
@@ -1107,8 +1108,22 @@ function applyRaceSizing(decision, race, latestPx) {
   // fee paid per new position; loosen only for exceptional conviction / late catch-up.
   let maxEntryFee = 25;
   if (Number.isFinite(gap) && gap <= 0) maxEntryFee = 15;
-  if (confidence >= 0.95 && Number.isFinite(gap) && gap >= 250) maxEntryFee = 35;
-  if (t < 0.25 && Number.isFinite(gap) && gap >= 200) maxEntryFee = 45;
+  if (confidence >= 0.95 && Number.isFinite(gap) && gap >= 250) maxEntryFee = Math.max(maxEntryFee, 45);
+  if (
+    confidence >= 0.97 &&
+    Number.isFinite(gap) && gap >= 750 &&
+    Number(race?.hoursRemaining) <= 144
+  ) {
+    maxEntryFee = Math.max(maxEntryFee, 60);
+  }
+  if (
+    confidence >= 0.97 &&
+    Number.isFinite(gap) && gap >= 1000 &&
+    Number(race?.hoursRemaining) <= 72
+  ) {
+    maxEntryFee = Math.max(maxEntryFee, 70);
+  }
+  if (t < 0.25 && Number.isFinite(gap) && gap >= 200) maxEntryFee = Math.max(maxEntryFee, 45);
   const feeQtyCap =
     Number.isFinite(px) && px > 0
       ? Math.max(0.1, maxEntryFee / (0.01 * px))
@@ -1153,6 +1168,14 @@ if (raceSelftest) {
     225
   );
   if (!(feeCapped?.qty <= 11.12)) throw new Error("RACE_SELFTEST_ENTRY_FEE_CAP");
+  const highConvictionCatchUp = applyRaceSizing(
+    { action: "enter", side: "buy", qty: 24, confidence: 0.97 },
+    { leaderGap: 1200, timeRemainingFrac: 0.56, hoursRemaining: 120 },
+    230
+  );
+  if (!(highConvictionCatchUp?.qty >= 25 && highConvictionCatchUp?.qty <= 26.09)) {
+    throw new Error("RACE_SELFTEST_HIGH_CONVICTION_CATCHUP_SIZE");
+  }
   const uncertain = { state: "idle", uncertainEntries: [{ id: "u1", side: "sell", qty: 31.53, entryPx: 224.26 }] };
   const cappedSame = applyUncertainRiskCap({ action: "enter", side: "sell", qty: 30, confidence: 0.9 }, uncertain, 224.5);
   const allowedOpposite = applyUncertainRiskCap({ action: "enter", side: "buy", qty: 30, confidence: 0.9 }, uncertain, 224.5);
@@ -1536,7 +1559,7 @@ async function findReliableOpposingOffer(decision, latest) {
   }
 
   const oppositeMakerSide = desiredSide === "buy" ? "sell" : "buy";
-  const minQty = Math.max(0.1, desiredQty * 0.35);
+  const minQty = Math.max(0.1, desiredQty * 0.60);
   const maxQty = Math.min(60, desiredQty * 1.35);
   const refPx = Number(latest.px);
   const candidates = [];
