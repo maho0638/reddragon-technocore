@@ -923,6 +923,9 @@ function tacticalExitDecision(openState, signal, latest, race, catalyst) {
   if (net >= 8 && catalyst?.active?.phase === "pre") return { exit: true, reason: "event_profit_lock", net, trend };
 
   // Cut a wrong directional thesis by price movement, not by fee-distorted net PnL.
+  if (favorableMove <= -0.80 && fastAdverse && continuationAdverse) {
+    return { exit: true, reason: "fast_directional_stop", net, trend };
+  }
   if (favorableMove <= -1.50 && continuationAdverse) {
     return { exit: true, reason: "directional_stop", net, trend };
   }
@@ -1298,6 +1301,36 @@ if (raceSelftest) {
   if (!(profitLock?.exit === true && profitLock.reason === "fast_reversal_profit_lock")) {
     throw new Error("RACE_SELFTEST_FAST_PROFIT_LOCK");
   }
+  const fastStop = tacticalExitDecision(
+    { state: "open", side: "buy", qty: 30, entryPx: 230, entryFeeEst: 69 },
+    { fresh: true, move5: -0.30, move15: -0.55, move30: -0.80, move60: -0.60, move240: 0.50 },
+    { px: 229.0 },
+    { hoursRemaining: 100 },
+    { active: null }
+  );
+  if (!(fastStop?.exit === true && fastStop.reason === "fast_directional_stop")) throw new Error("RACE_SELFTEST_FAST_DIRECTIONAL_STOP");
+  const scaleWinner = scaleInDecision(
+    { state: "open", side: "buy", qty: 24, entryPx: 225, addCount: 0, uncertainEntries: [] },
+    { fresh: true, move5: 0.25, move15: 0.55, move30: 0.80, move60: 0.60, move240: -0.40 },
+    { px: 226.2, n: 1000 },
+    { leaderGap: 1200, hoursRemaining: 100 },
+    { blockNewEntries: false }
+  );
+  const noAverageDown = scaleInDecision(
+    { state: "open", side: "buy", qty: 24, entryPx: 225, addCount: 0, uncertainEntries: [] },
+    { fresh: true, move5: 0.25, move15: 0.55, move30: 0.80, move60: 0.60, move240: -0.40 },
+    { px: 224.2, n: 1000 },
+    { leaderGap: 1200, hoursRemaining: 100 },
+    { blockNewEntries: false }
+  );
+  if (!(scaleWinner?.side === "buy" && scaleWinner.qty >= 3)) throw new Error("RACE_SELFTEST_SCALE_WINNER");
+  if (noAverageDown !== null) throw new Error("RACE_SELFTEST_NO_AVERAGE_DOWN");
+  const mergedAdd = mergeOpenPosition(
+    { state: "open", side: "buy", qty: 20, entryPx: 225, entryFeeEst: 45, addCount: 0, uncertainEntries: [] },
+    { state: "entry_accepted", side: "buy", qty: 5, entryPx: 227, entryFeeEst: 11.35, realizedScoreEst: 0, uncertainEntries: [] },
+    1001
+  );
+  if (!(Math.abs(mergedAdd.qty - 25) < 1e-9 && mergedAdd.entryPx > 225 && mergedAdd.entryPx < 227 && mergedAdd.addCount === 1)) throw new Error("RACE_SELFTEST_MERGE_ADD");
   const prePce = catalystContext(Date.parse("2026-09-30T12:00:00Z"));
   const postPce = catalystContext(Date.parse("2026-09-30T12:45:00Z"));
   if (!(prePce.blockNewEntries && prePce.active?.name === "PCE_GDP")) throw new Error("RACE_SELFTEST_CATALYST_PRE");
@@ -1703,7 +1736,76 @@ async function findReliableOpposingOffer(decision, latest) {
   return candidates[0] || null;
 }
 
-async function takeReliableOffer(match, decision, latest, priorState = {}) {
+function mergeOpenPosition(priorOpen, addState, settledSweep) {
+  const oldQty = Number(priorOpen?.qty);
+  const addQty = Number(addState?.qty);
+  const oldPx = Number(priorOpen?.entryPx);
+  const addPx = Number(addState?.entryPx);
+  if (![oldQty, addQty, oldPx, addPx].every(Number.isFinite) || oldQty <= 0 || addQty <= 0) throw new Error("INVALID_ADD_POSITION_STATE");
+  if (String(priorOpen?.side) !== String(addState?.side)) throw new Error("ADD_POSITION_SIDE_MISMATCH");
+  const totalQty = oldQty + addQty;
+  return {
+    ...priorOpen,
+    state: "open",
+    qty: totalQty,
+    entryPx: (oldQty * oldPx + addQty * addPx) / totalQty,
+    entryFeeEst: Number(priorOpen.entryFeeEst || (0.01 * oldQty * oldPx)) + Number(addState.entryFeeEst || (0.01 * addQty * addPx)),
+    realizedScoreEst: Number(addState.realizedScoreEst ?? priorOpen.realizedScoreEst ?? 0),
+    uncertainEntries: uncertainEntries(addState),
+    addCount: Number(priorOpen.addCount || 0) + 1,
+    lastAddQty: addQty,
+    lastAddPx: addPx,
+    lastAddSweep: Number(settledSweep || addState.acceptedAtSweep || addState.entrySweep || priorOpen.entrySweep)
+  };
+}
+
+function restorePriorOpen(state, latestSweep, reason) {
+  const prior = state?.priorOpen;
+  if (!prior || prior.state !== "open") return null;
+  return {
+    ...prior,
+    state: "open",
+    realizedScoreEst: Number(state.realizedScoreEst ?? prior.realizedScoreEst ?? 0),
+    uncertainEntries: uncertainEntries(state),
+    lastAddFailure: reason || "unknown",
+    addRetryAfterSweep: Number(latestSweep || 0) + 1
+  };
+}
+
+function scaleInDecision(openState, signal, latest, race, catalyst) {
+  if (!signal?.fresh || catalyst?.blockNewEntries) return null;
+  const hours = Number(race?.hoursRemaining);
+  if (!Number.isFinite(hours) || hours <= FINAL_NO_NEW_ENTRY_HOURS) return null;
+  const px = Number(latest?.px), entryPx = Number(openState?.entryPx), qty = Number(openState?.qty);
+  if (![px, entryPx, qty].every(Number.isFinite) || qty <= 0) return null;
+  if (Number(openState.addRetryAfterSweep || 0) > Number(latest?.n || 0)) return null;
+  if (Number(openState.addCount || 0) >= 2) return null;
+  if (uncertainEntries(openState).length) return null;
+
+  const shape = directionalShape(signal);
+  const long = openState.side === "buy";
+  const favorableMove = long ? px - entryPx : entryPx - px;
+  const continuation = long ? shape.continuationUp : shape.continuationDown;
+  const fastAdverse = long ? shape.fastDown : shape.fastUp;
+  if (!continuation || fastAdverse) return null;
+
+  const trigger = Number(openState.addCount || 0) === 0 ? 0.80 : 1.60;
+  if (favorableMove < trigger) return null;
+
+  const totalCap = Math.max(0, Math.min(43, 10000 / (px * 1.04)));
+  const remainingCap = Math.max(0, totalCap - qty);
+  if (remainingCap < 3) return null;
+
+  const gap = Number(race?.leaderGap);
+  const desired = Number(openState.addCount || 0) === 0
+    ? (Number.isFinite(gap) && gap >= 750 ? 10 : 7)
+    : (Number.isFinite(gap) && gap >= 750 ? 7 : 5);
+  const addQty = Math.floor(Math.min(desired, remainingCap) * 100) / 100;
+  if (addQty < 3) return null;
+  return { action: "enter", side: openState.side, qty: addQty, confidence: 0.98, reason: Number(openState.addCount || 0) === 0 ? "scale_in_winner_1" : "scale_in_winner_2" };
+}
+
+async function takeReliableOffer(match, decision, latest, priorState = {}, priorOpen = null) {
   const terms = match.b.terms;
   const side = String(decision.side);
   const qty = Number(terms.qty);
@@ -1728,7 +1830,9 @@ async function takeReliableOffer(match, decision, latest, priorState = {}) {
     entrySweep: Number(latest.n),
     realizedScoreEst: Number(priorState.realizedScoreEst || 0),
     liquidityRole: "taker",
-    maker: String(terms.maker)
+    maker: String(terms.maker),
+    priorOpen: priorOpen ? { ...priorOpen } : null,
+    entryPurpose: priorOpen ? "add" : "new"
   };
   await setState(preflight);
   const posted = await signedPost(ROOM, text);
@@ -1743,6 +1847,20 @@ async function takeReliableOffer(match, decision, latest, priorState = {}) {
   console.log(
     `ENTRY_TAKE side=${side} qty=${qty.toFixed(2)} px=${px.toFixed(2)} maker=${String(terms.maker).slice(0, 24)} seq=${posted.seq || "?"}`
   );
+}
+
+async function postScaleIn(decision, latest, openState) {
+  if (!execute) {
+    console.log(`DRY_SCALE_IN side=${decision.side} qty=${Number(decision.qty).toFixed(2)}`);
+    return true;
+  }
+  const match = await findReliableOpposingOffer(decision, latest);
+  if (!match) {
+    console.log(`SCALE_IN_NO_LIQUIDITY side=${decision.side} qty=${Number(decision.qty).toFixed(2)}`);
+    return false;
+  }
+  await takeReliableOffer(match, decision, latest, openState, openState);
+  return true;
 }
 
 async function findAcceptance(id) {
@@ -2229,10 +2347,11 @@ if (state.state === "entry_offer") {
 if (state.state === "entry_accepted") {
   const outcome = await findOutcome(state.id, Number(state.acceptedAtSweep || state.entrySweep || 0));
   const expectedSign = state.side === "buy" ? 1 : -1;
+  const expectedVisibleQty = state.priorOpen ? Number(state.priorOpen.qty || 0) + Number(state.qty) * 0.75 : Number(state.qty) * 0.75;
   const topEvidence =
     Number.isFinite(ownPos) &&
     Math.sign(ownPos) === expectedSign &&
-    Math.abs(ownPos) >= Math.max(0.1, Number(state.qty) * 0.75);
+    Math.abs(ownPos) >= Math.max(0.1, expectedVisibleQty);
   const peerEvidence = peerSettlementEvidence(positions, state, latest.n);
   if (peerEvidence) {
     console.log(
@@ -2241,15 +2360,21 @@ if (state.state === "entry_accepted") {
   }
 
   if (outcome?.outcome === "void") {
-    await setState({
-      state: "idle",
-      cooldownUntilSweep: Number(latest.n) + 1,
-      lastVoid: outcome.reason,
-      lastVoidId: state.id,
-      realizedScoreEst: Number(state.realizedScoreEst || 0),
-      uncertainEntries: uncertainEntries(state)
-    });
-    console.log(`ENTRY_VOID reason=${outcome.reason} n=${outcome.n ?? "na"} id=${state.id}`);
+    const restoredOpen = restorePriorOpen(state, latest.n, outcome.reason);
+    if (restoredOpen) {
+      await setState(restoredOpen);
+      console.log(`ADD_VOID_RESTORE_OPEN reason=${outcome.reason} n=${outcome.n ?? "na"} id=${state.id}`);
+    } else {
+      await setState({
+        state: "idle",
+        cooldownUntilSweep: Number(latest.n) + 1,
+        lastVoid: outcome.reason,
+        lastVoidId: state.id,
+        realizedScoreEst: Number(state.realizedScoreEst || 0),
+        uncertainEntries: uncertainEntries(state)
+      });
+      console.log(`ENTRY_VOID reason=${outcome.reason} n=${outcome.n ?? "na"} id=${state.id}`);
+    }
     process.exit(0);
   }
   if (outcome?.outcome === "ambiguous_omitted" && !topEvidence && !peerEvidence?.settled) {
@@ -2273,17 +2398,20 @@ if (state.state === "entry_accepted") {
   }
 
   if (outcome?.outcome === "settled" || topEvidence || peerEvidence?.settled) {
-    const open = {
-      state: "open",
-      side: state.side,
-      qty: Number(state.qty),
-      entryPx: Number(state.entryPx),
-      entrySweep: outcome?.n || Number(state.acceptedAtSweep || latest.n),
-      entryId: state.id,
-      realizedScoreEst: Number(state.realizedScoreEst || 0),
-      entryFeeEst: Number(state.entryFeeEst || (0.01 * Number(state.qty) * Number(state.entryPx))),
-      uncertainEntries: uncertainEntries(state)
-    };
+    const open = state.priorOpen
+      ? mergeOpenPosition(state.priorOpen, state, outcome?.n || Number(state.acceptedAtSweep || latest.n))
+      : {
+          state: "open",
+          side: state.side,
+          qty: Number(state.qty),
+          entryPx: Number(state.entryPx),
+          entrySweep: outcome?.n || Number(state.acceptedAtSweep || latest.n),
+          entryId: state.id,
+          realizedScoreEst: Number(state.realizedScoreEst || 0),
+          entryFeeEst: Number(state.entryFeeEst || (0.01 * Number(state.qty) * Number(state.entryPx))),
+          uncertainEntries: uncertainEntries(state),
+          addCount: 0
+        };
     await setState(open);
     console.log("POSITION_OPEN");
     state = open;
@@ -2299,10 +2427,11 @@ if (state.state === "entry_accepted") {
 if (state.state === "entry_unverified") {
   const outcome = await findOutcome(state.id, Number(state.acceptedAtSweep || state.entrySweep || 0));
   const expectedSign = state.side === "buy" ? 1 : -1;
+  const expectedVisibleQty = state.priorOpen ? Number(state.priorOpen.qty || 0) + Number(state.qty) * 0.75 : Number(state.qty) * 0.75;
   const topEvidence =
     Number.isFinite(ownPos) &&
     Math.sign(ownPos) === expectedSign &&
-    Math.abs(ownPos) >= Math.max(0.1, Number(state.qty) * 0.75);
+    Math.abs(ownPos) >= Math.max(0.1, expectedVisibleQty);
   const peerEvidence = peerSettlementEvidence(positions, state, latest.n);
   if (peerEvidence) {
     console.log(
@@ -2310,30 +2439,39 @@ if (state.state === "entry_unverified") {
     );
   }
   if (outcome?.outcome === "settled" || topEvidence || peerEvidence?.settled) {
-    const open = {
-      state: "open",
-      side: state.side,
-      qty: Number(state.qty),
-      entryPx: Number(state.entryPx),
-      entrySweep: Number(outcome.n),
-      entryId: state.id,
-      realizedScoreEst: Number(state.realizedScoreEst || 0),
-      entryFeeEst: Number(state.entryFeeEst || (0.01 * Number(state.qty) * Number(state.entryPx))),
-      uncertainEntries: uncertainEntries(state)
-    };
+    const open = state.priorOpen
+      ? mergeOpenPosition(state.priorOpen, state, Number(outcome?.n || latest.n))
+      : {
+          state: "open",
+          side: state.side,
+          qty: Number(state.qty),
+          entryPx: Number(state.entryPx),
+          entrySweep: Number(outcome?.n || latest.n),
+          entryId: state.id,
+          realizedScoreEst: Number(state.realizedScoreEst || 0),
+          entryFeeEst: Number(state.entryFeeEst || (0.01 * Number(state.qty) * Number(state.entryPx))),
+          uncertainEntries: uncertainEntries(state),
+          addCount: 0
+        };
     await setState(open);
     console.log("ENTRY_UNVERIFIED_RECOVERED_SETTLED");
     state = open;
   } else if (outcome?.outcome === "void") {
-    await setState({
-      state: "idle",
-      cooldownUntilSweep: Number(latest.n) + 1,
-      lastVoid: outcome.reason,
-      lastVoidId: state.id,
-      realizedScoreEst: Number(state.realizedScoreEst || 0),
-      uncertainEntries: uncertainEntries(state)
-    });
-    console.log(`ENTRY_UNVERIFIED_RECOVERED_VOID reason=${outcome.reason} n=${outcome.n ?? "na"} id=${state.id}`);
+    const restoredOpen = restorePriorOpen(state, latest.n, outcome.reason);
+    if (restoredOpen) {
+      await setState(restoredOpen);
+      console.log(`ADD_UNVERIFIED_VOID_RESTORE_OPEN reason=${outcome.reason} n=${outcome.n ?? "na"} id=${state.id}`);
+    } else {
+      await setState({
+        state: "idle",
+        cooldownUntilSweep: Number(latest.n) + 1,
+        lastVoid: outcome.reason,
+        lastVoidId: state.id,
+        realizedScoreEst: Number(state.realizedScoreEst || 0),
+        uncertainEntries: uncertainEntries(state)
+      });
+      console.log(`ENTRY_UNVERIFIED_RECOVERED_VOID reason=${outcome.reason} n=${outcome.n ?? "na"} id=${state.id}`);
+    }
     process.exit(0);
   } else if (outcome?.outcome === "ambiguous_omitted") {
     const acceptedAt = Number(state.acceptedAtSweep || state.entrySweep || latest.n);
@@ -2350,14 +2488,26 @@ if (state.state === "entry_unverified") {
         });
       }
       const env = uncertaintyEnvelope({ uncertainEntries: entries });
-      await setState({
-        state: "idle",
-        cooldownUntilSweep: Number(latest.n) + 1,
-        realizedScoreEst: Number(state.realizedScoreEst || 0),
-        uncertainEntries: entries,
-        lastAmbiguousId: state.id
-      });
-      console.log(`ENTRY_UNVERIFIED_SHADOWED id=${state.id} side=${state.side} qty=${Number(state.qty).toFixed(2)} lo=${env.lo.toFixed(2)} hi=${env.hi.toFixed(2)}`);
+      if (state.priorOpen) {
+        await setState({
+          ...state.priorOpen,
+          state: "open",
+          realizedScoreEst: Number(state.realizedScoreEst || state.priorOpen.realizedScoreEst || 0),
+          uncertainEntries: entries,
+          lastAmbiguousAddId: state.id,
+          addRetryAfterSweep: Number(latest.n) + UNCERTAIN_RELEASE_SWEEPS
+        });
+        console.log(`ADD_UNVERIFIED_SHADOWED id=${state.id} qty=${Number(state.qty).toFixed(2)} lo=${env.lo.toFixed(2)} hi=${env.hi.toFixed(2)}`);
+      } else {
+        await setState({
+          state: "idle",
+          cooldownUntilSweep: Number(latest.n) + 1,
+          realizedScoreEst: Number(state.realizedScoreEst || 0),
+          uncertainEntries: entries,
+          lastAmbiguousId: state.id
+        });
+        console.log(`ENTRY_UNVERIFIED_SHADOWED id=${state.id} side=${state.side} qty=${Number(state.qty).toFixed(2)} lo=${env.lo.toFixed(2)} hi=${env.hi.toFixed(2)}`);
+      }
       process.exit(0);
     }
     console.log(
@@ -2367,14 +2517,20 @@ if (state.state === "entry_unverified") {
   } else if (Number(latest.n) > Number(state.until || 0) + 2) {
     // Only clear when the public flow window is complete enough to prove that
     // no outcome was omitted. With omitted outcome arrays, absence is not evidence.
-    await setState({
-      state: "idle",
-      cooldownUntilSweep: Number(latest.n) + 1,
-      lastIgnoredId: state.id,
-      realizedScoreEst: Number(state.realizedScoreEst || 0),
-      uncertainEntries: uncertainEntries(state)
-    });
-    console.log("ENTRY_UNVERIFIED_CLEARED_COMPLETE_FLOW");
+    const restoredOpen = restorePriorOpen(state, latest.n, "complete_flow_no_settlement");
+    if (restoredOpen) {
+      await setState(restoredOpen);
+      console.log("ADD_UNVERIFIED_CLEARED_RESTORE_OPEN");
+    } else {
+      await setState({
+        state: "idle",
+        cooldownUntilSweep: Number(latest.n) + 1,
+        lastIgnoredId: state.id,
+        realizedScoreEst: Number(state.realizedScoreEst || 0),
+        uncertainEntries: uncertainEntries(state)
+      });
+      console.log("ENTRY_UNVERIFIED_CLEARED_COMPLETE_FLOW");
+    }
     process.exit(0);
   } else {
     console.log("ENTRY_UNVERIFIED_WAIT");
@@ -2591,6 +2747,14 @@ if (state.state === "open") {
     console.log(`TACTICAL_EXIT reason=${tacticalExit.reason} net=${tacticalExit.net.toFixed(2)} trend=${tacticalExit.trend.label}`);
     await postExit(state, latest);
     process.exit(0);
+  }
+  const addDecision = scaleInDecision(state, realNvdaSignal, latest, race, catalyst);
+  if (addDecision) {
+    const added = await postScaleIn(addDecision, latest, state);
+    if (added) {
+      console.log(`SCALE_IN side=${addDecision.side} qty=${Number(addDecision.qty).toFixed(2)} reason=${addDecision.reason} totalBefore=${Number(state.qty).toFixed(2)}`);
+      process.exit(0);
+    }
   }
   const decision = decide({
     now,
