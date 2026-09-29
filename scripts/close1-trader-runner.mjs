@@ -15,8 +15,8 @@ const OPEN_MS = Date.parse("2026-09-25T12:00:00Z");
 const LOCK_MS = Date.parse("2026-10-04T09:00:00Z");
 const UNCERTAIN_RELEASE_SWEEPS = 6;
 const UNCERTAIN_MAX_ABS_QTY = 43;
-const CONFIRMED_SHADOW_EXIT_MIN_NET = 8;
-const CONFIRMED_SHADOW_HARD_TAKE_NET = 25;
+const CONFIRMED_SHADOW_EXIT_MIN_NET = 10;
+const CONFIRMED_SHADOW_HARD_TAKE_NET = 20;
 const FINAL_DEFENSIVE_HOURS = 36;
 const FINAL_NO_NEW_ENTRY_HOURS = 12;
 const CORE_RANGE_LOW = 221;
@@ -902,6 +902,21 @@ function openPositionCloseNet(openState, mark) {
   return gross - entryFee - exitFee;
 }
 
+function profitThresholds(qty, entryPx, markPx) {
+  const q = Number(qty);
+  const entry = Number(entryPx);
+  const mark = Number(markPx);
+  if (![q, entry, mark].every(Number.isFinite) || q <= 0 || entry <= 0 || mark <= 0) {
+    return { bank: 25, protect: 12 };
+  }
+  const avgNotional = q * ((entry + mark) / 2);
+  // Net PnL already subtracts the estimated 1% entry + 1% exit fees.
+  // Keep extra room for clawback / execution mismatch instead of banking dust.
+  const bank = Math.max(20, 0.0030 * avgNotional);
+  const protect = Math.max(10, 0.0015 * avgNotional);
+  return { bank, protect };
+}
+
 function tacticalExitDecision(openState, signal, latest, race, catalyst) {
   const net = openPositionCloseNet(openState, latest?.px);
   if (!Number.isFinite(net)) return null;
@@ -916,11 +931,15 @@ function tacticalExitDecision(openState, signal, latest, race, catalyst) {
   const continuationAdverse = short ? shape.continuationUp : shape.continuationDown;
   const favorableContinuation = short ? shape.continuationDown : shape.continuationUp;
 
-  // Fast scalp mode: once estimated round-trip fees are covered and a small
-  // execution buffer remains, bank the profit. Do not wait for a larger move.
-  if (net >= 5) return { exit: true, reason: "bank_profit_now", net, trend };
-  if (net > 0 && (fastAdverse || !favorableContinuation || catalyst?.active?.phase === "pre")) {
-    return { exit: true, reason: "positive_net_exit", net, trend };
+  const profit = profitThresholds(openState.qty, openState.entryPx, px);
+  // Bank only meaningful fee-adjusted profit. If momentum fades after reaching
+  // a smaller but still worthwhile cushion, protect it instead of gambling it back.
+  if (net >= profit.bank) return { exit: true, reason: "bank_meaningful_profit", net, trend, profit };
+  if (
+    net >= profit.protect &&
+    (fastAdverse || !favorableContinuation || catalyst?.active?.phase === "pre")
+  ) {
+    return { exit: true, reason: "protect_meaningful_profit", net, trend, profit };
   }
 
   // Cut a wrong directional thesis by price movement, not by fee-distorted net PnL.
@@ -943,11 +962,12 @@ function confirmedShadowExitDecision(entry, signal, latest, race, catalyst) {
   const short = entry.side === "sell";
   const favorableStrong = short ? trend.strongDown : trend.strongUp;
   const adverseStrong = short ? trend.strongUp : trend.strongDown;
-  if (net >= 5) {
-    return { exit: true, reason: "shadow_bank_profit_now", net, trend };
+  const profit = profitThresholds(entry.qty, entry.entryPx, px);
+  if (net >= profit.bank) {
+    return { exit: true, reason: "shadow_bank_meaningful_profit", net, trend, profit };
   }
-  if (net > 0 && !favorableStrong) {
-    return { exit: true, reason: "shadow_positive_net_exit", net, trend };
+  if (net >= profit.protect && !favorableStrong) {
+    return { exit: true, reason: "shadow_protect_meaningful_profit", net, trend, profit };
   }
   if (catalyst?.active?.phase === "pre" && net >= 0) {
     return { exit: true, reason: "shadow_event_protect", net, trend };
@@ -1296,28 +1316,38 @@ if (raceSelftest) {
     { hoursRemaining: 100 },
     { active: null }
   );
-  if (!(profitLock?.exit === true && profitLock.reason === "bank_profit_now")) {
+  if (!(profitLock?.exit === true && ["bank_meaningful_profit","protect_meaningful_profit"].includes(profitLock.reason))) {
     throw new Error("RACE_SELFTEST_FAST_PROFIT_LOCK");
   }
-  const smallProfitReversal = tacticalExitDecision(
-    { state: "open", side: "buy", qty: 30, entryPx: 220, entryFeeEst: 66 },
-    { fresh: true, move5: -0.25, move15: -0.45, move30: 0.05, move60: 0.30, move240: 1.10 },
-    { px: 224.8 },
-    { hoursRemaining: 100 },
-    { active: null }
-  );
-  if (!(smallProfitReversal?.exit === true && smallProfitReversal.net > 0 && smallProfitReversal.reason === "bank_profit_now")) {
-    throw new Error("RACE_SELFTEST_ANY_PROFIT_REVERSAL_LOCK");
-  }
-  const instantBank = tacticalExitDecision(
+  const meaningfulProfit = tacticalExitDecision(
     { state: "open", side: "buy", qty: 30, entryPx: 220, entryFeeEst: 66 },
     { fresh: true, move5: 0.25, move15: 0.55, move30: 0.80, move60: 0.60, move240: 1.10 },
-    { px: 224.9 },
+    { px: 225.7 },
     { hoursRemaining: 100 },
     { active: null }
   );
-  if (!(instantBank?.exit === true && instantBank.net >= 5 && instantBank.reason === "bank_profit_now")) {
-    throw new Error("RACE_SELFTEST_BANK_PROFIT_NOW");
+  if (!(meaningfulProfit?.exit === true && meaningfulProfit.reason === "bank_meaningful_profit")) {
+    throw new Error("RACE_SELFTEST_BANK_MEANINGFUL_PROFIT");
+  }
+  const feeDust = tacticalExitDecision(
+    { state: "open", side: "buy", qty: 30, entryPx: 220, entryFeeEst: 66 },
+    { fresh: true, move5: 0.20, move15: 0.40, move30: 0.50, move60: 0.40, move240: 1.10 },
+    { px: 224.55 },
+    { hoursRemaining: 100 },
+    { active: null }
+  );
+  if (feeDust?.exit === true) {
+    throw new Error("RACE_SELFTEST_DONT_BANK_FEE_DUST");
+  }
+  const protectMeaningful = tacticalExitDecision(
+    { state: "open", side: "buy", qty: 30, entryPx: 220, entryFeeEst: 66 },
+    { fresh: true, move5: -0.25, move15: -0.45, move30: 0.05, move60: 0.30, move240: 1.10 },
+    { px: 225.15 },
+    { hoursRemaining: 100 },
+    { active: null }
+  );
+  if (!(protectMeaningful?.exit === true && protectMeaningful.reason === "protect_meaningful_profit")) {
+    throw new Error("RACE_SELFTEST_PROTECT_MEANINGFUL_PROFIT");
   }
   const fastStop = tacticalExitDecision(
     { state: "open", side: "buy", qty: 30, entryPx: 230, entryFeeEst: 69 },
@@ -1364,9 +1394,9 @@ if (raceSelftest) {
   const shadowRun = confirmedShadowExitDecision(confirmedShadow, strongDownSignal, { px: 219.30 }, { hoursRemaining: 100 }, { active: null });
   const shadowRescue = confirmedShadowExitDecision(confirmedShadow, strongUpSignal, { px: 222.00 }, { hoursRemaining: 100 }, { active: null });
   const shadowHardTake = confirmedShadowExitDecision(confirmedShadow, strongDownSignal, { px: 218.00 }, { hoursRemaining: 100 }, { active: null });
-  if (!(shadowRun?.exit === false && shadowRun.reason === "shadow_profit_run")) throw new Error("RACE_SELFTEST_SHADOW_PROFIT_RUN");
+  if (!(shadowRun?.exit === true && ["shadow_bank_meaningful_profit","shadow_protect_meaningful_profit"].includes(shadowRun.reason))) throw new Error("RACE_SELFTEST_SHADOW_PROFIT_BANK");
   if (!(shadowRescue?.exit === true && shadowRescue.reason === "shadow_lower_band_reversal")) throw new Error("RACE_SELFTEST_SHADOW_RESCUE");
-  if (!(shadowHardTake?.exit === true && shadowHardTake.reason === "shadow_hard_take")) throw new Error("RACE_SELFTEST_SHADOW_HARD_TAKE");
+  if (!(shadowHardTake?.exit === true && shadowHardTake.reason === "shadow_bank_meaningful_profit")) throw new Error("RACE_SELFTEST_SHADOW_HARD_TAKE");
   const openStop = tacticalExitDecision({ state: "open", side: "sell", qty: 10, entryPx: 232, entryFeeEst: 23.2 }, strongUpSignal, { px: 235 }, { hoursRemaining: 100 }, { active: null });
   if (!(openStop?.exit === true && ["fast_directional_stop", "directional_stop"].includes(openStop.reason))) throw new Error("RACE_SELFTEST_OPEN_STOP");
   const catchUpRefs = Array.from({ length: 24 }, (_, i) => ({ px: 224.50 + i * 0.001 }));
