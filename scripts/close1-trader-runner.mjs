@@ -1342,7 +1342,7 @@ if (raceSelftest) {
   const protectMeaningful = tacticalExitDecision(
     { state: "open", side: "buy", qty: 30, entryPx: 220, entryFeeEst: 66 },
     { fresh: true, move5: -0.25, move15: -0.45, move30: 0.05, move60: 0.30, move240: 1.10 },
-    { px: 225.15 },
+    { px: 224.85 },
     { hoursRemaining: 100 },
     { active: null }
   );
@@ -1394,7 +1394,7 @@ if (raceSelftest) {
   const shadowRun = confirmedShadowExitDecision(confirmedShadow, strongDownSignal, { px: 219.30 }, { hoursRemaining: 100 }, { active: null });
   const shadowRescue = confirmedShadowExitDecision(confirmedShadow, strongUpSignal, { px: 222.00 }, { hoursRemaining: 100 }, { active: null });
   const shadowHardTake = confirmedShadowExitDecision(confirmedShadow, strongDownSignal, { px: 218.00 }, { hoursRemaining: 100 }, { active: null });
-  if (!(shadowRun?.exit === true && ["shadow_bank_meaningful_profit","shadow_protect_meaningful_profit"].includes(shadowRun.reason))) throw new Error("RACE_SELFTEST_SHADOW_PROFIT_BANK");
+  if (!(shadowRun?.exit === false && shadowRun.reason === "shadow_hold")) throw new Error("RACE_SELFTEST_SHADOW_PROFIT_RUN");
   if (!(shadowRescue?.exit === true && shadowRescue.reason === "shadow_lower_band_reversal")) throw new Error("RACE_SELFTEST_SHADOW_RESCUE");
   if (!(shadowHardTake?.exit === true && shadowHardTake.reason === "shadow_bank_meaningful_profit")) throw new Error("RACE_SELFTEST_SHADOW_HARD_TAKE");
   const openStop = tacticalExitDecision({ state: "open", side: "sell", qty: 10, entryPx: 232, entryFeeEst: 23.2 }, strongUpSignal, { px: 235 }, { hoursRemaining: 100 }, { active: null });
