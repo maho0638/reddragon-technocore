@@ -13,7 +13,7 @@ const STATE_MARKER = "REDDRAGON_CLOSE1_STATE_V5:";
 const SEASON = "close-1";
 const OPEN_MS = Date.parse("2026-09-25T12:00:00Z");
 const LOCK_MS = Date.parse("2026-10-04T09:00:00Z");
-const UNCERTAIN_RELEASE_SWEEPS = 6;
+const UNCERTAIN_RELEASE_SWEEPS = 1;
 const UNCERTAIN_MAX_ABS_QTY = 43;
 const CONFIRMED_SHADOW_EXIT_MIN_NET = 10;
 const CONFIRMED_SHADOW_HARD_TAKE_NET = 20;
@@ -234,10 +234,12 @@ async function readExport(room) {
 }
 
 let archiveIndexCache = null;
+let archiveIndexFetchedAt = 0;
 const archiveRecordCache = new Map();
 
 async function close1ArchiveIndex() {
-  if (archiveIndexCache) return archiveIndexCache;
+  const nowMs = Date.now();
+  if (archiveIndexCache && nowMs - archiveIndexFetchedAt < 15_000) return archiveIndexCache;
   const { r, text } = await request(
     `${ARCHIVE_BASE}/index.json`,
     { headers: { accept: "application/json", "cache-control": "no-cache" } },
@@ -269,6 +271,7 @@ async function close1ArchiveIndex() {
     maxN = Math.max(maxN, n);
   }
   archiveIndexCache = { byN, maxN };
+  archiveIndexFetchedAt = nowMs;
   return archiveIndexCache;
 }
 
@@ -303,6 +306,12 @@ async function close1ArchiveRecord(meta) {
   if (Number(record?.input?.n) !== n || Number(record?.output?.sweep) !== n) return null;
   archiveRecordCache.set(n, record);
   return record;
+}
+
+function archiveTradeBelongsToUs(input, ourDid = did) {
+  if (!input || !ourDid) return false;
+  return String(input.maker || "") === String(ourDid) ||
+    String(input.countersigner || "") === String(ourDid);
 }
 
 function classifyArchiveMatches(matches, coveredThrough) {
@@ -360,7 +369,7 @@ async function findArchiveOutcome(id, fromSweep = 0) {
       const output = outputTrades[i];
       const tradeId = String(input?.id || output?.id || "");
       if (tradeId !== id) continue;
-      if (input?.maker && String(input.maker) !== did) continue;
+      if (!archiveTradeBelongsToUs(input)) continue;
       matches.push({ n, input, output });
     }
   }
@@ -1314,6 +1323,9 @@ function applyRaceSizing(decision, race, latestPx) {
 }
 
 if (raceSelftest) {
+  if (!archiveTradeBelongsToUs({ maker: did, countersigner: "did:key:z6MkOther" }, did)) throw new Error("RACE_SELFTEST_ARCHIVE_MAKER_OWNERSHIP");
+  if (!archiveTradeBelongsToUs({ maker: "did:key:z6MkOther", countersigner: did }, did)) throw new Error("RACE_SELFTEST_ARCHIVE_TAKER_OWNERSHIP");
+  if (archiveTradeBelongsToUs({ maker: "did:key:z6MkOther", countersigner: "did:key:z6MkThird" }, did)) throw new Error("RACE_SELFTEST_ARCHIVE_FOREIGN_MATCH");
   const ttlProbe = makeOffer("buy", 1, { n: 100, px: 225 }, "test");
   if (ttlProbe.until !== 101) throw new Error("RACE_SELFTEST_FAST_REPRICE_TTL");
   const base = { action: "enter", side: "buy", qty: 20, confidence: 0.9 };
@@ -2542,23 +2554,42 @@ if (state.state === "entry_accepted") {
     process.exit(0);
   }
   if (outcome?.outcome === "ambiguous_omitted" && !topEvidence && !peerEvidence?.settled) {
-    if (Number(latest.n) >= Number(state.acceptedAtSweep || latest.n) + 4) {
-      await setState({
-        ...state,
-        state: "entry_unverified",
-        checkedThroughSweep: Number(latest.n),
-        omittedSettled: outcome.omittedSettled,
-        omittedVoid: outcome.omittedVoid
-      });
+    const acceptedAt = Number(state.acceptedAtSweep || state.entrySweep || latest.n);
+    if (Number(latest.n) >= acceptedAt + UNCERTAIN_RELEASE_SWEEPS) {
+      const entries = uncertainEntries(state);
+      if (!entries.some((x) => x.id === state.id)) {
+        entries.push({
+          id: state.id,
+          side: state.side,
+          qty: Number(state.qty),
+          entryPx: Number(state.entryPx),
+          acceptedAtSweep: acceptedAt,
+          taker: state.taker || null
+        });
+      }
+      const env = uncertaintyEnvelope({ uncertainEntries: entries });
+      state = {
+        state: "idle",
+        cooldownUntilSweep: Number(latest.n),
+        realizedScoreEst: Number(state.realizedScoreEst || 0),
+        uncertainEntries: entries,
+        lastAmbiguousId: state.id
+      };
+      await setState(state);
       console.log(
-        `ENTRY_OUTCOME_AMBIGUOUS_OMITTED settled=${outcome.omittedSettled} void=${outcome.omittedVoid} sweeps=${outcome.firstOmittedSweep ?? "na"}-${outcome.lastOmittedSweep ?? "na"}`
+        `ENTRY_AMBIGUOUS_RELEASED id=${entries.at(-1)?.id || "?"} lo=${env.lo.toFixed(2)} hi=${env.hi.toFixed(2)}`
+      );
+      realNvdaSignal = await fetchRealNvdaSignal(now);
+      if (realNvdaSignal?.fresh) {
+        const trend = multiTimeframeTrend(realNvdaSignal);
+        console.log(`MTF_AMBIGUOUS_RELEASE trend=${trend.label} ratio=${trend.ratio.toFixed(2)} score=${trend.score}/${trend.weight}`);
+      }
+    } else {
+      console.log(
+        `ENTRY_PENDING_OMITTED settled=${outcome.omittedSettled} void=${outcome.omittedVoid}`
       );
       process.exit(0);
     }
-    console.log(
-      `ENTRY_PENDING_OMITTED settled=${outcome.omittedSettled} void=${outcome.omittedVoid}`
-    );
-    process.exit(0);
   }
 
   if (outcome?.outcome === "settled" || topEvidence || peerEvidence?.settled) {
@@ -2579,9 +2610,28 @@ if (state.state === "entry_accepted") {
     await setState(open);
     console.log("POSITION_OPEN");
     state = open;
-  } else if (Number(latest.n) >= Number(state.acceptedAtSweep || latest.n) + 4) {
-    await setState({ ...state, state: "entry_unverified", checkedThroughSweep: Number(latest.n) });
-    throw new Error("ENTRY_OUTCOME_UNVERIFIED");
+  } else if (Number(latest.n) >= Number(state.acceptedAtSweep || latest.n) + 2) {
+    const acceptedAt = Number(state.acceptedAtSweep || state.entrySweep || latest.n);
+    const entries = uncertainEntries(state);
+    if (!entries.some((x) => x.id === state.id)) {
+      entries.push({
+        id: state.id,
+        side: state.side,
+        qty: Number(state.qty),
+        entryPx: Number(state.entryPx),
+        acceptedAtSweep: acceptedAt,
+        taker: state.taker || null
+      });
+    }
+    state = {
+      state: "idle",
+      cooldownUntilSweep: Number(latest.n),
+      realizedScoreEst: Number(state.realizedScoreEst || 0),
+      uncertainEntries: entries,
+      lastUnverifiedReleasedId: state.id
+    };
+    await setState(state);
+    console.log("ENTRY_UNVERIFIED_RELEASED");
   } else {
     console.log("ENTRY_PENDING_SWEEP");
     process.exit(0);
