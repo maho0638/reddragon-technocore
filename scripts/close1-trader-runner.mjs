@@ -1010,6 +1010,12 @@ function confirmedShadowExitDecision(entry, signal, latest, race, catalyst) {
   const fastAdverse = short ? shape.fastUp : shape.fastDown;
   const continuationAdverse = short ? shape.continuationUp : shape.continuationDown;
   const profit = profitThresholds(entry.qty, entry.entryPx, px);
+  if (favorableMove <= -0.80 && fastAdverse && continuationAdverse) {
+    return { exit: true, reason: "shadow_fast_directional_stop", net, trend };
+  }
+  if (favorableMove <= -1.50 && continuationAdverse) {
+    return { exit: true, reason: "shadow_directional_stop", net, trend };
+  }
   if (net <= -120 && !favorableStrong) {
     return { exit: true, reason: "shadow_capital_release_stop", net, trend };
   }
@@ -1024,12 +1030,6 @@ function confirmedShadowExitDecision(entry, signal, latest, race, catalyst) {
   }
   if (Number(race?.hoursRemaining) <= FINAL_NO_NEW_ENTRY_HOURS && net >= 0) {
     return { exit: true, reason: "shadow_final_protect", net, trend };
-  }
-  if (favorableMove <= -0.80 && fastAdverse && continuationAdverse) {
-    return { exit: true, reason: "shadow_fast_directional_stop", net, trend };
-  }
-  if (favorableMove <= -1.50 && continuationAdverse) {
-    return { exit: true, reason: "shadow_directional_stop", net, trend };
   }
   if (short && px <= 223 && adverseStrong) return { exit: true, reason: "shadow_lower_band_reversal", net, trend };
   if (short && px >= RANGE_BREAK_HIGH && adverseStrong) return { exit: true, reason: "shadow_breakout_stop", net, trend };
