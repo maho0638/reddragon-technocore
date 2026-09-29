@@ -1220,7 +1220,8 @@ function applyRealNvdaSignal(decision, signal, race, distinct, latest) {
   if (!Number.isFinite(gap) || gap < 175 || !alignedOrLagging) return decision;
 
   const veryStrong = trend.veryStrongUp || trend.veryStrongDown;
-  const qty = veryStrong && gap >= 750 ? 24 : gap >= 300 ? 16 : 12;
+  const qty = veryStrong && gap >= 750 ? 40 : veryStrong && gap >= 300 ? 32 : gap >= 300 ? 22 : 16;
+  const confidence = veryStrong && gap >= 750 ? 0.97 : veryStrong ? 0.96 : 0.93;
   console.log(
     `REAL_NVDA_SCOUT side=${side} qty=${qty.toFixed(2)} trend=${trend.label} ratio=${trend.ratio.toFixed(2)} m15=${m15.toFixed(2)} m30=${m30.toFixed(2)} xyz15=${xyzMove15.toFixed(2)} gap=${gap.toFixed(2)}`
   );
@@ -1228,7 +1229,7 @@ function applyRealNvdaSignal(decision, signal, race, distinct, latest) {
     action: "enter",
     side,
     qty,
-    confidence: 0.92,
+    confidence,
     reason: "real_nvda_lead_confirmation"
   };
 }
@@ -1563,6 +1564,16 @@ if (raceSelftest) {
     squeezeDecision.reason !== "race_squeeze_breakout_scout"
   ) {
     throw new Error("RACE_SELFTEST_SQUEEZE_BREAKOUT");
+  }
+  const veryStrongRealScout = applyRealNvdaSignal(
+    null,
+    { fresh: true, move5: -0.05, move15: -0.55, move30: -0.75, move60: -0.90, move240: -2.50 },
+    { leaderGap: 1200 },
+    [{ px: 229.0 }, { px: 228.8 }, { px: 228.5 }, { px: 228.3 }],
+    { px: 228.3 }
+  );
+  if (!(veryStrongRealScout?.side === "sell" && veryStrongRealScout.qty >= 40 && veryStrongRealScout.confidence >= 0.97)) {
+    throw new Error("RACE_SELFTEST_VERY_STRONG_REAL_SCOUT_SIZE");
   }
   const realFreshBuy = applyRealNvdaSignal(
     null,
