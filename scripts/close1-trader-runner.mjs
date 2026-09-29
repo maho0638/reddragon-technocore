@@ -2228,6 +2228,14 @@ async function findOutcome(id, fromSweep = 0, flowMessages = null) {
     if (Number.isFinite(Number(fromSweep)) && Number(fromSweep) > 0 && n < Number(fromSweep)) continue;
 
     if (Array.isArray(b.settled) && b.settled.includes(id)) {
+      if (Number(fromSweep) > 0) {
+        try {
+          const archived = await findArchiveOutcome(id, Number(fromSweep));
+          if (archived?.outcome === "settled") return archived;
+        } catch (error) {
+          console.log(`ARCHIVE_SETTLED_ENRICH_FAILED id=${id} error=${String(error).slice(0,160)}`);
+        }
+      }
       return { outcome: "settled", n };
     }
     if (Array.isArray(b.void)) {
@@ -2942,7 +2950,10 @@ if (state.state === "exit_offer") {
 }
 
 if (state.state === "exit_accepted") {
-  const outcome = await findOutcome(state.id);
+  const outcome = await findOutcome(
+    state.id,
+    Number(state.acceptedAtSweep || state.requestedAtSweep || state.entrySweep || 0)
+  );
   const expectedStillOpenSign = state.entrySide === "buy" ? 1 : -1;
   const topStillOpen =
     Number.isFinite(ownPos) &&
