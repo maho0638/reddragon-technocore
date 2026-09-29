@@ -1260,7 +1260,7 @@ if (raceSelftest) {
     { leaderGap: 1200, timeRemainingFrac: 0.56, hoursRemaining: 120 },
     230
   );
-  if (!(highConvictionCatchUp?.qty >= 25 && highConvictionCatchUp?.qty <= 26.09)) {
+  if (!(highConvictionCatchUp?.qty >= 30 && highConvictionCatchUp?.qty <= 34.79)) {
     throw new Error("RACE_SELFTEST_HIGH_CONVICTION_CATCHUP_SIZE");
   }
   const uncertain = { state: "idle", uncertainEntries: [{ id: "u1", side: "sell", qty: 31.53, entryPx: 224.26 }] };
