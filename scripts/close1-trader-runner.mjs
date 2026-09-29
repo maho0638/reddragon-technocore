@@ -15,8 +15,8 @@ const OPEN_MS = Date.parse("2026-09-25T12:00:00Z");
 const LOCK_MS = Date.parse("2026-10-04T09:00:00Z");
 const UNCERTAIN_RELEASE_SWEEPS = 6;
 const UNCERTAIN_MAX_ABS_QTY = 43;
-const CONFIRMED_SHADOW_EXIT_MIN_NET = 15;
-const CONFIRMED_SHADOW_HARD_TAKE_NET = 50;
+const CONFIRMED_SHADOW_EXIT_MIN_NET = 8;
+const CONFIRMED_SHADOW_HARD_TAKE_NET = 25;
 const FINAL_DEFENSIVE_HOURS = 36;
 const FINAL_NO_NEW_ENTRY_HOURS = 12;
 const CORE_RANGE_LOW = 221;
@@ -916,11 +916,12 @@ function tacticalExitDecision(openState, signal, latest, race, catalyst) {
   const continuationAdverse = short ? shape.continuationUp : shape.continuationDown;
   const favorableContinuation = short ? shape.continuationDown : shape.continuationUp;
 
-  // The objective is realized profit, not perfect tops/bottoms.
-  if (net >= 40) return { exit: true, reason: "hard_take_profit", net, trend };
-  if (net >= 25 && !favorableContinuation) return { exit: true, reason: "protect_profit", net, trend };
-  if (net >= 15 && fastAdverse) return { exit: true, reason: "fast_reversal_profit_lock", net, trend };
-  if (net >= 8 && catalyst?.active?.phase === "pre") return { exit: true, reason: "event_profit_lock", net, trend };
+  // Realize profit aggressively. Net already includes estimated exit fee.
+  // Only a clean continuation is allowed to keep a winner open.
+  if (net >= 25) return { exit: true, reason: "hard_take_profit", net, trend };
+  if (net > 0 && fastAdverse) return { exit: true, reason: "any_profit_reversal_lock", net, trend };
+  if (net >= 8 && !favorableContinuation) return { exit: true, reason: "protect_profit", net, trend };
+  if (net >= 5 && catalyst?.active?.phase === "pre") return { exit: true, reason: "event_profit_lock", net, trend };
 
   // Cut a wrong directional thesis by price movement, not by fee-distorted net PnL.
   if (favorableMove <= -0.80 && fastAdverse && continuationAdverse) {
@@ -1298,8 +1299,18 @@ if (raceSelftest) {
     { hoursRemaining: 100 },
     { active: null }
   );
-  if (!(profitLock?.exit === true && profitLock.reason === "fast_reversal_profit_lock")) {
+  if (!(profitLock?.exit === true && profitLock.reason === "any_profit_reversal_lock")) {
     throw new Error("RACE_SELFTEST_FAST_PROFIT_LOCK");
+  }
+  const smallProfitReversal = tacticalExitDecision(
+    { state: "open", side: "buy", qty: 30, entryPx: 220, entryFeeEst: 66 },
+    { fresh: true, move5: -0.25, move15: -0.45, move30: 0.05, move60: 0.30, move240: 1.10 },
+    { px: 224.8 },
+    { hoursRemaining: 100 },
+    { active: null }
+  );
+  if (!(smallProfitReversal?.exit === true && smallProfitReversal.net > 0 && smallProfitReversal.reason === "any_profit_reversal_lock")) {
+    throw new Error("RACE_SELFTEST_ANY_PROFIT_REVERSAL_LOCK");
   }
   const fastStop = tacticalExitDecision(
     { state: "open", side: "buy", qty: 30, entryPx: 230, entryFeeEst: 69 },
