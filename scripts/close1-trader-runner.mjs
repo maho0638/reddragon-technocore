@@ -687,8 +687,9 @@ function applyUncertainRiskCap(decision, state, latestPx) {
   if (!uncertainEntries(state).length) return decision;
 
   const px = Number(latestPx);
+  const realizedCapital = Math.max(1000, 10000 + Number(state?.realizedScoreEst || 0));
   const cashCap = Number.isFinite(px) && px > 0
-    ? Math.max(0.1, 10000 / (px * 1.035))
+    ? Math.max(0.1, realizedCapital / (px * 1.035))
     : UNCERTAIN_MAX_ABS_QTY;
   const cap = Math.min(UNCERTAIN_MAX_ABS_QTY, cashCap);
   const env = uncertaintyEnvelope(state);
@@ -733,8 +734,10 @@ function raceContext({ now, pnlSnapshots, state, latest }) {
   const timeRemainingFrac = clamp(remainingMs / totalMs, 0, 1);
   const elapsedFrac = 1 - timeRemainingFrac;
   const gap = Number.isFinite(leader) ? leader - own : null;
+  const realizedCapital = Math.max(1000, 10000 + Number(state?.realizedScoreEst || 0));
   return {
     leaderScore: leader,
+    realizedCapital,
     ownScoreEst: own,
     ownDownsideFloor: downsideFloor,
     leaderGap: gap,
@@ -1174,9 +1177,10 @@ function applyRaceSizing(decision, race, latestPx) {
   if (!Number.isFinite(qty) || qty < 0.1) return null;
 
   const px = Number(latestPx);
+  const capital = Math.max(1000, Number(race?.realizedCapital || 10000));
   const cashAffordable = Number.isFinite(px) && px > 0
-    ? Math.max(0.1, Math.min(44.5, (10000 / (px * 1.035))))
-    : 43;
+    ? Math.max(0.1, Math.min(60, (capital / (px * 1.035))))
+    : Math.max(0.1, capital / (230 * 1.035));
   const rawConfidence = decision.confidence;
   const confidence = clamp(
     Number.isFinite(Number(rawConfidence))
@@ -1278,11 +1282,19 @@ if (raceSelftest) {
   if (!(feeCapped?.qty <= 11.12)) throw new Error("RACE_SELFTEST_ENTRY_FEE_CAP");
   const highConvictionCatchUp = applyRaceSizing(
     { action: "enter", side: "buy", qty: 24, confidence: 0.97 },
-    { leaderGap: 1200, timeRemainingFrac: 0.56, hoursRemaining: 120 },
+    { leaderGap: 1200, timeRemainingFrac: 0.56, hoursRemaining: 120, realizedCapital: 10000 },
     230
   );
   if (!(highConvictionCatchUp?.qty >= 30 && highConvictionCatchUp?.qty <= 34.79)) {
     throw new Error("RACE_SELFTEST_HIGH_CONVICTION_CATCHUP_SIZE");
+  }
+  const compoundedCatchUp = applyRaceSizing(
+    { action: "enter", side: "buy", qty: 50, confidence: 0.99 },
+    { leaderGap: 1200, timeRemainingFrac: 0.30, hoursRemaining: 60, realizedCapital: 11200 },
+    230
+  );
+  if (!(compoundedCatchUp?.qty > highConvictionCatchUp.qty)) {
+    throw new Error("RACE_SELFTEST_COMPOUND_CAPITAL_NOT_USED");
   }
   const uncertain = { state: "idle", uncertainEntries: [{ id: "u1", side: "sell", qty: 31.53, entryPx: 224.26 }] };
   const cappedSame = applyUncertainRiskCap({ action: "enter", side: "sell", qty: 30, confidence: 0.9 }, uncertain, 224.5);
@@ -1840,7 +1852,8 @@ function scaleInDecision(openState, signal, latest, race, catalyst) {
   const trigger = Number(openState.addCount || 0) === 0 ? 0.80 : 1.60;
   if (favorableMove < trigger) return null;
 
-  const totalCap = Math.max(0, Math.min(43, 10000 / (px * 1.04)));
+  const realizedCapital = Math.max(1000, 10000 + Number(openState.realizedScoreEst || 0));
+  const totalCap = Math.max(0, Math.min(60, realizedCapital / (px * 1.04)));
   const remainingCap = Math.max(0, totalCap - qty);
   if (remainingCap < 3) return null;
 
@@ -2677,7 +2690,7 @@ if (state.state === "exit_accepted") {
       (0.01 * Number(state.qty) * Number(latest.px));
     await setState({
       state: "idle",
-      cooldownUntilSweep: Number(latest.n) + 2,
+      cooldownUntilSweep: Number(latest.n) + 1,
       lastClosedId: state.id,
       realizedScoreEst: Number(state.realizedScoreEst || 0) + gross - fees,
       uncertainEntries: state.closingShadowId
@@ -2737,7 +2750,7 @@ if (state.state === "exit_unverified") {
       (0.01 * Number(state.qty) * Number(latest.px));
     await setState({
       state: "idle",
-      cooldownUntilSweep: Number(latest.n) + 2,
+      cooldownUntilSweep: Number(latest.n) + 1,
       lastClosedId: state.id,
       realizedScoreEst: Number(state.realizedScoreEst || 0) + gross - fees,
       uncertainEntries: state.closingShadowId
