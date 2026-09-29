@@ -811,6 +811,85 @@ function multiTimeframeTrend(signal) {
   };
 }
 
+function directionalShape(signal) {
+  const m5 = Number(signal?.move5);
+  const m15 = Number(signal?.move15);
+  const m30 = Number(signal?.move30);
+  const m60 = Number(signal?.move60);
+  const m240 = Number(signal?.move240);
+  const finiteFast = Number.isFinite(m5) && Number.isFinite(m15);
+  const fastUp = finiteFast && m5 >= 0.12 && m15 >= 0.35;
+  const fastDown = finiteFast && m5 <= -0.12 && m15 <= -0.35;
+  const midUp = Number.isFinite(m30) && Number.isFinite(m60) && m30 >= 0.55 && m60 >= 0.35;
+  const midDown = Number.isFinite(m30) && Number.isFinite(m60) && m30 <= -0.55 && m60 <= -0.35;
+  const continuationUp = fastUp && (midUp || (Number.isFinite(m30) && m30 >= 0.35 && (!Number.isFinite(m60) || m60 >= -0.25)));
+  const continuationDown = fastDown && (midDown || (Number.isFinite(m30) && m30 <= -0.35 && (!Number.isFinite(m60) || m60 <= 0.25)));
+  const earlyTurnUp = fastUp && (!Number.isFinite(m30) || m30 >= -0.25) && (!Number.isFinite(m60) || m60 >= -0.80);
+  const earlyTurnDown = fastDown && (!Number.isFinite(m30) || m30 <= 0.25) && (!Number.isFinite(m60) || m60 <= 0.80);
+  const slowUp = Number.isFinite(m240) && m240 >= 0.80;
+  const slowDown = Number.isFinite(m240) && m240 <= -0.80;
+  return {
+    m5, m15, m30, m60, m240,
+    fastUp, fastDown, midUp, midDown,
+    continuationUp, continuationDown,
+    earlyTurnUp, earlyTurnDown,
+    slowUp, slowDown
+  };
+}
+
+function aggressiveDirectionalEntry(signal, latest, race, catalyst) {
+  if (!signal?.fresh) return null;
+  if (catalyst?.blockNewEntries) return null;
+  const hours = Number(race?.hoursRemaining);
+  if (!Number.isFinite(hours) || hours <= FINAL_NO_NEW_ENTRY_HOURS) return null;
+  const px = Number(latest?.px);
+  const gap = Number(race?.leaderGap);
+  if (!Number.isFinite(px) || px <= 0) return null;
+
+  const s = directionalShape(signal);
+  const roundTripFeeMove = 0.02 * px;
+  const viable = (target) => Math.abs(Number(target) - px) >= roundTripFeeMove + 0.55;
+  const highPressure = Number.isFinite(gap) && gap >= 750;
+  const qtyStrong = highPressure ? 28 : Number.isFinite(gap) && gap >= 350 ? 24 : 20;
+  const qtyTurn = highPressure ? 24 : 18;
+
+  // After a major event, require continuation rather than a one-bar reversal.
+  if (catalyst?.requireVeryStrong && !(s.continuationUp || s.continuationDown)) return null;
+
+  // Upper/lower band reversals: enter on the fast turn before 4h has fully flipped.
+  if (px >= 230.5 && px <= 234.5 && s.earlyTurnDown && viable(223.5)) {
+    return {
+      action: "enter", side: "sell", qty: s.continuationDown ? qtyStrong : qtyTurn,
+      confidence: s.continuationDown ? 0.98 : 0.96,
+      reason: s.continuationDown ? "aggr_upper_continuation_short" : "aggr_upper_turn_short"
+    };
+  }
+  if (px >= 219 && px <= 223.5 && s.earlyTurnUp && viable(230.5)) {
+    return {
+      action: "enter", side: "buy", qty: s.continuationUp ? qtyStrong : qtyTurn,
+      confidence: s.continuationUp ? 0.98 : 0.96,
+      reason: s.continuationUp ? "aggr_lower_continuation_long" : "aggr_lower_turn_long"
+    };
+  }
+
+  // Middle of the range: only trade a continuation with enough room to clear both fees.
+  if (px > 223.5 && px < 231.5 && s.continuationUp && viable(234.5)) {
+    return { action: "enter", side: "buy", qty: qtyStrong, confidence: 0.97, reason: "aggr_mid_momentum_long" };
+  }
+  if (px > 223.5 && px < 231.5 && s.continuationDown && viable(220.5)) {
+    return { action: "enter", side: "sell", qty: qtyStrong, confidence: 0.97, reason: "aggr_mid_momentum_short" };
+  }
+
+  // Breakouts: 4h may still lag; 5/15 trigger plus 30/60 continuation is enough.
+  if (px > RANGE_BREAK_HIGH && px <= 239.5 && s.continuationUp && viable(242)) {
+    return { action: "enter", side: "buy", qty: highPressure ? 30 : 24, confidence: 0.98, reason: "aggr_breakout_long" };
+  }
+  if (px < RANGE_BREAK_LOW && px >= 213 && s.continuationDown && viable(212.5)) {
+    return { action: "enter", side: "sell", qty: highPressure ? 30 : 24, confidence: 0.98, reason: "aggr_breakdown_short" };
+  }
+  return null;
+}
+
 function openPositionCloseNet(openState, mark) {
   const qty = Number(openState?.qty);
   const entry = Number(openState?.entryPx);
@@ -827,21 +906,28 @@ function tacticalExitDecision(openState, signal, latest, race, catalyst) {
   const net = openPositionCloseNet(openState, latest?.px);
   if (!Number.isFinite(net)) return null;
   const trend = multiTimeframeTrend(signal);
+  const shape = directionalShape(signal);
   const px = Number(latest?.px);
+  const entryPx = Number(openState?.entryPx);
   const short = openState.side === "sell";
-  const favorableStrong = short ? trend.strongDown : trend.strongUp;
-  const adverseStrong = short ? trend.strongUp : trend.strongDown;
-  const adverseVeryStrong = short ? trend.veryStrongUp : trend.veryStrongDown;
-  if (net >= 60) return { exit: true, reason: "hard_take_profit", net, trend };
-  if (net >= 30 && (!favorableStrong || catalyst?.active?.phase === "pre" || Number(race?.hoursRemaining) <= FINAL_DEFENSIVE_HOURS)) {
-    return { exit: true, reason: "protect_profit", net, trend };
+  const direction = short ? -1 : 1;
+  const favorableMove = Number.isFinite(entryPx) ? direction * (px - entryPx) : 0;
+  const fastAdverse = short ? shape.fastUp : shape.fastDown;
+  const continuationAdverse = short ? shape.continuationUp : shape.continuationDown;
+  const favorableContinuation = short ? shape.continuationDown : shape.continuationUp;
+
+  // The objective is realized profit, not perfect tops/bottoms.
+  if (net >= 40) return { exit: true, reason: "hard_take_profit", net, trend };
+  if (net >= 25 && !favorableContinuation) return { exit: true, reason: "protect_profit", net, trend };
+  if (net >= 15 && fastAdverse) return { exit: true, reason: "fast_reversal_profit_lock", net, trend };
+  if (net >= 8 && catalyst?.active?.phase === "pre") return { exit: true, reason: "event_profit_lock", net, trend };
+
+  // Cut a wrong directional thesis by price movement, not by fee-distorted net PnL.
+  if (favorableMove <= -1.50 && continuationAdverse) {
+    return { exit: true, reason: "directional_stop", net, trend };
   }
-  if (net >= 15 && (adverseStrong || catalyst?.active?.phase === "pre" || Number(race?.hoursRemaining) <= FINAL_NO_NEW_ENTRY_HOURS)) {
-    return { exit: true, reason: "early_profit_lock", net, trend };
-  }
-  if (short && px >= RANGE_BREAK_HIGH && adverseStrong) return { exit: true, reason: "short_breakout_stop", net, trend };
-  if (!short && px <= RANGE_BREAK_LOW && adverseStrong) return { exit: true, reason: "long_breakdown_stop", net, trend };
-  if (net <= -90 && adverseVeryStrong) return { exit: true, reason: "momentum_stop", net, trend };
+  if (short && px >= RANGE_BREAK_HIGH && fastAdverse) return { exit: true, reason: "short_breakout_stop", net, trend };
+  if (!short && px <= RANGE_BREAK_LOW && fastAdverse) return { exit: true, reason: "long_breakdown_stop", net, trend };
   return { exit: false, reason: "hold", net, trend };
 }
 
@@ -911,7 +997,8 @@ function applyCalendarRiskGate(decision, signal, race, catalyst) {
     console.log(`CATALYST_ENTRY_BLOCK name=${catalyst.active?.name || "unknown"} phase=pre`);
     return null;
   }
-  if (catalyst?.requireVeryStrong && !(trend.veryStrongUp || trend.veryStrongDown)) {
+  const shape = directionalShape(signal);
+  if (catalyst?.requireVeryStrong && !(shape.continuationUp || shape.continuationDown)) {
     console.log(`CATALYST_POST_WAIT name=${catalyst.active?.name || "unknown"} trend=${trend.label} ratio=${trend.ratio.toFixed(2)}`);
     return null;
   }
@@ -919,7 +1006,7 @@ function applyCalendarRiskGate(decision, signal, race, catalyst) {
     console.log(`FINAL_ENTRY_BLOCK hLeft=${Number(race.hoursRemaining).toFixed(1)}`);
     return null;
   }
-  if (Number(race?.hoursRemaining) <= FINAL_DEFENSIVE_HOURS && !(trend.veryStrongUp || trend.veryStrongDown)) {
+  if (Number(race?.hoursRemaining) <= FINAL_DEFENSIVE_HOURS && !(shape.continuationUp || shape.continuationDown)) {
     console.log(`FINAL_STRONG_ONLY hLeft=${Number(race.hoursRemaining).toFixed(1)} trend=${trend.label}`);
     return null;
   }
@@ -1114,14 +1201,14 @@ function applyRaceSizing(decision, race, latestPx) {
     Number.isFinite(gap) && gap >= 750 &&
     Number(race?.hoursRemaining) <= 144
   ) {
-    maxEntryFee = Math.max(maxEntryFee, 60);
+    maxEntryFee = Math.max(maxEntryFee, 80);
   }
   if (
     confidence >= 0.97 &&
     Number.isFinite(gap) && gap >= 1000 &&
     Number(race?.hoursRemaining) <= 72
   ) {
-    maxEntryFee = Math.max(maxEntryFee, 70);
+    maxEntryFee = Math.max(maxEntryFee, 90);
   }
   if (t < 0.25 && Number.isFinite(gap) && gap >= 200) maxEntryFee = Math.max(maxEntryFee, 45);
   const feeQtyCap =
@@ -1195,6 +1282,22 @@ if (raceSelftest) {
   const downTrend = multiTimeframeTrend(strongDownSignal);
   const upTrend = multiTimeframeTrend(strongUpSignal);
   if (!(downTrend.veryStrongDown && upTrend.veryStrongUp)) throw new Error("RACE_SELFTEST_MTF_DIRECTION");
+  const earlyUpSignal = { fresh: true, move5: 0.22, move15: 0.48, move30: 0.62, move60: 0.20, move240: -1.40 };
+  const earlyDownSignal = { fresh: true, move5: -0.22, move15: -0.48, move30: -0.62, move60: -0.20, move240: 1.40 };
+  const earlyLong = aggressiveDirectionalEntry(earlyUpSignal, { px: 226.0 }, { leaderGap: 1200, hoursRemaining: 100 }, { blockNewEntries: false, requireVeryStrong: false });
+  const earlyShort = aggressiveDirectionalEntry(earlyDownSignal, { px: 230.8 }, { leaderGap: 1200, hoursRemaining: 100 }, { blockNewEntries: false, requireVeryStrong: false });
+  if (!(earlyLong?.side === "buy" && earlyLong.qty >= 28)) throw new Error("RACE_SELFTEST_EARLY_LONG");
+  if (!(earlyShort?.side === "sell" && earlyShort.qty >= 24)) throw new Error("RACE_SELFTEST_EARLY_SHORT");
+  const profitLock = tacticalExitDecision(
+    { state: "open", side: "buy", qty: 30, entryPx: 220, entryFeeEst: 66 },
+    { fresh: true, move5: -0.25, move15: -0.45, move30: 0.10, move60: 0.40, move240: 1.20 },
+    { px: 225.2 },
+    { hoursRemaining: 100 },
+    { active: null }
+  );
+  if (!(profitLock?.exit === true && profitLock.reason === "fast_reversal_profit_lock")) {
+    throw new Error("RACE_SELFTEST_FAST_PROFIT_LOCK");
+  }
   const prePce = catalystContext(Date.parse("2026-09-30T12:00:00Z"));
   const postPce = catalystContext(Date.parse("2026-09-30T12:45:00Z"));
   if (!(prePce.blockNewEntries && prePce.active?.name === "PCE_GDP")) throw new Error("RACE_SELFTEST_CATALYST_PRE");
@@ -1559,7 +1662,7 @@ async function findReliableOpposingOffer(decision, latest) {
   }
 
   const oppositeMakerSide = desiredSide === "buy" ? "sell" : "buy";
-  const minQty = Math.max(0.1, desiredQty * 0.60);
+  const minQty = Math.max(0.1, desiredQty * 0.40);
   const maxQty = Math.min(60, desiredQty * 1.35);
   const refPx = Number(latest.px);
   const candidates = [];
@@ -1840,6 +1943,55 @@ async function reconcileUncertainEntries(state, posSnapshots, latestSweep) {
   return { state: { ...state, uncertainEntries: kept }, changed: true };
 }
 
+async function findReliableExactOpposingOffer(side, qty, latest) {
+  const match = await findReliableOpposingOffer({ side, qty }, latest);
+  if (!match) return null;
+  return Math.abs(Number(match.qty) - Number(qty)) <= 0.02 ? match : null;
+}
+
+async function takeReliableExitOffer(match, openState, latest) {
+  const terms = match.b.terms;
+  const exitSide = openState.side === "buy" ? "sell" : "buy";
+  const taker_sig = signPayload(`${SEASON}|accept|${canonicalTerms(terms)}|${did}`);
+  const text = JSON.stringify({
+    t: "trade",
+    season: SEASON,
+    terms,
+    taker: did,
+    maker_sig: match.b.maker_sig,
+    taker_sig
+  });
+  const preflight = {
+    state: "exit_preflight",
+    id: String(terms.id),
+    exitSide,
+    qty: Number(openState.qty),
+    entrySide: openState.side,
+    entryPx: Number(openState.entryPx),
+    entrySweep: Number(openState.entrySweep),
+    entryId: openState.entryId || null,
+    until: Number(terms.until),
+    requestedAtSweep: Number(latest.n),
+    realizedScoreEst: Number(openState.realizedScoreEst || 0),
+    entryFeeEst: Number(openState.entryFeeEst || (0.01 * Number(openState.qty) * Number(openState.entryPx))),
+    closingShadowId: openState.closingShadowId || null,
+    uncertainEntries: uncertainEntries(openState),
+    liquidityRole: "taker",
+    maker: String(terms.maker)
+  };
+  await setState(preflight);
+  const posted = await signedPost(ROOM, text);
+  await setState({
+    ...preflight,
+    state: "exit_accepted",
+    postedSeq: posted.seq,
+    acceptedSeq: posted.seq,
+    acceptedAtSweep: Number(latest.n),
+    taker: did
+  });
+  console.log(`EXIT_TAKE side=${exitSide} qty=${Number(openState.qty).toFixed(2)} px=${Number(terms.px).toFixed(2)} maker=${String(terms.maker).slice(0,24)} seq=${posted.seq || "?"}`);
+}
+
 async function postEntry(decision, latest, priorState = {}) {
   if (execute) {
     const match = await findReliableOpposingOffer(decision, latest);
@@ -1872,6 +2024,13 @@ async function postEntry(decision, latest, priorState = {}) {
 }
 async function postExit(openState, latest) {
   const side = openState.side === "buy" ? "sell" : "buy";
+  if (execute) {
+    const exactMatch = await findReliableExactOpposingOffer(side, Number(openState.qty), latest);
+    if (exactMatch) {
+      await takeReliableExitOffer(exactMatch, openState, latest);
+      return;
+    }
+  }
   const offer = makeOffer(side, Number(openState.qty), latest, "rd4x");
   if (!execute) {
     console.log(`DRY_EXIT side=${side} qty=${Number(openState.qty).toFixed(2)}`);
@@ -2500,14 +2659,15 @@ const rawDecision = decide({
   latest,
   race
 });
+const aggressiveDecision = aggressiveDirectionalEntry(realNvdaSignal, latest, race, catalyst);
+const tacticalDecision = aggressiveDecision || tacticalRangeEntry(realNvdaSignal, latest, race, catalyst) || rawDecision;
 const fallbackDecision = controlledFallbackEntry(
-  rawDecision,
+  tacticalDecision,
   race,
   distinct,
   positions,
   latest
 );
-const tacticalDecision = fallbackDecision || tacticalRangeEntry(realNvdaSignal, latest, race, catalyst);
 const realConfirmedDecision = applyRealNvdaSignal(
   tacticalDecision,
   realNvdaSignal,
