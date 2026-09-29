@@ -2418,19 +2418,28 @@ if (state.state === "entry_offer") {
     console.log("ENTRY_ACCEPTED");
     process.exit(0);
   }
-  if (Number(latest.n) <= Number(state.until || 0)) {
+  const effectiveEntryUntil = Math.min(
+    Number(state.until || latest.n),
+    Number(state.entrySweep || latest.n) + 1
+  );
+  if (Number(latest.n) <= effectiveEntryUntil) {
     console.log("ENTRY_OFFER_LIVE");
     process.exit(0);
   }
-  await setState({
+  state = {
     state: "idle",
-    cooldownUntilSweep: Number(latest.n) + 1,
+    cooldownUntilSweep: Number(latest.n),
     lastExpiredId: state.id,
     realizedScoreEst: Number(state.realizedScoreEst || 0),
     uncertainEntries: uncertainEntries(state)
-  });
-  console.log("ENTRY_EXPIRED");
-  process.exit(0);
+  };
+  await setState(state);
+  console.log("ENTRY_EXPIRED_FAST_REPRICE");
+  realNvdaSignal = await fetchRealNvdaSignal(now);
+  if (realNvdaSignal?.fresh) {
+    const trend = multiTimeframeTrend(realNvdaSignal);
+    console.log(`MTF_REPRICE trend=${trend.label} ratio=${trend.ratio.toFixed(2)} score=${trend.score}/${trend.weight}`);
+  }
 }
 
 if (state.state === "entry_accepted") {
@@ -2641,7 +2650,11 @@ if (state.state === "exit_offer") {
     console.log("EXIT_ACCEPTED");
     process.exit(0);
   }
-  if (Number(latest.n) <= Number(state.until || 0)) {
+  const effectiveExitUntil = Math.min(
+    Number(state.until || latest.n),
+    Number(state.requestedAtSweep || latest.n) + 1
+  );
+  if (Number(latest.n) <= effectiveExitUntil) {
     console.log("EXIT_OFFER_LIVE");
     process.exit(0);
   }
