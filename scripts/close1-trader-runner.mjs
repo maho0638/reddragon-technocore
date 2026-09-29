@@ -874,6 +874,15 @@ function directionalShape(signal) {
   };
 }
 
+function directionalFeeRoom(side, px) {
+  const p = Number(px);
+  if (!Number.isFinite(p) || p <= 0 || !["buy", "sell"].includes(String(side))) return false;
+  const target = side === "buy"
+    ? (p <= RANGE_BREAK_HIGH ? 234.5 : 242)
+    : (p >= RANGE_BREAK_LOW ? 220.5 : 212.5);
+  return Math.abs(target - p) >= 0.02 * p + 0.55;
+}
+
 function activeContestEntry(signal, latest, race, catalyst) {
   if (!signal?.fresh || catalyst?.blockNewEntries) return null;
   const hours = Number(race?.hoursRemaining);
@@ -901,12 +910,15 @@ function activeContestEntry(signal, latest, race, catalyst) {
     ? (!Number.isFinite(m30) || m30 >= 0.15) && (!Number.isFinite(m60) || m60 >= -0.10)
     : (!Number.isFinite(m30) || m30 <= -0.15) && (!Number.isFinite(m60) || m60 <= 0.10);
 
+  const side = up ? "buy" : "sell";
+  if (!directionalFeeRoom(side, px)) return null;
+
   const highPressure = Number.isFinite(gap) && gap >= 750;
   const qty = highPressure ? (supported ? 40 : 34) : (supported ? 30 : 24);
   const confidence = highPressure ? 0.97 : supported ? 0.96 : 0.94;
   return {
     action: "enter",
-    side: up ? "buy" : "sell",
+    side,
     qty,
     confidence,
     reason: supported ? "active_direction_supported" : "active_direction_early"
@@ -1243,6 +1255,10 @@ function applyRealNvdaSignal(decision, signal, race, distinct, latest) {
   }
 
   if (!Number.isFinite(gap) || gap < 175 || !alignedOrLagging) return decision;
+  if (!directionalFeeRoom(side, Number(latest?.px))) {
+    console.log(`REAL_NVDA_FEE_ROOM_BLOCK side=${side} px=${Number(latest?.px).toFixed(2)}`);
+    return decision;
+  }
 
   const veryStrong = trend.veryStrongUp || trend.veryStrongDown;
   const qty = veryStrong && gap >= 750 ? 40 : veryStrong && gap >= 300 ? 32 : gap >= 300 ? 22 : 16;
@@ -1423,6 +1439,8 @@ if (raceSelftest) {
   const downTrend = multiTimeframeTrend(strongDownSignal);
   const upTrend = multiTimeframeTrend(strongUpSignal);
   if (!(downTrend.veryStrongDown && upTrend.veryStrongUp)) throw new Error("RACE_SELFTEST_MTF_DIRECTION");
+  if (!directionalFeeRoom("sell", 227.5)) throw new Error("RACE_SELFTEST_FEE_ROOM_VALID");
+  if (directionalFeeRoom("sell", 222.0)) throw new Error("RACE_SELFTEST_FEE_ROOM_BLOCK_NEAR_TARGET");
   const activeLong = activeContestEntry(
     { fresh: true, move5: 0.10, move15: 0.24, move30: 0.18, move60: 0.00, move240: -0.60 },
     { px: 231.0 },
@@ -3123,7 +3141,15 @@ const confirmedShadowActions = uncertainEntries(state)
   .filter((x) => x.confirmedOutcome === "settled")
   .map((entry) => ({ entry, decision: confirmedShadowExitDecision(entry, realNvdaSignal, latest, race, catalyst) }))
   .filter((x) => x.decision?.exit)
-  .sort((a, b) => Number(b.decision.net) - Number(a.decision.net));
+  .sort((a, b) => {
+    const riskReason = (reason) => /stop|capital_release|breakout|breakdown|reversal/.test(String(reason || ""));
+    const ar = riskReason(a.decision.reason);
+    const br = riskReason(b.decision.reason);
+    if (ar !== br) return ar ? -1 : 1;
+    return ar
+      ? Number(a.decision.net) - Number(b.decision.net)
+      : Number(b.decision.net) - Number(a.decision.net);
+  });
 
 if (confirmedShadowActions.length) {
   const { entry, decision: shadowDecision } = confirmedShadowActions[0];
@@ -3141,7 +3167,9 @@ if (confirmedShadowActions.length) {
     entryId: entry.id,
     closingShadowId: entry.id,
     realizedScoreEst: Number(state.realizedScoreEst || 0),
-    entryFeeEst: 0.01 * Number(entry.qty) * Number(entry.entryPx),
+    entryFeeEst: Number.isFinite(Number(entry.entryFeeEst))
+      ? Number(entry.entryFeeEst)
+      : 0.01 * Number(entry.qty) * Number(entry.entryPx),
     uncertainEntries: uncertainEntries(state)
   }, latest);
   process.exit(0);
