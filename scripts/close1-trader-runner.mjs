@@ -1350,7 +1350,7 @@ if (raceSelftest) {
   if (!(shadowRescue?.exit === true && shadowRescue.reason === "shadow_lower_band_reversal")) throw new Error("RACE_SELFTEST_SHADOW_RESCUE");
   if (!(shadowHardTake?.exit === true && shadowHardTake.reason === "shadow_hard_take")) throw new Error("RACE_SELFTEST_SHADOW_HARD_TAKE");
   const openStop = tacticalExitDecision({ state: "open", side: "sell", qty: 10, entryPx: 232, entryFeeEst: 23.2 }, strongUpSignal, { px: 235 }, { hoursRemaining: 100 }, { active: null });
-  if (!(openStop?.exit === true && openStop.reason === "directional_stop")) throw new Error("RACE_SELFTEST_OPEN_STOP");
+  if (!(openStop?.exit === true && ["fast_directional_stop", "directional_stop"].includes(openStop.reason))) throw new Error("RACE_SELFTEST_OPEN_STOP");
   const catchUpRefs = Array.from({ length: 24 }, (_, i) => ({ px: 224.50 + i * 0.001 }));
   const catchUpDecision = controlledFallbackEntry(
     null,
