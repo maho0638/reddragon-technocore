@@ -2143,6 +2143,42 @@ if (raceSelftest) {
     ledgerDiag.push({ id: tradeId, fromSweep, result });
   }
   console.log("LEDGER_OUTCOME_DIAG " + JSON.stringify(ledgerDiag));
+  const roomDiagMessages = await readExport(ROOM);
+  const missedRanges = [];
+  for (const msg of flowDiagMessages) {
+    const body = parseBody(msg);
+    if (body?.t !== "flow" || !Array.isArray(body.missed)) continue;
+    for (const row of body.missed) {
+      if (!Array.isArray(row) || row.length < 3 || String(row[0]) !== ROOM) continue;
+      const lo = Number(row[1]), hi = Number(row[2]);
+      if (Number.isFinite(lo) && Number.isFinite(hi)) missedRanges.push([lo, hi, Number(body.n)]);
+    }
+  }
+  const acceptedRoomTrades = [];
+  for (const msg of roomDiagMessages) {
+    const body = parseBody(msg);
+    const terms = body?.terms;
+    if (body?.t !== "trade" || body?.season !== SEASON || !terms?.id || !body?.taker_sig) continue;
+    const ourMaker = String(terms.maker || "") === did;
+    const ourTaker = String(body.taker || "") === did;
+    if (!ourMaker && !ourTaker) continue;
+    const seq = Number(msg?.seq || 0);
+    const makerSide = String(terms.side || "");
+    const ourSide = ourMaker ? makerSide : makerSide === "buy" ? "sell" : makerSide === "sell" ? "buy" : "?";
+    const missed = missedRanges.some(([lo, hi]) => seq >= lo && seq <= hi);
+    acceptedRoomTrades.push({
+      seq,
+      id: String(terms.id),
+      role: ourMaker ? "maker" : "taker",
+      side: ourSide,
+      qty: Number(terms.qty),
+      px: Number(terms.px),
+      until: Number(terms.until),
+      missed
+    });
+  }
+  acceptedRoomTrades.sort((a, b) => a.seq - b.seq);
+  console.log("REDDRAGON_ACCEPTED_ROOM_TRADES " + JSON.stringify(acceptedRoomTrades));
   console.log("RACE_SIZING_SELFTEST_OK");
   process.exit(0);
 }
