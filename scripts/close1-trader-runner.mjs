@@ -2665,7 +2665,10 @@ async function reconcileUncertainEntries(state, posSnapshots, latestSweep) {
     }
 
     const peerEvidence = peerSettlementEvidence(posSnapshots, entry, latestSweep);
-    const settled = outcome?.outcome === "settled" || peerEvidence?.settled === true;
+    if (peerEvidence?.settled) {
+      console.log(`UNCERTAIN_POSITION_HINT id=${entry.id} peer=${peerEvidence.peer.slice(0,24)} observed=${peerEvidence.observedDelta.toFixed(2)} expected=${peerEvidence.expectedDelta.toFixed(2)}`);
+    }
+    const settled = outcome?.outcome === "settled";
     if (settled && entry.confirmedOutcome !== "settled") {
       changed = true;
       const settledPx = Number.isFinite(Number(outcome?.px)) ? Number(outcome.px) : Number(entry.entryPx);
@@ -3142,7 +3145,7 @@ if (state.state === "entry_accepted") {
     }
     process.exit(0);
   }
-  if (outcome?.outcome === "ambiguous_omitted" && !topEvidence && !peerEvidence?.settled) {
+  if (outcome?.outcome === "ambiguous_omitted") {
     const acceptedAt = Number(state.acceptedAtSweep || state.entrySweep || latest.n);
     if (Number(latest.n) >= acceptedAt + UNCERTAIN_RELEASE_SWEEPS) {
       const entries = uncertainEntries(state);
@@ -3204,7 +3207,7 @@ if (state.state === "entry_accepted") {
     }
   }
 
-  if (!releasedAmbiguousEntry && (outcome?.outcome === "settled" || topEvidence || peerEvidence?.settled)) {
+  if (!releasedAmbiguousEntry && outcome?.outcome === "settled") {
     const settledEntryPx = Number.isFinite(Number(outcome?.px)) ? Number(outcome.px) : Number(state.entryPx);
     const settledEntryFee = Number.isFinite(Number(outcome?.fee))
       ? Number(outcome.fee)
@@ -3290,7 +3293,7 @@ if (state.state === "entry_unverified") {
       `PEER_POSITION_DELTA did=${peerEvidence.peer.slice(0, 24)} before=${peerEvidence.before.pos.toFixed(2)} after=${peerEvidence.after.pos.toFixed(2)} observed=${peerEvidence.observedDelta.toFixed(2)} expected=${peerEvidence.expectedDelta.toFixed(2)} settled=${peerEvidence.settled}`
     );
   }
-  if (outcome?.outcome === "settled" || topEvidence || peerEvidence?.settled) {
+  if (outcome?.outcome === "settled") {
     const settledEntryPx = Number.isFinite(Number(outcome?.px)) ? Number(outcome.px) : Number(state.entryPx);
     const settledEntryFee = Number.isFinite(Number(outcome?.fee))
       ? Number(outcome.fee)
@@ -3468,10 +3471,7 @@ if (state.state === "exit_accepted") {
     await setState(open);
     console.log(`EXIT_VOID_REEVALUATE reason=${outcome.reason} n=${outcome.n ?? "na"} id=${state.id}`);
     state = open;
-  } else if (
-    outcome?.outcome === "settled" ||
-    (fullExitAttempt && Number.isFinite(ownPos) && !topStillOpen && Number(latest.n) >= Number(state.acceptedAtSweep || latest.n) + 1)
-  ) {
+  } else if (outcome?.outcome === "settled") {
     const transition = settledExitTransition(state, outcome, latest.n, latest.px);
     if (!transition) throw new Error("EXIT_REALIZED_ACCOUNTING_INVALID");
     await setState(transition.next);
@@ -3497,21 +3497,21 @@ if (state.state === "exit_unverified") {
     Math.sign(ownPos) === expectedStillOpenSign &&
     Math.abs(ownPos) >= Math.max(0.1, Number(state.positionQtyBefore || state.qty) * 0.5);
 
-  if (outcome?.outcome === "void" || topStillOpen) {
+  if (outcome?.outcome === "void") {
     if (state.closingShadowId) {
       await setState({
         state: "idle",
         cooldownUntilSweep: Number(latest.n) + 1,
         realizedScoreEst: Number(state.realizedScoreEst || 0),
         uncertainEntries: uncertainEntries(state),
-        lastShadowExitVoid: outcome?.reason || "position_visible"
+        lastShadowExitVoid: outcome?.reason || "void"
       });
-      console.log(`SHADOW_EXIT_UNVERIFIED_STILL_OPEN reason=${outcome?.reason || "position_visible"}`);
+      console.log(`SHADOW_EXIT_UNVERIFIED_VOID reason=${outcome?.reason || "void"}`);
       process.exit(0);
     }
-    const open = restoreOpenFromExitState(state, latest.n, outcome?.reason || "position_visible");
+    const open = restoreOpenFromExitState(state, latest.n, outcome?.reason || "void");
     await setState(open);
-    console.log(`EXIT_UNVERIFIED_RECOVERED_OPEN reason=${outcome?.reason || "position_visible"}`);
+    console.log(`EXIT_UNVERIFIED_RECOVERED_OPEN reason=${outcome?.reason || "void"}`);
     state = open;
   } else if (outcome?.outcome === "settled") {
     const transition = settledExitTransition(state, outcome, latest.n, latest.px);
