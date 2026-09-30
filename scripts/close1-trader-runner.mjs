@@ -578,6 +578,18 @@ async function signedPost(room, text) {
   return { seq };
 }
 
+async function latestRefSnapshot() {
+  const msgs = await readRoom("d-close1-price", 8);
+  let latest = null;
+  for (const m of msgs) {
+    const b = parseBody(m);
+    if (b?.t !== "price" || !b?.ref?.px) continue;
+    const item = { n: Number(b.n), px: Number(b.ref.px), time: String(b.ref.time || ""), tid: String(b.ref.tid || ""), age_s: Number(b.age_s || 0) };
+    if (Number.isInteger(item.n) && Number.isFinite(item.px) && (!latest || item.n > latest.n)) latest = item;
+  }
+  return latest;
+}
+
 async function priceSeries() {
   const msgs = await readExport("d-close1-price");
   const out = [];
@@ -1442,6 +1454,7 @@ if (raceSelftest) {
   if (!acceptableTakerEntryQuote("buy", 228.48, 228.40)) throw new Error("RACE_SELFTEST_ACCEPT_NEAR_MARK_BUY");
   if (!acceptableTakerEntryQuote("sell", 228.65, 228.40)) throw new Error("RACE_SELFTEST_ACCEPT_FAVORABLE_SELL");
   if (!acceptableTakerEntryQuote("buy", 228.10, 228.40)) throw new Error("RACE_SELFTEST_ACCEPT_FAVORABLE_BUY");
+  if (!(101 >= 100 + 1) || (100 >= 100 + 1)) throw new Error("RACE_SELFTEST_NEXT_SWEEP_UNTIL");
   const partialAllocProbe = exitAllocation({ qty: 40, entryPx: 225, entryFeeEst: 90 }, 15);
   if (!(partialAllocProbe && partialAllocProbe.remainingQty === 25 && Math.abs(partialAllocProbe.closedEntryFee - 33.75) < 1e-9)) throw new Error("RACE_SELFTEST_PARTIAL_EXIT_ALLOCATION");
   const partialStateProbe = settledExitTransition(
@@ -2034,7 +2047,7 @@ async function findReliableOpposingOffer(decision, latest) {
     if (settledIds.has(id) || voidById.has(id) || acceptedIds.has(id)) continue;
     if (String(terms.side) !== oppositeMakerSide) continue;
     if (!(terms.taker === "any" || terms.taker === did)) continue;
-    if (Number(terms.until) < Number(latest.n)) continue;
+    if (Number(terms.until) < Number(latest.n) + 1) continue;
 
     const qty = Number(terms.qty);
     const px = Number(terms.px);
@@ -2154,6 +2167,12 @@ async function takeReliableOffer(match, decision, latest, priorState = {}, prior
   const side = String(decision.side);
   const qty = Number(terms.qty);
   const px = Number(terms.px);
+  const fresh = await latestRefSnapshot();
+  const executionRef = fresh || latest;
+  if (!executionRef || Number(terms.until) < Number(executionRef.n) + 1 || Math.abs(px-Number(executionRef.px))/Number(executionRef.px) > 0.045 || !acceptableTakerEntryQuote(side, px, Number(executionRef.px))) {
+    console.log(`ENTRY_TAKE_STALE_SKIP id=${terms.id} until=${terms.until} n=${executionRef?.n ?? "na"} px=${px.toFixed(2)} ref=${Number(executionRef?.px).toFixed(2)}`);
+    return false;
+  }
   const taker_sig = signPayload(`${SEASON}|accept|${canonicalTerms(terms)}|${did}`);
   const text = JSON.stringify({
     t: "trade",
@@ -2171,7 +2190,7 @@ async function takeReliableOffer(match, decision, latest, priorState = {}, prior
     qty,
     entryPx: px,
     until: Number(terms.until),
-    entrySweep: Number(latest.n),
+    entrySweep: Number(executionRef.n),
     realizedScoreEst: Number(priorState.realizedScoreEst || 0),
     liquidityRole: "taker",
     maker: String(terms.maker),
@@ -2193,6 +2212,7 @@ async function takeReliableOffer(match, decision, latest, priorState = {}, prior
   console.log(
     `ENTRY_TAKE side=${side} qty=${qty.toFixed(2)} px=${px.toFixed(2)} maker=${String(terms.maker).slice(0, 24)} seq=${posted.seq || "?"}`
   );
+  return true;
 }
 
 async function postScaleIn(decision, latest, openState) {
@@ -2435,57 +2455,112 @@ async function findOutcome(id, fromSweep = 0, flowMessages = null) {
   return null;
 }
 
+async function proveArchiveAbsence(id, fromSweep, untilSweep) {
+  const start = Number(fromSweep), until = Number(untilSweep);
+  if (!id || !Number.isInteger(start) || start <= 0 || !Number.isInteger(until) || until < start) return null;
+  const end = until + 1;
+  if (end - start > 24) return null;
+  const index = await close1ArchiveIndex();
+  if (!index || index.maxN < end) return null;
+  for (let n = start; n <= end; n++) {
+    const meta = index.byN.get(n);
+    if (!meta || meta.status !== "full") return null;
+    const record = await close1ArchiveRecord(meta);
+    if (!record) return null;
+    const direct = outcomeFromArchiveRecord(record, id, n);
+    if (direct) return direct;
+  }
+  return { outcome: "void", reason: "not_seen_in_authoritative_archive", n: end, inferredFrom: "official_archive_absence" };
+}
+
+function acceptedTradeBodyById(roomMessages, id) {
+  const candidates = [];
+  for (const msg of roomMessages || []) {
+    const b = parseBody(msg);
+    if (b?.t === "trade" && b?.season === SEASON && String(b?.terms?.id || "") === String(id || "") && b?.taker_sig && validAcceptance(b)) {
+      candidates.push({ seq: Number(msg?.seq || 0), b });
+    }
+  }
+  candidates.sort((a, b) => a.seq - b.seq);
+  return candidates[0]?.b || null;
+}
+
+function hydrateUncertainEntry(entry, roomMessages) {
+  if (!entry?.id || entry.kind === "pending_exit") return entry;
+  const accepted = acceptedTradeBodyById(roomMessages, entry.id);
+  const terms = accepted?.terms;
+  if (!terms) return entry;
+  const ourMaker = String(terms.maker || "") === did, ourTaker = String(accepted.taker || "") === did;
+  if (!ourMaker && !ourTaker) return entry;
+  const makerSide = String(terms.side || "");
+  const ourSide = ourMaker ? makerSide : makerSide === "buy" ? "sell" : makerSide === "sell" ? "buy" : entry.side;
+  return {
+    ...entry, side: ourSide,
+    qty: Number.isFinite(Number(terms.qty)) ? Number(terms.qty) : Number(entry.qty),
+    entryPx: Number.isFinite(Number(terms.px)) ? Number(terms.px) : Number(entry.entryPx),
+    until: Number.isInteger(Number(terms.until)) ? Number(terms.until) : Number(entry.until || 0),
+    maker: String(terms.maker || entry.maker || ""), taker: String(accepted.taker || entry.taker || ""),
+    liquidityRole: ourMaker ? "maker" : "taker",
+    counterparty: ourMaker ? String(accepted.taker || "") : String(terms.maker || "")
+  };
+}
+function uncertainMetadataChanged(a, b) {
+  for (const key of ["side","qty","entryPx","until","maker","taker","liquidityRole","counterparty"]) {
+    if (String(a?.[key] ?? "") !== String(b?.[key] ?? "")) return true;
+  }
+  return false;
+}
+
 async function reconcileUncertainEntries(state, posSnapshots, latestSweep) {
   const entries = uncertainEntries(state);
   if (!entries.length) return { state, changed: false };
-
-  // Old ambiguous trades can age out of the 200-message live view. Use the signed,
-  // read-only referee export to revisit their ids without posting a diagnostic trade.
   const flowMessages = await readExport("d-close1-flow");
+  const needRoomHydration = entries.some((x) => x?.kind !== "pending_exit" && (!x?.until || !x?.liquidityRole || !x?.counterparty));
+  const roomMessages = needRoomHydration ? await readExport(ROOM) : [];
   const kept = [];
-  let changed = false;
-
-  for (const entry of entries) {
-    const outcome = await findOutcome(
-      String(entry.id || ""),
-      Number(entry.acceptedAtSweep || 0),
-      flowMessages
-    );
-
-    if (outcome?.outcome === "void") {
+  let changed = false, realizedDelta = 0;
+  for (const rawEntry of entries) {
+    const entry = needRoomHydration ? hydrateUncertainEntry(rawEntry, roomMessages) : rawEntry;
+    if (uncertainMetadataChanged(rawEntry, entry)) {
       changed = true;
-      console.log(
-        `UNCERTAIN_RESOLVED_VOID id=${entry.id} reason=${outcome.reason} n=${outcome.n ?? "na"}`
-      );
-      continue;
+      console.log(`UNCERTAIN_METADATA_RECOVERED id=${entry.id} until=${entry.until || "na"} role=${entry.liquidityRole || "na"}`);
     }
-
+    if (entry.kind === "pending_exit") {
+      let outcome = await findOutcome(String(entry.exitId || ""), Number(entry.requestedAtSweep || entry.acceptedAtSweep || 0), flowMessages);
+      if (!outcome && Number(entry.until) > 0) outcome = await proveArchiveAbsence(String(entry.exitId || ""), Number(entry.requestedAtSweep || entry.acceptedAtSweep || 0), Number(entry.until));
+      if (outcome?.outcome === "settled") {
+        const close = realizedCloseDelta({ qty:Number(entry.qty), entrySide:entry.side, entryPx:Number(entry.entryPx), entryFeeEst:Number(entry.entryFeeEst || (0.01*Number(entry.qty)*Number(entry.entryPx))), exitPx:Number(entry.exitPx) }, outcome, Number(entry.exitPx || entry.entryPx));
+        if (close) realizedDelta += close.delta;
+        changed = true;
+        console.log(`PENDING_EXIT_RESOLVED_SETTLED exit=${entry.exitId} delta=${close?.delta?.toFixed?.(2) ?? "na"}`);
+        continue;
+      }
+      if (outcome?.outcome === "void") {
+        changed = true;
+        kept.push({ ...entry, kind:"position_shadow", id:entry.originalEntryId || `restored-${entry.exitId}`, confirmedOutcome:"settled", confirmedAtSweep:Number(entry.entrySweep || latestSweep), exitId:undefined, exitPx:undefined, requestedAtSweep:undefined });
+        console.log(`PENDING_EXIT_RESOLVED_VOID exit=${entry.exitId} reason=${outcome.reason || "void"}`);
+        continue;
+      }
+      kept.push(entry); continue;
+    }
+    let outcome = await findOutcome(String(entry.id || ""), Number(entry.acceptedAtSweep || 0), flowMessages);
+    if (!outcome && Number(entry.until) > 0) outcome = await proveArchiveAbsence(String(entry.id || ""), Number(entry.acceptedAtSweep || 0), Number(entry.until));
+    if (outcome?.outcome === "void") {
+      changed = true; console.log(`UNCERTAIN_RESOLVED_VOID id=${entry.id} reason=${outcome.reason} n=${outcome.n ?? "na"}`); continue;
+    }
     const peerEvidence = peerSettlementEvidence(posSnapshots, entry, latestSweep);
     const settled = outcome?.outcome === "settled" || peerEvidence?.settled === true;
     if (settled && entry.confirmedOutcome !== "settled") {
       changed = true;
       const settledPx = Number.isFinite(Number(outcome?.px)) ? Number(outcome.px) : Number(entry.entryPx);
-      const settledFee = Number.isFinite(Number(outcome?.fee))
-        ? Number(outcome.fee)
-        : Number(entry.entryFeeEst || (0.01 * Number(entry.qty) * settledPx));
-      kept.push({
-        ...entry,
-        entryPx: settledPx,
-        entryFeeEst: settledFee,
-        confirmedOutcome: "settled",
-        confirmedAtSweep: Number(outcome?.n || peerEvidence?.after?.n || latestSweep)
-      });
-      console.log(
-        `UNCERTAIN_CONFIRMED_SETTLED id=${entry.id} n=${outcome?.n ?? peerEvidence?.after?.n ?? "na"}`
-      );
-      continue;
+      const settledFee = Number.isFinite(Number(outcome?.fee)) ? Number(outcome.fee) : Number(entry.entryFeeEst || (0.01*Number(entry.qty)*settledPx));
+      kept.push({ ...entry, entryPx:settledPx, entryFeeEst:settledFee, confirmedOutcome:"settled", confirmedAtSweep:Number(outcome?.n || peerEvidence?.after?.n || latestSweep) });
+      console.log(`UNCERTAIN_CONFIRMED_SETTLED id=${entry.id} n=${outcome?.n ?? peerEvidence?.after?.n ?? "na"}`); continue;
     }
-
     kept.push(entry);
   }
-
-  if (!changed) return { state, changed: false };
-  return { state: { ...state, uncertainEntries: kept }, changed: true };
+  if (!changed && !realizedDelta) return { state, changed:false };
+  return { state:{ ...state, realizedScoreEst:Number(state.realizedScoreEst || 0)+realizedDelta, uncertainEntries:kept }, changed:true };
 }
 
 async function findReliableExitOpposingOffer(side, qty, latest) {
@@ -2527,6 +2602,13 @@ function restoreOpenFromExitState(state, latestSweep, reason) {
 async function takeReliableExitOffer(match, openState, latest) {
   const terms = match.b.terms;
   const exitSide = openState.side === "buy" ? "sell" : "buy";
+  const fresh = await latestRefSnapshot();
+  const executionRef = fresh || latest;
+  const exitPx = Number(terms.px);
+  if (!executionRef || Number(terms.until) < Number(executionRef.n) + 1 || Math.abs(exitPx-Number(executionRef.px))/Number(executionRef.px) > 0.045) {
+    console.log(`EXIT_TAKE_STALE_SKIP id=${terms.id} until=${terms.until} n=${executionRef?.n ?? "na"} px=${exitPx.toFixed(2)} ref=${Number(executionRef?.px).toFixed(2)}`);
+    return false;
+  }
   const taker_sig = signPayload(`${SEASON}|accept|${canonicalTerms(terms)}|${did}`);
   const text = JSON.stringify({
     t: "trade",
@@ -2547,7 +2629,7 @@ async function takeReliableExitOffer(match, openState, latest) {
     entrySweep: Number(openState.entrySweep),
     entryId: openState.entryId || null,
     until: Number(terms.until),
-    requestedAtSweep: Number(latest.n),
+    requestedAtSweep: Number(executionRef.n),
     realizedScoreEst: Number(openState.realizedScoreEst || 0),
     entryFeeEst: allocation.closedEntryFee, closingShadowId: openState.closingShadowId || null,
     uncertainEntries: uncertainEntries(openState), liquidityRole: "taker", maker: String(terms.maker),
@@ -2564,20 +2646,24 @@ async function takeReliableExitOffer(match, openState, latest) {
     taker: did
   });
   console.log(`EXIT_TAKE side=${exitSide} qty=${allocation.closedQty.toFixed(2)} remaining=${allocation.remainingQty.toFixed(2)} px=${Number(terms.px).toFixed(2)} maker=${String(terms.maker).slice(0,24)} seq=${posted.seq || "?"}`);
+  return true;
 }
 
 async function postEntry(decision, latest, priorState = {}) {
+  let executionLatest = latest;
   if (execute) {
-    const match = await findReliableOpposingOffer(decision, latest);
+    executionLatest = await latestRefSnapshot() || latest;
+    const match = await findReliableOpposingOffer(decision, executionLatest);
     if (match) {
-      await takeReliableOffer(match, decision, latest, priorState);
-      return;
+      const taken = await takeReliableOffer(match, decision, executionLatest, priorState);
+      if (taken) return;
+      executionLatest = await latestRefSnapshot() || executionLatest;
     }
   }
 
   const desiredQty = Number(decision.qty);
   const makerQty = Math.min(desiredQty, MAKER_ENTRY_CHUNK_QTY);
-  const offer = makeOffer(decision.side, makerQty, latest, "rd4e");
+  const offer = makeOffer(decision.side, makerQty, executionLatest, "rd4e");
   if (!execute) {
     console.log(`DRY_ENTRY side=${decision.side} qty=${Number(decision.qty).toFixed(2)}`);
     return;
@@ -2590,7 +2676,7 @@ async function postEntry(decision, latest, priorState = {}) {
     targetQty: desiredQty,
     entryPx: Number(offer.terms.px),
     until: offer.until,
-    entrySweep: Number(latest.n),
+    entrySweep: Number(executionLatest.n),
     realizedScoreEst: Number(priorState.realizedScoreEst || 0),
     uncertainEntries: uncertainEntries(priorState),
     liquidityRole: "maker"
@@ -2650,17 +2736,20 @@ function settledExitTransition(state, outcome, latestSweep, fallbackMark) {
 
 async function postExit(openState, latest) {
   const side = openState.side === "buy" ? "sell" : "buy";
+  let executionLatest = latest;
   if (execute) {
-    const exitMatch = await findReliableExitOpposingOffer(side, Number(openState.qty), latest);
+    executionLatest = await latestRefSnapshot() || latest;
+    const exitMatch = await findReliableExitOpposingOffer(side, Number(openState.qty), executionLatest);
     if (exitMatch) {
-      await takeReliableExitOffer(exitMatch, openState, latest);
-      return;
+      const taken = await takeReliableExitOffer(exitMatch, openState, executionLatest);
+      if (taken) return;
+      executionLatest = await latestRefSnapshot() || executionLatest;
     }
   }
   const exitQty = Math.min(Number(openState.qty), MAKER_EXIT_CHUNK_QTY);
   const allocation = exitAllocation(openState, exitQty);
   if (!allocation) throw new Error("INVALID_MAKER_EXIT_ALLOCATION");
-  const offer = makeOffer(side, exitQty, latest, "rd4x");
+  const offer = makeOffer(side, exitQty, executionLatest, "rd4x");
   if (!execute) {
     console.log(`DRY_EXIT side=${side} qty=${Number(openState.qty).toFixed(2)}`);
     return;
@@ -2677,7 +2766,7 @@ async function postExit(openState, latest) {
     entrySweep: Number(openState.entrySweep),
     entryId: openState.entryId || null,
     until: offer.until,
-    requestedAtSweep: Number(latest.n),
+    requestedAtSweep: Number(executionLatest.n),
     realizedScoreEst: Number(openState.realizedScoreEst || 0),
     entryFeeEst: allocation.closedEntryFee, closingShadowId: openState.closingShadowId || null,
     uncertainEntries: uncertainEntries(openState), liquidityRole: "maker",
@@ -3196,7 +3285,7 @@ if (state.state === "exit_accepted") {
     state = open;
   } else if (
     outcome?.outcome === "settled" ||
-    (Number.isFinite(ownPos) && !topStillOpen && Number(latest.n) >= Number(state.acceptedAtSweep || latest.n) + 1)
+    (fullExitAttempt && Number.isFinite(ownPos) && !topStillOpen && Number(latest.n) >= Number(state.acceptedAtSweep || latest.n) + 1)
   ) {
     const transition = settledExitTransition(state, outcome, latest.n, latest.px);
     if (!transition) throw new Error("EXIT_REALIZED_ACCOUNTING_INVALID");
@@ -3249,38 +3338,38 @@ if (state.state === "exit_unverified") {
     (outcome?.outcome === "ambiguous_omitted" || !outcome) &&
     Number(latest.n) >= Number(state.acceptedAtSweep || latest.n) + 2
   ) {
-    if (state.closingShadowId) {
-      await setState({
-        state: "idle",
-        cooldownUntilSweep: Number(latest.n) + 1,
-        realizedScoreEst: Number(state.realizedScoreEst || 0),
-        uncertainEntries: uncertainEntries(state),
-        lastAmbiguousExitId: state.id
-      });
-      console.log(`SHADOW_EXIT_UNVERIFIED_WAIT shadow=${state.closingShadowId} exit=${state.id}`);
-      process.exit(0);
-    }
-    const entries = uncertainEntries(state);
-    const shadowId = state.entryId || `open-before-${state.id}`;
-    if (!entries.some((x) => x.id === shadowId)) {
+    const before = Number(state.positionQtyBefore || state.qty);
+    const attempted = Number(state.qty);
+    const guaranteedRemaining = Math.max(0, before - attempted);
+    let entries = uncertainEntries(state);
+    if (state.closingShadowId) entries = entries.filter((x) => String(x.id || "") !== String(state.closingShadowId));
+    if (!entries.some((x) => x.kind === "pending_exit" && String(x.exitId || "") === String(state.id))) {
       entries.push({
-        id: shadowId,
-        side: state.entrySide,
-        qty: Number(state.qty),
-        entryPx: Number(state.entryPx),
-        acceptedAtSweep: Number(state.entrySweep || state.acceptedAtSweep || latest.n),
-        exitAmbiguousId: state.id
+        kind:"pending_exit", id:`pending-exit-${state.id}`, exitId:state.id,
+        originalEntryId:state.closingShadowId || state.entryId || null, side:state.entrySide,
+        qty:attempted, entryPx:Number(state.entryPx),
+        entryFeeEst:Number(state.entryFeeEst || (0.01*attempted*Number(state.entryPx))),
+        entrySweep:Number(state.entrySweep || 0),
+        acceptedAtSweep:Number(state.requestedAtSweep || state.acceptedAtSweep || latest.n),
+        requestedAtSweep:Number(state.requestedAtSweep || state.acceptedAtSweep || latest.n),
+        until:Number(state.until || Number(state.requestedAtSweep || latest.n)+1),
+        exitPx:Number(state.exitPx), closingShadowId:state.closingShadowId || null
       });
     }
-    const env = uncertaintyEnvelope({ uncertainEntries: entries });
-    await setState({
-      state: "idle",
-      cooldownUntilSweep: Number(latest.n) + 1,
-      realizedScoreEst: Number(state.realizedScoreEst || 0),
-      uncertainEntries: entries,
-      lastAmbiguousExitId: state.id
-    });
-    console.log(`EXIT_UNVERIFIED_SHADOWED id=${state.id} qty=${Number(state.qty).toFixed(2)} lo=${env.lo.toFixed(2)} hi=${env.hi.toFixed(2)}`);
+    if (!state.closingShadowId && guaranteedRemaining >= 0.1) {
+      await setState({
+        state:"open", side:state.entrySide, qty:guaranteedRemaining, targetQty:guaranteedRemaining,
+        entryPx:Number(state.entryPx), entrySweep:Number(state.entrySweep), entryId:state.entryId || null,
+        entryFeeEst:Number(state.remainingEntryFeeEst || 0), realizedScoreEst:Number(state.realizedScoreEst || 0),
+        uncertainEntries:entries, addCount:Number(state.addCount || 0),
+        lastAmbiguousExitId:state.id, exitRetryAfterSweep:Number(latest.n)
+      });
+      console.log(`EXIT_UNVERIFIED_PENDING_PARTIAL exit=${state.id} attempted=${attempted.toFixed(2)} guaranteed=${guaranteedRemaining.toFixed(2)}`);
+    } else {
+      const env=uncertaintyEnvelope({uncertainEntries:entries});
+      await setState({state:"idle",cooldownUntilSweep:Number(latest.n),realizedScoreEst:Number(state.realizedScoreEst || 0),uncertainEntries:entries,lastAmbiguousExitId:state.id});
+      console.log(`EXIT_UNVERIFIED_PENDING exit=${state.id} qty=${attempted.toFixed(2)} lo=${env.lo.toFixed(2)} hi=${env.hi.toFixed(2)}`);
+    }
     process.exit(0);
   } else {
     console.log("EXIT_UNVERIFIED_WAIT");
