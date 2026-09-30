@@ -755,6 +755,66 @@ function uncertainEntries(state) {
 }
 
 const LEGACY_LOST_UNCERTAIN_ID = "c12439-any-n1404-6635bbf409";
+const HISTORICAL_LEDGER_RECOVERY_V2 = [
+  {
+    kind: "position_shadow", id: "rd4e-305-uifc397", side: "sell", qty: 31.53, entryPx: 224.26,
+    entryFeeEst: 70.71, acceptedAtSweep: 305, fromSweep: 305, entrySweep: 305,
+    confirmedOutcome: "settled", confirmedAtSweep: 306, liquidityRole: "maker",
+    recoveredFrom: "verified_actions_and_archive_reconciliation"
+  },
+  {
+    id: "m_1212_bb_12001", side: "sell", qty: 8.00, entryPx: 229.40,
+    acceptedAtSweep: 1212, fromSweep: 1212, entrySweep: 1212, postedSeq: 9499799,
+    liquidityRole: "taker", maker: "did:key:z6MkqK9A8b9qAVtX", counterparty: "did:key:z6MkqK9A8b9qAVtX",
+    recoveredFrom: "verified_actions_acceptance"
+  },
+  {
+    id: "cc-a05-auto-maker-1790703210663", side: "sell", qty: 25.80, entryPx: 229.12,
+    acceptedAtSweep: 1219, fromSweep: 1219, entrySweep: 1219, postedSeq: 9598041,
+    liquidityRole: "taker", maker: "did:key:z6Mkpkk2j7ww3qBU", counterparty: "did:key:z6Mkpkk2j7ww3qBU",
+    recoveredFrom: "verified_actions_acceptance"
+  },
+  {
+    id: "m_1230_bb_65659", side: "sell", qty: 8.00, entryPx: 227.86,
+    acceptedAtSweep: 1230, fromSweep: 1230, entrySweep: 1230, postedSeq: 9775623,
+    liquidityRole: "taker", maker: "did:key:z6MkqK9A8b9qAVtX", counterparty: "did:key:z6MkqK9A8b9qAVtX",
+    recoveredFrom: "verified_actions_acceptance"
+  },
+  {
+    id: "cc-a05-auto-maker-1790709210450", side: "sell", qty: 25.80, entryPx: 228.53,
+    acceptedAtSweep: 1238, fromSweep: 1238, entrySweep: 1238, postedSeq: 9887843,
+    liquidityRole: "taker", maker: "did:key:z6Mkpkk2j7ww3qBU", counterparty: "did:key:z6Mkpkk2j7ww3qBU",
+    recoveredFrom: "verified_actions_acceptance"
+  },
+  {
+    id: "kc-7764ef181d0d", side: "sell", qty: 15.00, entryPx: 230.19,
+    acceptedAtSweep: 1245, fromSweep: 1245, entrySweep: 1245, postedSeq: 10005422,
+    liquidityRole: "taker", maker: "did:key:z6MkgxsvfrJneVqP", counterparty: "did:key:z6MkgxsvfrJneVqP",
+    recoveredFrom: "verified_actions_acceptance"
+  },
+  {
+    id: "c118543-any-n1285-9a9ee0f661", side: "buy", qty: 42.15, entryPx: 230.48,
+    acceptedAtSweep: 1286, fromSweep: 1285, entrySweep: 1285, postedSeq: 10621388,
+    liquidityRole: "taker", maker: "did:key:z6MktdNSv7Z1DWFU", counterparty: "did:key:z6MktdNSv7Z1DWFU",
+    recoveredFrom: "verified_actions_acceptance"
+  }
+];
+
+function recoverHistoricalLedgerV2(state) {
+  if (!state || state.historicalLedgerRecoveryV2Applied === true) return { state, changed: false };
+  const entries = uncertainEntries(state);
+  const ids = new Set(entries.map((x) => String(x.id || "")));
+  for (const item of HISTORICAL_LEDGER_RECOVERY_V2) {
+    if (ids.has(item.id)) continue;
+    entries.push({ ...item });
+    ids.add(item.id);
+  }
+  return {
+    state: { ...state, uncertainEntries: entries, historicalLedgerRecoveryV2Applied: true },
+    changed: true
+  };
+}
+
 function recoverLostLegacyUncertain(state) {
   if (!state || state.legacyLostUncertain1404Recovered === true) {
     return { state, changed: false };
