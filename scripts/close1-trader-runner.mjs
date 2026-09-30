@@ -1383,6 +1383,12 @@ if (raceSelftest) {
   if (!archiveTradeBelongsToUs({ maker: did, countersigner: "did:key:z6MkOther" }, did)) throw new Error("RACE_SELFTEST_ARCHIVE_MAKER_OWNERSHIP");
   if (!archiveTradeBelongsToUs({ maker: "did:key:z6MkOther", countersigner: did }, did)) throw new Error("RACE_SELFTEST_ARCHIVE_TAKER_OWNERSHIP");
   if (archiveTradeBelongsToUs({ maker: "did:key:z6MkOther", countersigner: "did:key:z6MkThird" }, did)) throw new Error("RACE_SELFTEST_ARCHIVE_FOREIGN_MATCH");
+  if (acceptableTakerEntryQuote("sell", 226.25, 228.40)) throw new Error("RACE_SELFTEST_REJECT_BAD_SELL_TAKER_PRICE");
+  if (acceptableTakerEntryQuote("buy", 230.0, 228.40)) throw new Error("RACE_SELFTEST_REJECT_BAD_BUY_TAKER_PRICE");
+  if (!acceptableTakerEntryQuote("sell", 228.30, 228.40)) throw new Error("RACE_SELFTEST_ACCEPT_NEAR_MARK_SELL");
+  if (!acceptableTakerEntryQuote("buy", 228.48, 228.40)) throw new Error("RACE_SELFTEST_ACCEPT_NEAR_MARK_BUY");
+  if (!acceptableTakerEntryQuote("sell", 228.65, 228.40)) throw new Error("RACE_SELFTEST_ACCEPT_FAVORABLE_SELL");
+  if (!acceptableTakerEntryQuote("buy", 228.10, 228.40)) throw new Error("RACE_SELFTEST_ACCEPT_FAVORABLE_BUY");
   const ttlProbe = makeOffer("buy", 1, { n: 100, px: 225 }, "test");
   if (ttlProbe.until !== 101) throw new Error("RACE_SELFTEST_FAST_REPRICE_TTL");
   const base = { action: "enter", side: "buy", qty: 20, confidence: 0.9 };
@@ -1873,9 +1879,26 @@ function validMakerOffer(body) {
   }
 }
 
+function takerEntryQuoteEdge(side, offerPx, refPx) {
+  const px = Number(offerPx);
+  const ref = Number(refPx);
+  if (!["buy", "sell"].includes(String(side)) || !Number.isFinite(px) || px <= 0 || !Number.isFinite(ref) || ref <= 0) return null;
+  return side === "sell" ? px - ref : ref - px;
+}
+
+function acceptableTakerEntryQuote(side, offerPx, refPx) {
+  const edge = takerEntryQuoteEdge(side, offerPx, refPx);
+  if (edge == null) return false;
+  // Refuse large instant price disadvantage. A quote may slip by at most 8 bp
+  // (capped at 0.20 POLF/contract) to preserve fill opportunity.
+  const maxAdverse = Math.min(0.20, Number(refPx) * 0.0008);
+  return edge >= -maxAdverse - 1e-9;
+}
+
 async function findReliableOpposingOffer(decision, latest) {
   const desiredSide = String(decision?.side || "");
   const desiredQty = Number(decision?.qty);
+  const openingEntry = decision?.action === "enter";
   if (!["buy", "sell"].includes(desiredSide) || !Number.isFinite(desiredQty)) return null;
 
   const [roomMsgs, flowMsgs] = await Promise.all([
@@ -1924,7 +1947,7 @@ async function findReliableOpposingOffer(decision, latest) {
 
   const oppositeMakerSide = desiredSide === "buy" ? "sell" : "buy";
   const minQty = Math.max(0.1, desiredQty * 0.40);
-  const maxQty = Math.min(60, desiredQty * 1.35);
+  const maxQty = Math.min(60, desiredQty);
   const refPx = Number(latest.px);
   const candidates = [];
   const seenIds = new Set();
@@ -1947,6 +1970,8 @@ async function findReliableOpposingOffer(decision, latest) {
     if (!Number.isFinite(qty) || qty < minQty || qty > maxQty) continue;
     if (!Number.isFinite(px) || !Number.isFinite(refPx) || refPx <= 0) continue;
     if (Math.abs(px - refPx) / refPx > 0.045) continue;
+    if (openingEntry && !acceptableTakerEntryQuote(desiredSide, px, refPx)) continue;
+    if (openingEntry && !directionalFeeRoom(desiredSide, px)) continue;
 
     const maker = String(terms.maker);
     const settledCount = makerSettled.get(maker) || 0;
@@ -1963,8 +1988,9 @@ async function findReliableOpposingOffer(decision, latest) {
     const reliability = settledCount - 1.5 * fundsFails + (pristineHighConviction ? 0.25 : 0);
     const sizeFit = -Math.abs(qty - desiredQty) / Math.max(1, desiredQty);
     const priceFit = -Math.abs(px - refPx) / refPx;
+    const entryQuoteEdge = openingEntry ? takerEntryQuoteEdge(desiredSide, px, refPx) : 0;
     const recency = Number(roomMsgs[i]?.seq || 0);
-    candidates.push({ b, qty, px, maker, score: reliability * 10 + sizeFit * 3 + priceFit + recency * 1e-9 });
+    candidates.push({ b, qty, px, maker, score: reliability * 10 + sizeFit * 3 + priceFit + entryQuoteEdge * 5 + recency * 1e-9 });
   }
 
   candidates.sort((a, b) => b.score - a.score);
