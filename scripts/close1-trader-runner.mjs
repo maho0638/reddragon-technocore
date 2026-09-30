@@ -912,6 +912,16 @@ function confirmedShadowCloseNet(entry, mark) {
   return gross - entryFee - exitFee;
 }
 
+function confirmedLedgerCloseNet(state, mark) {
+  let total = Number(state?.realizedScoreEst || 0);
+  for (const x of uncertainEntries(state)) {
+    if (x.confirmedOutcome !== "settled") continue;
+    const net = confirmedShadowCloseNet(x, mark);
+    if (Number.isFinite(net)) total += net;
+  }
+  return total;
+}
+
 function removeUncertainEntry(state, id) {
   return uncertainEntries(state).filter((x) => String(x.id || "") !== String(id || ""));
 }
