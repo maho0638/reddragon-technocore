@@ -2221,7 +2221,7 @@ async function takeReliableOffer(match, decision, latest, priorState = {}, prior
     state: "entry_accepted",
     postedSeq: posted.seq,
     acceptedSeq: posted.seq,
-    acceptedAtSweep: Number(latest.n),
+    acceptedAtSweep: Number(executionRef.n),
     taker: did
   });
   console.log(
@@ -2697,7 +2697,7 @@ async function takeReliableExitOffer(match, openState, latest) {
     state: "exit_accepted",
     postedSeq: posted.seq,
     acceptedSeq: posted.seq,
-    acceptedAtSweep: Number(latest.n),
+    acceptedAtSweep: Number(executionRef.n),
     taker: did
   });
   console.log(`EXIT_TAKE side=${exitSide} qty=${allocation.closedQty.toFixed(2)} remaining=${allocation.remainingQty.toFixed(2)} px=${Number(terms.px).toFixed(2)} maker=${String(terms.maker).slice(0,24)} seq=${posted.seq || "?"}`);
@@ -3128,7 +3128,12 @@ if (state.state === "entry_accepted") {
         qty: Number(state.qty),
         entryPx: Number(state.entryPx),
         acceptedAtSweep: acceptedAt,
-        taker: state.taker || null
+        until: Number(state.until || acceptedAt + 1),
+        taker: state.taker || null,
+        maker: state.maker || null,
+        liquidityRole: state.liquidityRole || null,
+        counterparty: state.counterparty || (state.liquidityRole === "taker" ? state.maker : state.taker) || null,
+        postedSeq: Number(state.postedSeq || state.acceptedSeq || 0) || null
       });
     }
     state = {
