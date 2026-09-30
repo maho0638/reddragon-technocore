@@ -255,11 +255,17 @@ async function close1ArchiveIndex() {
   } catch {
     return null;
   }
-  if (parsed?.contest !== SEASON || !Array.isArray(parsed?.sweeps)) return null;
+  const sweepRows = Array.isArray(parsed)
+    ? parsed
+    : Array.isArray(parsed?.sweeps)
+      ? parsed.sweeps
+      : [];
+  if (!sweepRows.length) return null;
+  if (!Array.isArray(parsed) && parsed?.contest && parsed.contest !== SEASON) return null;
 
   const byN = new Map();
   let maxN = 0;
-  for (const row of parsed.sweeps) {
+  for (const row of sweepRows) {
     const n = Number(row?.n);
     const path = String(row?.path || "");
     const file = String(row?.file || "");
