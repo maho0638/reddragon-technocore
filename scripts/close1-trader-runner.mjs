@@ -544,6 +544,15 @@ async function getState() {
   if (!state) throw new Error("STATE_GITHUB_DECRYPT_FAILED");
   return state;
 }
+function mergePersistentStateMeta(nextState, previousState) {
+  const out = { ...(nextState || {}) };
+  if (previousState?.legacyLostUncertain1404Recovered === true &&
+      out.legacyLostUncertain1404Recovered !== false) {
+    out.legacyLostUncertain1404Recovered = true;
+  }
+  return out;
+}
+
 async function setState(state, force = false) {
   if (!execute && !force) {
     console.log(`DRY_STATE=${state.state}`);
@@ -551,9 +560,11 @@ async function setState(state, force = false) {
   }
 
   const current = await fetchStateFile();
+  const previousState = current.text ? decryptState(current.text.trim()) : null;
+  const durableState = mergePersistentStateMeta(state, previousState);
   const payload = {
     message: "chore(close1): persist encrypted trader state",
-    content: Buffer.from(encryptState(state), "utf8").toString("base64"),
+    content: Buffer.from(encryptState(durableState), "utf8").toString("base64"),
     branch: "main"
   };
   if (current.sha) payload.sha = current.sha;
@@ -1633,6 +1644,20 @@ if (raceSelftest) {
   const lostRecoveryAgain = recoverLostLegacyUncertain(lostRecovery.state);
   if (lostRecoveryAgain.changed || lostRecoveryAgain.state.uncertainEntries.length !== 1) {
     throw new Error("RACE_SELFTEST_LEGACY_UNCERTAIN_RECOVERY_IDEMPOTENT");
+  }
+  const durableMeta = mergePersistentStateMeta(
+    { state: "entry_offer", uncertainEntries: lostRecovery.state.uncertainEntries },
+    lostRecovery.state
+  );
+  if (durableMeta.legacyLostUncertain1404Recovered !== true) {
+    throw new Error("RACE_SELFTEST_PERSISTENT_RECOVERY_META");
+  }
+  const explicitReset = mergePersistentStateMeta(
+    { state: "idle", legacyLostUncertain1404Recovered: false },
+    lostRecovery.state
+  );
+  if (explicitReset.legacyLostUncertain1404Recovered !== false) {
+    throw new Error("RACE_SELFTEST_PERSISTENT_RECOVERY_META_RESET");
   }
   const carryProbe = buildTakerEntryPreflight(
     { id: "carry-test", qty: 1, px: 225, until: 11, maker: "did:key:z6MkMaker" },
