@@ -546,9 +546,11 @@ async function getState() {
 }
 function mergePersistentStateMeta(nextState, previousState) {
   const out = { ...(nextState || {}) };
-  if (previousState?.legacyLostUncertain1404Recovered === true &&
-      out.legacyLostUncertain1404Recovered !== false) {
-    out.legacyLostUncertain1404Recovered = true;
+  if (!Object.prototype.hasOwnProperty.call(out, "uncertainEntries") && Array.isArray(previousState?.uncertainEntries)) {
+    out.uncertainEntries = uncertainEntries(previousState);
+  }
+  for (const key of ["legacyLostUncertain1404Recovered", "historicalLedgerRecoveryV2Applied"]) {
+    if (previousState?.[key] === true && out[key] !== false) out[key] = true;
   }
   return out;
 }
