@@ -758,7 +758,7 @@ const LEGACY_LOST_UNCERTAIN_ID = "c12439-any-n1404-6635bbf409";
 const HISTORICAL_LEDGER_RECOVERY_V2 = [
   {
     kind: "position_shadow", id: "rd4e-305-uifc397", side: "sell", qty: 31.53, entryPx: 224.26,
-    entryFeeEst: 70.71, acceptedAtSweep: 305, fromSweep: 305, entrySweep: 305,
+    entryFeeEst: 70.709178, acceptedAtSweep: 305, fromSweep: 305, entrySweep: 305,
     confirmedOutcome: "settled", confirmedAtSweep: 306, liquidityRole: "maker",
     recoveredFrom: "verified_actions_and_archive_reconciliation"
   },
@@ -1741,6 +1741,60 @@ if (raceSelftest) {
   const lostRecoveryAgain = recoverLostLegacyUncertain(lostRecovery.state);
   if (lostRecoveryAgain.changed || lostRecoveryAgain.state.uncertainEntries.length !== 1) {
     throw new Error("RACE_SELFTEST_LEGACY_UNCERTAIN_RECOVERY_IDEMPOTENT");
+  }
+  const ledgerRecovery = recoverHistoricalLedgerV2({ state: "idle", uncertainEntries: [] });
+  if (!(ledgerRecovery.changed &&
+        ledgerRecovery.state.uncertainEntries.length === HISTORICAL_LEDGER_RECOVERY_V2.length &&
+        ledgerRecovery.state.historicalLedgerRecoveryV2Applied === true)) {
+    throw new Error("RACE_SELFTEST_HISTORICAL_LEDGER_RECOVERY");
+  }
+  const recovered305 = ledgerRecovery.state.uncertainEntries.find((x) => x.id === "rd4e-305-uifc397");
+  if (!(recovered305?.confirmedOutcome === "settled" &&
+        Math.abs(Number(recovered305.qty) - 31.53) < 1e-9 &&
+        Math.abs(Number(recovered305.entryPx) - 224.26) < 1e-9 &&
+        Math.abs(Number(recovered305.entryFeeEst) - 70.709178) < 1e-9)) {
+    throw new Error("RACE_SELFTEST_HISTORICAL_CONFIRMED_POSITION");
+  }
+  const ledgerRecoveryAgain = recoverHistoricalLedgerV2(ledgerRecovery.state);
+  if (ledgerRecoveryAgain.changed ||
+      ledgerRecoveryAgain.state.uncertainEntries.length !== HISTORICAL_LEDGER_RECOVERY_V2.length) {
+    throw new Error("RACE_SELFTEST_HISTORICAL_LEDGER_IDEMPOTENT");
+  }
+  const carriedLedger = mergePersistentStateMeta({ state: "entry_offer" }, ledgerRecovery.state);
+  if (carriedLedger.uncertainEntries?.length !== HISTORICAL_LEDGER_RECOVERY_V2.length) {
+    throw new Error("RACE_SELFTEST_LEDGER_CARRY_ON_OMITTED_FIELD");
+  }
+  const explicitLedgerClear = mergePersistentStateMeta({ state: "idle", uncertainEntries: [] }, ledgerRecovery.state);
+  if (explicitLedgerClear.uncertainEntries.length !== 0) {
+    throw new Error("RACE_SELFTEST_LEDGER_EXPLICIT_CLEAR");
+  }
+  const crossingBounds = positionExposureBounds({
+    uncertainEntries: [
+      { id: "certain-short", side: "sell", qty: 31.53, entryPx: 224.26, confirmedOutcome: "settled" },
+      { id: "maybe-buy", side: "buy", qty: 42.15, entryPx: 230.48 }
+    ]
+  });
+  if (!(crossingBounds.lo < 0 && crossingBounds.hi > 0)) {
+    throw new Error("RACE_SELFTEST_EXPOSURE_CROSSES_ZERO");
+  }
+  if (safeConfirmedShadowExitQty(
+    { id: "certain-short", side: "sell", qty: 31.53, entryPx: 224.26, confirmedOutcome: "settled" },
+    { uncertainEntries: [
+      { id: "certain-short", side: "sell", qty: 31.53, entryPx: 224.26, confirmedOutcome: "settled" },
+      { id: "maybe-buy", side: "buy", qty: 42.15, entryPx: 230.48 }
+    ] }
+  ) !== 0) {
+    throw new Error("RACE_SELFTEST_BLOCK_UNSAFE_SHADOW_EXIT");
+  }
+  const guaranteedShortQty = safeConfirmedShadowExitQty(
+    { id: "certain-short", side: "sell", qty: 31.53, entryPx: 224.26, confirmedOutcome: "settled" },
+    { uncertainEntries: [
+      { id: "certain-short", side: "sell", qty: 31.53, entryPx: 224.26, confirmedOutcome: "settled" },
+      { id: "maybe-sell", side: "sell", qty: 8, entryPx: 229.4 }
+    ] }
+  );
+  if (Math.abs(guaranteedShortQty - 31.53) > 1e-9) {
+    throw new Error("RACE_SELFTEST_ALLOW_GUARANTEED_SHADOW_EXIT");
   }
   const durableMeta = mergePersistentStateMeta(
     { state: "entry_offer", uncertainEntries: lostRecovery.state.uncertainEntries },
