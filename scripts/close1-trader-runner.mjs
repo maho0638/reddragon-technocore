@@ -3186,12 +3186,15 @@ if (state.state === "entry_accepted") {
         qty: Number(state.qty),
         entryPx: Number(state.entryPx),
         acceptedAtSweep: acceptedAt,
+        fromSweep: Number(state.entrySweep || acceptedAt),
+        entrySweep: Number(state.entrySweep || acceptedAt),
         until: Number(state.until || acceptedAt + 1),
         taker: state.taker || null,
         maker: state.maker || null,
         liquidityRole: state.liquidityRole || null,
         counterparty: state.counterparty || (state.liquidityRole === "taker" ? state.maker : state.taker) || null,
-        postedSeq: Number(state.postedSeq || state.acceptedSeq || 0) || null
+        postedSeq: Number(state.postedSeq || state.acceptedSeq || 0) || null,
+        entryFeeEst: Number(state.entryFeeEst || (0.01 * Number(state.qty) * Number(state.entryPx)))
       });
     }
     state = {
