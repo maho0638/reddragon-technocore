@@ -2092,6 +2092,26 @@ if (raceSelftest) {
   }
   const archive576 = await findArchiveOutcome("rd4e-576-ujrqapi", 576);
   console.log("ARCHIVE_DIAG_576 " + JSON.stringify(archive576));
+  const flowDiagMessages = await readExport("d-close1-flow");
+  const missedDiag = [];
+  for (const msg of flowDiagMessages) {
+    const body = parseBody(msg);
+    if (body?.t !== "flow" || body?.missed == null) continue;
+    const value = body.missed;
+    let shape;
+    if (Array.isArray(value)) {
+      shape = { type: "array", length: value.length, first: value.slice(0, 3), last: value.slice(-3) };
+    } else if (value && typeof value === "object") {
+      const keys = Object.keys(value);
+      const sample = {};
+      for (const key of keys.slice(0, 6)) sample[key] = value[key];
+      shape = { type: "object", keys: keys.slice(0, 20), sample };
+    } else {
+      shape = { type: typeof value, value };
+    }
+    missedDiag.push({ n: Number(body.n), shape });
+  }
+  console.log("MISSED_SCHEMA_DIAG " + JSON.stringify(missedDiag.slice(-8)));
   console.log("RACE_SIZING_SELFTEST_OK");
   process.exit(0);
 }
