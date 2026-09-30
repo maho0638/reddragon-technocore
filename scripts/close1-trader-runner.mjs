@@ -2112,6 +2112,17 @@ if (raceSelftest) {
     missedDiag.push({ n: Number(body.n), shape });
   }
   console.log("MISSED_SCHEMA_DIAG " + JSON.stringify(missedDiag.slice(-8)));
+  const missedNonEmpty = missedDiag.filter((row) => {
+    const s = row.shape;
+    return (s.type === "array" && s.length > 0) ||
+      (s.type === "object" && Array.isArray(s.keys) && s.keys.length > 0) ||
+      (s.type !== "array" && s.type !== "object" && s.value != null);
+  });
+  console.log("MISSED_SCHEMA_NONEMPTY_DIAG " + JSON.stringify({
+    count: missedNonEmpty.length,
+    first: missedNonEmpty.slice(0, 6),
+    last: missedNonEmpty.slice(-10)
+  }));
   console.log("RACE_SIZING_SELFTEST_OK");
   process.exit(0);
 }
