@@ -3697,5 +3697,6 @@ if (decision?.action === "enter") {
   else if (realConfirmedDecision && !calendarDecision) noTradeReason = "calendar_block";
   else if (calendarDecision && !sizedDecision) noTradeReason = "sizing_block";
   else if (sizedDecision && !decision) noTradeReason = "uncertain_risk";
+  else if (decision && decision.action !== "enter") noTradeReason = `strategy_${String(decision.action || decision.reason || "hold")}`;
   console.log(`NO_TRADE reason=${noTradeReason}`);
 }
