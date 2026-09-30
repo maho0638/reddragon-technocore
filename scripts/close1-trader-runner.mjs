@@ -1487,6 +1487,35 @@ if (raceSelftest) {
     { outcome: "settled", px: 224, fee: 24 },
     230
   );
+  // Missing/redacted settlement fields must not silently become zero values.
+  const missingArchiveFee = archiveFeeForUs({
+    input: { maker: did, countersigner: "did:key:z6MkOther" },
+    output: { outcome: "settled" }
+  }, did);
+  if (missingArchiveFee !== null) throw new Error("RACE_SELFTEST_MISSING_ARCHIVE_FEE_NOT_NULL");
+  if (finitePositiveSettlementValue(null) !== null || finitePositiveSettlementValue(0) !== null ||
+      finitePositiveSettlementValue("224.5") !== 224.5) throw new Error("RACE_SELFTEST_NULL_SETTLEMENT_PRICE");
+  if (finiteNonnegativeSettlementFee(null) !== null || finiteNonnegativeSettlementFee(-1) !== null ||
+      finiteNonnegativeSettlementFee(0) !== 0) throw new Error("RACE_SELFTEST_NULL_SETTLEMENT_FEE");
+  const missingFieldsClose = realizedCloseDelta(
+    { entrySide: "buy", qty: 10, entryPx: 220, entryFeeEst: null, exitPx: 225 },
+    { outcome: "settled", px: null, fee: null }, 226
+  );
+  if (!(missingFieldsClose && missingFieldsClose.exitPx === 225 &&
+    Math.abs(missingFieldsClose.entryFee - 22) < 1e-9 &&
+    Math.abs(missingFieldsClose.exitFee - 22.5) < 1e-9 &&
+    Math.abs(missingFieldsClose.delta - 5.5) < 1e-9)) throw new Error("RACE_SELFTEST_NULL_OUTCOME_FALLBACK_FEES");
+  const explicitZeroFeeClose = realizedCloseDelta(
+    { entrySide: "sell", qty: 10, entryPx: 225, entryFeeEst: 0, exitPx: 220 },
+    { outcome: "settled", px: 220, fee: 0 }, 218
+  );
+  if (!(explicitZeroFeeClose && explicitZeroFeeClose.delta === 50)) throw new Error("RACE_SELFTEST_VALID_ZERO_FEE");
+  if (realizedCloseDelta({ entrySide: "buy", qty: 10, entryPx: 0 }, { px: null, fee: null }, null) !== null)
+    throw new Error("RACE_SELFTEST_REJECT_INVALID_SETTLEMENT_PRICE");
+  const missingFeeShadow = confirmedShadowCloseNet(
+    { side: "buy", qty: 10, entryPx: 220, entryFeeEst: null, confirmedOutcome: "settled" }, 225
+  );
+  if (Math.abs(missingFeeShadow - 5.5) > 1e-9) throw new Error("RACE_SELFTEST_SHADOW_NULL_FEE");
   if (!(Math.abs(feeProbe - 2.5) < 1e-9 && Math.abs(takerFeeProbe - 3.5) < 1e-9)) throw new Error("RACE_SELFTEST_ARCHIVE_SIDE_FEE");
   if (!(closeProbe && Math.abs(closeProbe.exitPx - 224) < 1e-9 && Math.abs(closeProbe.delta - (-6)) < 1e-9)) throw new Error("RACE_SELFTEST_REALIZED_USES_TRADE_PX");
   if (!archiveTradeBelongsToUs({ maker: did, countersigner: "did:key:z6MkOther" }, did)) throw new Error("RACE_SELFTEST_ARCHIVE_MAKER_OWNERSHIP");
