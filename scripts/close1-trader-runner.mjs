@@ -818,22 +818,25 @@ function applyUncertainRiskCap(decision, state, latestPx) {
   const realizedCapital = Math.max(1000, 10000 + Number(state?.realizedScoreEst || 0));
   const reserved = uncertainCapitalReserve(state);
   const freeCapital = Math.max(0, realizedCapital - reserved);
-  const cashCap = Number.isFinite(px) && px > 0
-    ? freeCapital / (px * 1.035)
+  const cashCapacity = Number.isFinite(px) && px > 0
+    ? Math.max(0, freeCapital / (px * 1.035))
     : 0;
-  const cap = Math.min(UNCERTAIN_MAX_ABS_QTY, Math.max(0, cashCap));
   const env = uncertaintyEnvelope(state);
   const side = String(decision.side);
-  const capacity = side === "buy" ? cap - env.hi : side === "sell" ? cap + env.lo : 0;
+  const directionalCapacity =
+    side === "buy" ? UNCERTAIN_MAX_ABS_QTY - env.hi :
+    side === "sell" ? UNCERTAIN_MAX_ABS_QTY + env.lo :
+    0;
+  const capacity = Math.max(0, Math.min(directionalCapacity, cashCapacity));
   const requested = Number(decision.qty);
   const qty = Math.min(requested, capacity);
   if (!Number.isFinite(qty) || qty < 0.1) {
-    console.log(`UNCERTAIN_RISK_BLOCK side=${side} lo=${env.lo.toFixed(2)} hi=${env.hi.toFixed(2)} cap=${cap.toFixed(2)} reserved=${reserved.toFixed(2)} free=${freeCapital.toFixed(2)}`);
+    console.log(`UNCERTAIN_RISK_BLOCK side=${side} lo=${env.lo.toFixed(2)} hi=${env.hi.toFixed(2)} dirCap=${directionalCapacity.toFixed(2)} cashCap=${cashCapacity.toFixed(2)} reserved=${reserved.toFixed(2)} free=${freeCapital.toFixed(2)}`);
     return null;
   }
   const clipped = Math.floor(qty * 100) / 100;
   if (clipped < requested) {
-    console.log(`UNCERTAIN_RISK_CAP side=${side} requested=${requested.toFixed(2)} allowed=${clipped.toFixed(2)} lo=${env.lo.toFixed(2)} hi=${env.hi.toFixed(2)} cap=${cap.toFixed(2)} reserved=${reserved.toFixed(2)} free=${freeCapital.toFixed(2)}`);
+    console.log(`UNCERTAIN_RISK_CAP side=${side} requested=${requested.toFixed(2)} allowed=${clipped.toFixed(2)} lo=${env.lo.toFixed(2)} hi=${env.hi.toFixed(2)} dirCap=${directionalCapacity.toFixed(2)} cashCap=${cashCapacity.toFixed(2)} reserved=${reserved.toFixed(2)} free=${freeCapital.toFixed(2)}`);
   }
   return { ...decision, qty: clipped };
 }
