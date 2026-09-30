@@ -243,12 +243,19 @@ const archiveRecordCache = new Map();
 async function close1ArchiveIndex() {
   const nowMs = Date.now();
   if (archiveIndexCache && nowMs - archiveIndexFetchedAt < 15_000) return archiveIndexCache;
-  const { r, text } = await request(
-    `${ARCHIVE_BASE}/index.json`,
-    { headers: { accept: "application/json", "cache-control": "no-cache" } },
-    2
-  );
-  if (!r.ok) return null;
+  let response;
+  try {
+    response = await request(
+      `${ARCHIVE_BASE}/index.json`,
+      { headers: { accept: "application/json", "cache-control": "no-cache" } },
+      2
+    );
+  } catch (error) {
+    console.log(`ARCHIVE_INDEX_UNAVAILABLE error=${String(error).slice(0,160)}`);
+    return archiveIndexCache;
+  }
+  const { r, text } = response;
+  if (!r.ok) return archiveIndexCache;
   let parsed;
   try {
     parsed = JSON.parse(text);
@@ -295,11 +302,18 @@ async function close1ArchiveRecord(meta) {
   const cacheKey = `${n}:${path}:${expected}`;
   if (archiveRecordCache.has(cacheKey)) return archiveRecordCache.get(cacheKey);
 
-  const { r, text } = await request(
-    `${ARCHIVE_BASE}/${path}`,
-    { headers: { accept: "application/json", "cache-control": "no-cache" } },
-    2
-  );
+  let response;
+  try {
+    response = await request(
+      `${ARCHIVE_BASE}/${path}`,
+      { headers: { accept: "application/json", "cache-control": "no-cache" } },
+      2
+    );
+  } catch (error) {
+    console.log(`ARCHIVE_RECORD_UNAVAILABLE n=${n} error=${String(error).slice(0,160)}`);
+    return null;
+  }
+  const { r, text } = response;
   if (!r.ok || text.length > 12_000_000) return null;
 
   const actual = createHash("sha256").update(Buffer.from(text, "utf8")).digest("hex");
@@ -2905,6 +2919,11 @@ async function reconcileUncertainEntries(state, posSnapshots, latestSweep) {
     if (uncertainMetadataChanged(rawEntry, entry)) {
       changed = true;
       console.log(`UNCERTAIN_METADATA_RECOVERED id=${entry.id} until=${entry.until || "na"} role=${entry.liquidityRole || "na"}`);
+    }
+
+    if (entry.confirmedOutcome === "settled" && entry.kind !== "pending_exit") {
+      kept.push(entry);
+      continue;
     }
 
     if (entry.kind === "pending_exit") {
