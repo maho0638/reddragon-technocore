@@ -1,7 +1,7 @@
 name: Close-1 Race Selftest
 on:
   push:
-    branches: [main, fix/close1-null-settlement-20260930]
+    branches: [main]
     paths:
       - "scripts/close1-trader-runner.mjs"
       - ".github/workflows/close1-race-selftest.yml"
