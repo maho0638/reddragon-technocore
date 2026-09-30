@@ -2123,6 +2123,25 @@ if (raceSelftest) {
     first: missedNonEmpty.slice(0, 6),
     last: missedNonEmpty.slice(-10)
   }));
+  const ledgerDiagTargets = [
+    ["rd4e-305-uifc397", 305],
+    ["rd4e-576-ujrqapi", 576],
+    ["m_1212_bb_12001", 1212],
+    ["cc-a05-auto-maker-1790703210663", 1219],
+    ["m_1230_bb_65659", 1230],
+    ["cc-a05-auto-maker-1790709210450", 1238],
+    ["kc-7764ef181d0d", 1245],
+    ["c118543-any-n1285-9a9ee0f661", 1285],
+    ["c12439-any-n1404-6635bbf409", 1404],
+    ["0gatsby-L-TWAP-1-stand0-1790779554", 1472],
+    ["rd4e-1517-uofvgrk", 1517]
+  ];
+  const ledgerDiag = [];
+  for (const [tradeId, fromSweep] of ledgerDiagTargets) {
+    const result = await findOutcome(tradeId, fromSweep, flowDiagMessages);
+    ledgerDiag.push({ id: tradeId, fromSweep, result });
+  }
+  console.log("LEDGER_OUTCOME_DIAG " + JSON.stringify(ledgerDiag));
   console.log("RACE_SIZING_SELFTEST_OK");
   process.exit(0);
 }
