@@ -360,8 +360,8 @@ function outcomeFromArchiveRecord(record, id, n) {
     if (output?.outcome === "settled" || (output?.outcome === "void" && output?.reason === "settled")) {
       return {
         outcome: "settled", n: Number(n),
-        px: Number.isFinite(Number(input?.px)) ? Number(input.px) : null,
-        qty: Number.isFinite(Number(input?.qty)) ? Number(input.qty) : null,
+        px: finitePositiveSettlementValue(input?.px),
+        qty: finitePositiveSettlementValue(input?.qty),
         fee: archiveFeeForUs({ input, output }),
         inferredFrom: "referee_file"
       };
@@ -371,6 +371,18 @@ function outcomeFromArchiveRecord(record, id, n) {
     }
   }
   return null;
+}
+
+function finitePositiveSettlementValue(value) {
+  if (value == null || value === "") return null;
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+function finiteNonnegativeSettlementFee(value) {
+  if (value == null || value === "") return null;
+  const n = Number(value);
+  return Number.isFinite(n) && n >= 0 ? n : null;
 }
 
 function archiveTradeBelongsToUs(input, ourDid = did) {
@@ -386,12 +398,12 @@ function archiveFeeForUs(match, ourDid = did) {
   let fee = 0;
   let found = false;
   if (String(input.maker || "") === String(ourDid)) {
-    const v = Number(output.maker_fee);
-    if (Number.isFinite(v)) { fee += v; found = true; }
+    const v = finiteNonnegativeSettlementFee(output.maker_fee);
+    if (v !== null) { fee += v; found = true; }
   }
   if (String(input.countersigner || "") === String(ourDid)) {
-    const v = Number(output.taker_fee);
-    if (Number.isFinite(v)) { fee += v; found = true; }
+    const v = finiteNonnegativeSettlementFee(output.taker_fee);
+    if (v !== null) { fee += v; found = true; }
   }
   return found ? fee : null;
 }
@@ -406,8 +418,8 @@ function classifyArchiveMatches(matches, coveredThrough) {
     return {
       outcome: "settled",
       n: Number(settled.n),
-      px: Number.isFinite(Number(settled?.input?.px)) ? Number(settled.input.px) : null,
-      qty: Number.isFinite(Number(settled?.input?.qty)) ? Number(settled.input.qty) : null,
+      px: finitePositiveSettlementValue(settled?.input?.px),
+      qty: finitePositiveSettlementValue(settled?.input?.qty),
       fee: archiveFeeForUs(settled),
       inferredFrom: "official_archive"
     };
@@ -767,9 +779,7 @@ function confirmedShadowCloseNet(entry, mark) {
   ) return null;
   const direction = entry.side === "buy" ? 1 : -1;
   const gross = direction * qty * (current - entryPx);
-  const entryFee = Number.isFinite(Number(entry?.entryFeeEst))
-    ? Number(entry.entryFeeEst)
-    : 0.01 * qty * entryPx;
+  const entryFee = finiteNonnegativeSettlementFee(entry?.entryFeeEst) ?? (0.01 * qty * entryPx);
   const exitFee = 0.01 * qty * current;
   return gross - entryFee - exitFee;
 }
@@ -788,7 +798,7 @@ function uncertainConfirmedMark(state, latestMark) {
     const entry = Number(x.entryPx);
     if (!Number.isFinite(entry)) continue;
     const direction = x.side === "buy" ? 1 : -1;
-    const entryFee = Number.isFinite(Number(x.entryFeeEst)) ? Number(x.entryFeeEst) : (0.01 * qty * entry);
+    const entryFee = finiteNonnegativeSettlementFee(x.entryFeeEst) ?? (0.01 * qty * entry);
     score += direction * qty * (mark - entry) - entryFee;
   }
   return score;
@@ -803,7 +813,7 @@ function uncertainDownsideFloor(state, latestMark) {
     const entry = Number(x.entryPx);
     if (!Number.isFinite(entry)) continue;
     const direction = x.side === "buy" ? 1 : -1;
-    const entryFee = Number.isFinite(Number(x.entryFeeEst)) ? Number(x.entryFeeEst) : (0.01 * qty * entry);
+    const entryFee = finiteNonnegativeSettlementFee(x.entryFeeEst) ?? (0.01 * qty * entry);
     const settledEstimate = direction * qty * (mark - entry) - entryFee;
     floor += x.confirmedOutcome === "settled" ? settledEstimate : Math.min(0, settledEstimate);
   }
@@ -2638,9 +2648,14 @@ async function reconcileUncertainEntries(state, posSnapshots, latestSweep) {
       if (!outcome && Number(entry.until) > 0) outcome = await proveArchiveAbsence(String(entry.exitId || ""), Number(entry.requestedAtSweep || entry.acceptedAtSweep || 0), Number(entry.until));
       if (outcome?.outcome === "settled") {
         const close = realizedCloseDelta({ qty:Number(entry.qty), entrySide:entry.side, entryPx:Number(entry.entryPx), entryFeeEst:Number(entry.entryFeeEst || (0.01*Number(entry.qty)*Number(entry.entryPx))), exitPx:Number(entry.exitPx) }, outcome, Number(entry.exitPx || entry.entryPx));
-        if (close) realizedDelta += close.delta;
+        if (!close) {
+          kept.push(entry);
+          console.log(`PENDING_EXIT_ACCOUNTING_BLOCKED exit=${entry.exitId} reason=invalid_settlement_values`);
+          continue;
+        }
+        realizedDelta += close.delta;
         changed = true;
-        console.log(`PENDING_EXIT_RESOLVED_SETTLED exit=${entry.exitId} delta=${close?.delta?.toFixed?.(2) ?? "na"}`);
+        console.log(`PENDING_EXIT_RESOLVED_SETTLED exit=${entry.exitId} delta=${close.delta.toFixed(2)}`);
         continue;
       }
       if (outcome?.outcome === "void") {
@@ -2671,8 +2686,9 @@ async function reconcileUncertainEntries(state, posSnapshots, latestSweep) {
     const settled = outcome?.outcome === "settled";
     if (settled && entry.confirmedOutcome !== "settled") {
       changed = true;
-      const settledPx = Number.isFinite(Number(outcome?.px)) ? Number(outcome.px) : Number(entry.entryPx);
-      const settledFee = Number.isFinite(Number(outcome?.fee)) ? Number(outcome.fee) : Number(entry.entryFeeEst || (0.01*Number(entry.qty)*settledPx));
+      const settledPx = finitePositiveSettlementValue(outcome?.px) ?? Number(entry.entryPx);
+      const settledFee = finiteNonnegativeSettlementFee(outcome?.fee) ??
+        (finiteNonnegativeSettlementFee(entry.entryFeeEst) ?? (0.01 * Number(entry.qty) * settledPx));
       kept.push({ ...entry, entryPx:settledPx, entryFeeEst:settledFee, confirmedOutcome:"settled", confirmedAtSweep:Number(outcome?.n || peerEvidence?.after?.n || latestSweep) });
       console.log(`UNCERTAIN_CONFIRMED_SETTLED id=${entry.id} n=${outcome?.n ?? peerEvidence?.after?.n ?? "na"}`);
       continue;
@@ -2810,20 +2826,14 @@ async function postEntry(decision, latest, priorState = {}) {
 function realizedCloseDelta(state, outcome, fallbackMark) {
   const qty = Number(state?.qty);
   const entryPx = Number(state?.entryPx);
-  const exitPx = Number.isFinite(Number(outcome?.px))
-    ? Number(outcome.px)
-    : Number.isFinite(Number(state?.exitPx))
-      ? Number(state.exitPx)
-      : Number(fallbackMark);
-  if (![qty, entryPx, exitPx].every(Number.isFinite) || qty <= 0) return null;
+  const exitPx = finitePositiveSettlementValue(outcome?.px) ??
+    finitePositiveSettlementValue(state?.exitPx) ??
+    finitePositiveSettlementValue(fallbackMark);
+  if (![qty, entryPx, exitPx].every(Number.isFinite) || qty <= 0 || entryPx <= 0 || exitPx <= 0) return null;
   const direction = state.entrySide === "buy" ? 1 : -1;
   const gross = direction * qty * (exitPx - entryPx);
-  const entryFee = Number.isFinite(Number(state.entryFeeEst))
-    ? Number(state.entryFeeEst)
-    : 0.01 * qty * entryPx;
-  const exitFee = Number.isFinite(Number(outcome?.fee))
-    ? Number(outcome.fee)
-    : 0.01 * qty * exitPx;
+  const entryFee = finiteNonnegativeSettlementFee(state.entryFeeEst) ?? (0.01 * qty * entryPx);
+  const exitFee = finiteNonnegativeSettlementFee(outcome?.fee) ?? (0.01 * qty * exitPx);
   return { delta: gross - entryFee - exitFee, gross, entryFee, exitFee, exitPx };
 }
 
@@ -3208,10 +3218,9 @@ if (state.state === "entry_accepted") {
   }
 
   if (!releasedAmbiguousEntry && outcome?.outcome === "settled") {
-    const settledEntryPx = Number.isFinite(Number(outcome?.px)) ? Number(outcome.px) : Number(state.entryPx);
-    const settledEntryFee = Number.isFinite(Number(outcome?.fee))
-      ? Number(outcome.fee)
-      : Number(state.entryFeeEst || (0.01 * Number(state.qty) * settledEntryPx));
+    const settledEntryPx = finitePositiveSettlementValue(outcome?.px) ?? Number(state.entryPx);
+    const settledEntryFee = finiteNonnegativeSettlementFee(outcome?.fee) ??
+      (finiteNonnegativeSettlementFee(state.entryFeeEst) ?? (0.01 * Number(state.qty) * settledEntryPx));
     const settledState = { ...state, entryPx: settledEntryPx, entryFeeEst: settledEntryFee };
     const open = state.priorOpen
       ? mergeOpenPosition(state.priorOpen, settledState, outcome?.n || Number(state.acceptedAtSweep || latest.n))
@@ -3294,10 +3303,9 @@ if (state.state === "entry_unverified") {
     );
   }
   if (outcome?.outcome === "settled") {
-    const settledEntryPx = Number.isFinite(Number(outcome?.px)) ? Number(outcome.px) : Number(state.entryPx);
-    const settledEntryFee = Number.isFinite(Number(outcome?.fee))
-      ? Number(outcome.fee)
-      : Number(state.entryFeeEst || (0.01 * Number(state.qty) * settledEntryPx));
+    const settledEntryPx = finitePositiveSettlementValue(outcome?.px) ?? Number(state.entryPx);
+    const settledEntryFee = finiteNonnegativeSettlementFee(outcome?.fee) ??
+      (finiteNonnegativeSettlementFee(state.entryFeeEst) ?? (0.01 * Number(state.qty) * settledEntryPx));
     const settledState = { ...state, entryPx: settledEntryPx, entryFeeEst: settledEntryFee };
     const open = state.priorOpen
       ? mergeOpenPosition(state.priorOpen, settledState, Number(outcome?.n || latest.n))
