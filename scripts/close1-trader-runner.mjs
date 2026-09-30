@@ -740,6 +740,20 @@ function uncertaintyEnvelope(state) {
   return { lo, hi, worst: Math.max(Math.abs(lo), Math.abs(hi)) };
 }
 
+function uncertainCapitalReserve(state) {
+  let reserve = 0;
+  for (const x of uncertainEntries(state)) {
+    const qty = Number(x.qty);
+    const px = Number(x.entryPx);
+    if (!Number.isFinite(qty) || qty <= 0 || !Number.isFinite(px) || px <= 0) continue;
+    // No leverage: if the uncertain trade settled, its notional is tied up.
+    // Add a small fee/clawback cushion so follow-on entries do not repeatedly
+    // void for insufficient funds while the public archive is lagging.
+    reserve += qty * px * 1.02;
+  }
+  return reserve;
+}
+
 function confirmedShadowCloseNet(entry, mark) {
   const qty = Number(entry?.qty);
   const entryPx = Number(entry?.entryPx);
@@ -802,22 +816,24 @@ function applyUncertainRiskCap(decision, state, latestPx) {
 
   const px = Number(latestPx);
   const realizedCapital = Math.max(1000, 10000 + Number(state?.realizedScoreEst || 0));
+  const reserved = uncertainCapitalReserve(state);
+  const freeCapital = Math.max(0, realizedCapital - reserved);
   const cashCap = Number.isFinite(px) && px > 0
-    ? Math.max(0.1, realizedCapital / (px * 1.035))
-    : UNCERTAIN_MAX_ABS_QTY;
-  const cap = Math.min(UNCERTAIN_MAX_ABS_QTY, cashCap);
+    ? freeCapital / (px * 1.035)
+    : 0;
+  const cap = Math.min(UNCERTAIN_MAX_ABS_QTY, Math.max(0, cashCap));
   const env = uncertaintyEnvelope(state);
   const side = String(decision.side);
   const capacity = side === "buy" ? cap - env.hi : side === "sell" ? cap + env.lo : 0;
   const requested = Number(decision.qty);
   const qty = Math.min(requested, capacity);
   if (!Number.isFinite(qty) || qty < 0.1) {
-    console.log(`UNCERTAIN_RISK_BLOCK side=${side} lo=${env.lo.toFixed(2)} hi=${env.hi.toFixed(2)} cap=${cap.toFixed(2)}`);
+    console.log(`UNCERTAIN_RISK_BLOCK side=${side} lo=${env.lo.toFixed(2)} hi=${env.hi.toFixed(2)} cap=${cap.toFixed(2)} reserved=${reserved.toFixed(2)} free=${freeCapital.toFixed(2)}`);
     return null;
   }
   const clipped = Math.floor(qty * 100) / 100;
   if (clipped < requested) {
-    console.log(`UNCERTAIN_RISK_CAP side=${side} requested=${requested.toFixed(2)} allowed=${clipped.toFixed(2)} lo=${env.lo.toFixed(2)} hi=${env.hi.toFixed(2)} cap=${cap.toFixed(2)}`);
+    console.log(`UNCERTAIN_RISK_CAP side=${side} requested=${requested.toFixed(2)} allowed=${clipped.toFixed(2)} lo=${env.lo.toFixed(2)} hi=${env.hi.toFixed(2)} cap=${cap.toFixed(2)} reserved=${reserved.toFixed(2)} free=${freeCapital.toFixed(2)}`);
   }
   return { ...decision, qty: clipped };
 }
@@ -2590,7 +2606,8 @@ async function reconcileUncertainEntries(state, posSnapshots, latestSweep) {
       kept.push(entry); continue;
     }
 
-    let outcome = await findOutcome(String(entry.id || ""), Number(entry.acceptedAtSweep || 0), flowMessages);
+    const outcomeFromSweep = Number(entry.fromSweep || entry.entrySweep || entry.acceptedAtSweep || 0);
+    let outcome = await findOutcome(String(entry.id || ""), outcomeFromSweep, flowMessages);
     if (!outcome && Number(entry.until) > 0) outcome = await proveArchiveAbsence(String(entry.id || ""), Number(entry.acceptedAtSweep || 0), Number(entry.until));
     if (!outcome && legacyMissingMetadata && Number(entry.acceptedAtSweep) > 0) {
       outcome = await proveArchiveProcessingAbsence(String(entry.id || ""), Number(entry.acceptedAtSweep), Number(latestSweep), 6);
@@ -2961,14 +2978,16 @@ if (state.state === "exit_preflight") {
     const open = {
       state: "open",
       side: state.entrySide,
-      qty: Number(state.qty),
+      qty: Number(state.positionQtyBefore || state.qty),
+      targetQty: Number(state.positionQtyBefore || state.qty),
       entryPx: Number(state.entryPx),
       entrySweep: Number(state.entrySweep),
       entryId: state.entryId || null,
       lastPreflight: state.id,
       realizedScoreEst: Number(state.realizedScoreEst || 0),
-      entryFeeEst: Number(state.entryFeeEst || (0.01 * Number(state.qty) * Number(state.entryPx))),
-      uncertainEntries: uncertainEntries(state)
+      entryFeeEst: Number(state.positionEntryFeeTotal || state.entryFeeEst || (0.01 * Number(state.positionQtyBefore || state.qty) * Number(state.entryPx))),
+      uncertainEntries: uncertainEntries(state),
+      addCount: Number(state.addCount || 0)
     };
     await setState(open);
     console.log("EXIT_PREFLIGHT_CLEARED");
