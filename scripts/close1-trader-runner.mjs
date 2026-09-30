@@ -3166,6 +3166,13 @@ let race = raceContext({ now, pnlSnapshots: pnl, state, latest });
 console.log(
   `STATUS execute=${execute} n=${latest.n} ref=${latest.px} state=${state.state} ownTopPos=${ownPos ?? "na"} leader=${race.leaderScore ?? "na"} ownEst=${race.ownScoreEst.toFixed(2)} downside=${race.ownDownsideFloor.toFixed(2)} gap=${race.leaderGap ?? "na"} hLeft=${race.hoursRemaining.toFixed(1)}`
 );
+{
+  const bounds = positionExposureBounds(state);
+  const unresolved = uncertainEntries(state).filter((x) => x.confirmedOutcome !== "settled").length;
+  console.log(
+    `LEDGER_PNL realized=${Number(state.realizedScoreEst || 0).toFixed(2)} confirmedMtm=${uncertainConfirmedMark(state, latest.px).toFixed(2)} closeNow=${confirmedLedgerCloseNet(state, latest.px).toFixed(2)} unresolved=${unresolved} posLo=${bounds.lo.toFixed(2)} posHi=${bounds.hi.toFixed(2)}`
+  );
+}
 if (!execute) {
   await logRecentRedDragonVoids();
   await logPeerRecentHistory(state?.taker);
