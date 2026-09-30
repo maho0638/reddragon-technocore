@@ -2126,6 +2126,7 @@ if (raceSelftest) {
   const ledgerDiagTargets = [
     ["rd4e-305-uifc397", 305],
     ["rd4e-576-ujrqapi", 576],
+    ["rd4e-983-ulsig79", 983],
     ["m_1212_bb_12001", 1212],
     ["cc-a05-auto-maker-1790703210663", 1219],
     ["m_1230_bb_65659", 1230],
