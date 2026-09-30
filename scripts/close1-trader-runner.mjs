@@ -3129,26 +3129,44 @@ if (state.state === "entry_accepted") {
           qty: Number(state.qty),
           entryPx: Number(state.entryPx),
           acceptedAtSweep: acceptedAt,
+          fromSweep: Number(state.entrySweep || acceptedAt),
+          entrySweep: Number(state.entrySweep || acceptedAt),
           until: Number(state.until || acceptedAt + 1),
           taker: state.taker || null,
           maker: state.maker || null,
           liquidityRole: state.liquidityRole || null,
-          counterparty: state.counterparty || (state.liquidityRole === "taker" ? state.maker : state.taker) || null
+          counterparty: state.counterparty || (state.liquidityRole === "taker" ? state.maker : state.taker) || null,
+          postedSeq: Number(state.postedSeq || state.acceptedSeq || 0) || null,
+          entryFeeEst: Number(state.entryFeeEst || (0.01 * Number(state.qty) * Number(state.entryPx)))
         });
       }
       const env = uncertaintyEnvelope({ uncertainEntries: entries });
-      state = {
-        state: "idle",
-        cooldownUntilSweep: Number(latest.n),
-        realizedScoreEst: Number(state.realizedScoreEst || 0),
-        uncertainEntries: entries,
-        lastAmbiguousId: state.id
-      };
+      if (state.priorOpen) {
+        state = {
+          ...state.priorOpen,
+          state: "open",
+          realizedScoreEst: Number(state.realizedScoreEst || state.priorOpen.realizedScoreEst || 0),
+          uncertainEntries: entries,
+          lastAmbiguousAddId: state.id,
+          addRetryAfterSweep: Number(latest.n) + UNCERTAIN_RELEASE_SWEEPS
+        };
+        console.log(
+          `ADD_AMBIGUOUS_SHADOWED id=${entries.at(-1)?.id || "?"} lo=${env.lo.toFixed(2)} hi=${env.hi.toFixed(2)}`
+        );
+      } else {
+        state = {
+          state: "idle",
+          cooldownUntilSweep: Number(latest.n),
+          realizedScoreEst: Number(state.realizedScoreEst || 0),
+          uncertainEntries: entries,
+          lastAmbiguousId: state.id
+        };
+        console.log(
+          `ENTRY_AMBIGUOUS_RELEASED id=${entries.at(-1)?.id || "?"} lo=${env.lo.toFixed(2)} hi=${env.hi.toFixed(2)}`
+        );
+      }
       await setState(state);
       releasedAmbiguousEntry = true;
-      console.log(
-        `ENTRY_AMBIGUOUS_RELEASED id=${entries.at(-1)?.id || "?"} lo=${env.lo.toFixed(2)} hi=${env.hi.toFixed(2)}`
-      );
       realNvdaSignal = await fetchRealNvdaSignal(now);
       if (realNvdaSignal?.fresh) {
         const trend = multiTimeframeTrend(realNvdaSignal);
@@ -3207,15 +3225,27 @@ if (state.state === "entry_accepted") {
         entryFeeEst: Number(state.entryFeeEst || (0.01 * Number(state.qty) * Number(state.entryPx)))
       });
     }
-    state = {
-      state: "idle",
-      cooldownUntilSweep: Number(latest.n),
-      realizedScoreEst: Number(state.realizedScoreEst || 0),
-      uncertainEntries: entries,
-      lastUnverifiedReleasedId: state.id
-    };
+    if (state.priorOpen) {
+      state = {
+        ...state.priorOpen,
+        state: "open",
+        realizedScoreEst: Number(state.realizedScoreEst || state.priorOpen.realizedScoreEst || 0),
+        uncertainEntries: entries,
+        lastUnverifiedAddId: state.id,
+        addRetryAfterSweep: Number(latest.n) + UNCERTAIN_RELEASE_SWEEPS
+      };
+      console.log("ADD_UNVERIFIED_SHADOWED");
+    } else {
+      state = {
+        state: "idle",
+        cooldownUntilSweep: Number(latest.n),
+        realizedScoreEst: Number(state.realizedScoreEst || 0),
+        uncertainEntries: entries,
+        lastUnverifiedReleasedId: state.id
+      };
+      console.log("ENTRY_UNVERIFIED_RELEASED");
+    }
     await setState(state);
-    console.log("ENTRY_UNVERIFIED_RELEASED");
   } else if (!releasedAmbiguousEntry) {
     console.log("ENTRY_PENDING_SWEEP");
     process.exit(0);
