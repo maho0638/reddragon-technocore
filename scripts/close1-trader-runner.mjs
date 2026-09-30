@@ -2279,6 +2279,19 @@ async function findOutcome(id, fromSweep = 0, flowMessages = null) {
       lastOmittedSweep
     };
   }
+
+  // A trade can age out of, or be absent from, the compact live flow even when
+  // the official archive already has the authoritative outcome. Do not leave
+  // accepted/uncertain exposure unresolved merely because no "omitted" counter
+  // happened to be present in the currently visible flow window.
+  if (Number(fromSweep) > 0) {
+    try {
+      const archived = await findArchiveOutcome(id, Number(fromSweep));
+      if (archived) return archived;
+    } catch (error) {
+      console.log(`ARCHIVE_FALLBACK_LOOKUP_FAILED id=${id} error=${String(error).slice(0,200)}`);
+    }
+  }
   return null;
 }
 
