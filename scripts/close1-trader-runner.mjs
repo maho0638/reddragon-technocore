@@ -6,7 +6,10 @@ import { readFile } from "node:fs/promises";
 
 const BASE = "https://technocore.chat";
 const ARCHIVE_BASE = "https://challenges.technocore.chat/close-1";
-const ARCHIVE_SCAN_SWEEPS = 8;
+const ARCHIVE_SCAN_SWEEPS = 12;
+const MAKER_ENTRY_CHUNK_QTY = 20;
+const MAKER_EXIT_CHUNK_QTY = 20;
+const PARTIAL_EXIT_MIN_FRACTION = 0.20;
 const ROOM = "close1";
 const STATE_PATH = "runtime/close1-state.enc";
 const STATE_MARKER = "REDDRAGON_CLOSE1_STATE_V5:";
@@ -24,13 +27,13 @@ const CORE_RANGE_HIGH = 233;
 const RANGE_BREAK_LOW = 220.5;
 const RANGE_BREAK_HIGH = 234.5;
 const MAJOR_CATALYSTS = [
-  { name: "PCE_GDP", at: Date.parse("2026-09-30T12:30:00Z"), preMin: 90, postMin: 45 },
-  { name: "MICRON_EARNINGS", at: Date.parse("2026-09-30T20:30:00Z"), preMin: 90, postMin: 180 },
+  { name: "PCE_GDP", at: Date.parse("2026-09-30T12:30:00Z"), preMin: 30, postMin: 45 },
+  { name: "MICRON_EARNINGS", at: Date.parse("2026-09-30T20:30:00Z"), preMin: 30, postMin: 180 },
   { name: "FED_WALLER", at: Date.parse("2026-10-01T14:00:00Z"), preMin: 30, postMin: 45 },
   { name: "FED_JEFFERSON", at: Date.parse("2026-10-01T17:30:00Z"), preMin: 30, postMin: 45 },
   { name: "FED_BOWMAN", at: Date.parse("2026-10-01T19:00:00Z"), preMin: 30, postMin: 45 },
   { name: "FED_COOK", at: Date.parse("2026-10-01T19:30:00Z"), preMin: 30, postMin: 45 },
-  { name: "US_JOBS", at: Date.parse("2026-10-02T12:30:00Z"), preMin: 90, postMin: 60 }
+  { name: "US_JOBS", at: Date.parse("2026-10-02T12:30:00Z"), preMin: 30, postMin: 60 }
 ];
 const EXPECTED_DID = "did:key:z6MkuhrsP4tDZjWYdZLPxaur19WvrF1yuLGsGB2S8Q1gwS6K";
 const keyB64 = String(process.env.TECHNOCORE_PRIVATE_KEY_PKCS8_B64 || "").trim();
@@ -261,11 +264,12 @@ async function close1ArchiveIndex() {
     const path = String(row?.path || "");
     const file = String(row?.file || "");
     const status = String(row?.status || "");
+    const expectedHash = status === "full" ? file : String(row?.sha256 || "");
     if (
       !Number.isInteger(n) || n < 1 ||
       !/^(?:sweeps|redacted)\/[0-9a-f]{64}\.json$/.test(path) ||
-      !/^[0-9a-f]{64}$/.test(file) ||
-      !["full", "redacted"].includes(status)
+      !["full", "redacted"].includes(status) ||
+      !/^[0-9a-f]{64}$/.test(expectedHash)
     ) continue;
     byN.set(n, row);
     maxN = Math.max(maxN, n);
@@ -307,6 +311,51 @@ async function close1ArchiveRecord(meta) {
   if (Number(record?.input?.n) !== n || Number(record?.output?.sweep) !== n) return null;
   archiveRecordCache.set(cacheKey, record);
   return record;
+}
+
+async function close1ArchiveRecordByHash(n, fileHash) {
+  const sweep = Number(n);
+  const hash = String(fileHash || "");
+  if (!Number.isInteger(sweep) || sweep < 1 || !/^[0-9a-f]{64}$/.test(hash)) return null;
+  const cacheKey = `flow:${sweep}:${hash}`;
+  if (archiveRecordCache.has(cacheKey)) return archiveRecordCache.get(cacheKey);
+  const { r, text } = await request(
+    `${ARCHIVE_BASE}/sweeps/${hash}.json`,
+    { headers: { accept: "application/json", "cache-control": "no-cache" } },
+    2
+  );
+  if (!r.ok || text.length > 12_000_000) return null;
+  const actual = createHash("sha256").update(Buffer.from(text, "utf8")).digest("hex");
+  if (actual !== hash) return null;
+  let record;
+  try { record = JSON.parse(text); } catch { return null; }
+  if (Number(record?.input?.n) !== sweep || Number(record?.output?.sweep) !== sweep) return null;
+  archiveRecordCache.set(cacheKey, record);
+  return record;
+}
+
+function outcomeFromArchiveRecord(record, id, n) {
+  const inputTrades = Array.isArray(record?.input?.trades) ? record.input.trades : [];
+  const outputTrades = Array.isArray(record?.output?.trades) ? record.output.trades : [];
+  for (let i = 0; i < Math.max(inputTrades.length, outputTrades.length); i++) {
+    const input = inputTrades[i];
+    const output = outputTrades[i];
+    if (String(input?.id || output?.id || "") !== String(id || "")) continue;
+    if (!archiveTradeBelongsToUs(input)) continue;
+    if (output?.outcome === "settled" || (output?.outcome === "void" && output?.reason === "settled")) {
+      return {
+        outcome: "settled", n: Number(n),
+        px: Number.isFinite(Number(input?.px)) ? Number(input.px) : null,
+        qty: Number.isFinite(Number(input?.qty)) ? Number(input.qty) : null,
+        fee: archiveFeeForUs({ input, output }),
+        inferredFrom: "referee_file"
+      };
+    }
+    if (output?.outcome === "void") {
+      return { outcome: "void", reason: String(output?.reason || "void"), n: Number(n), inferredFrom: "referee_file" };
+    }
+  }
+  return null;
 }
 
 function archiveTradeBelongsToUs(input, ourDid = did) {
@@ -606,7 +655,11 @@ function visiblePositionAt(posSnapshots, key, sweep) {
 }
 
 function peerSettlementEvidence(posSnapshots, state, latestSweep) {
-  const peer = String(state?.taker || "");
+  const peer = String(
+    state?.counterparty ||
+    (state?.liquidityRole === "taker" ? state?.maker : state?.taker) ||
+    ""
+  );
   const acceptedAt = Number(state?.acceptedAtSweep || 0);
   const qty = Number(state?.qty);
   if (!peer || !acceptedAt || !Number.isFinite(qty) || qty <= 0) return null;
@@ -897,18 +950,18 @@ function activeContestEntry(signal, latest, race, catalyst) {
   const m60 = Number(signal.move60);
   if (![m5, m15].every(Number.isFinite)) return null;
 
-  const up = m5 >= 0.08 && m15 >= 0.20;
-  const down = m5 <= -0.08 && m15 <= -0.20;
+  const up = m15 >= 0.12 && m30 >= 0.18 && m5 >= -0.10;
+  const down = m15 <= -0.12 && m30 <= -0.18 && m5 <= 0.10;
   if (!up && !down) return null;
 
   const notOpposed = up
-    ? (!Number.isFinite(m30) || m30 >= -0.25) && (!Number.isFinite(m60) || m60 >= -0.50)
-    : (!Number.isFinite(m30) || m30 <= 0.25) && (!Number.isFinite(m60) || m60 <= 0.50);
+    ? (!Number.isFinite(m60) || m60 >= -0.40)
+    : (!Number.isFinite(m60) || m60 <= 0.40);
   if (!notOpposed) return null;
 
   const supported = up
-    ? (!Number.isFinite(m30) || m30 >= 0.15) && (!Number.isFinite(m60) || m60 >= -0.10)
-    : (!Number.isFinite(m30) || m30 <= -0.15) && (!Number.isFinite(m60) || m60 <= 0.10);
+    ? m5 >= 0.03 && (!Number.isFinite(m60) || m60 >= -0.10)
+    : m5 <= -0.03 && (!Number.isFinite(m60) || m60 <= 0.10);
 
   const side = up ? "buy" : "sell";
   if (!directionalFeeRoom(side, px)) return null;
@@ -1389,6 +1442,23 @@ if (raceSelftest) {
   if (!acceptableTakerEntryQuote("buy", 228.48, 228.40)) throw new Error("RACE_SELFTEST_ACCEPT_NEAR_MARK_BUY");
   if (!acceptableTakerEntryQuote("sell", 228.65, 228.40)) throw new Error("RACE_SELFTEST_ACCEPT_FAVORABLE_SELL");
   if (!acceptableTakerEntryQuote("buy", 228.10, 228.40)) throw new Error("RACE_SELFTEST_ACCEPT_FAVORABLE_BUY");
+  const partialAllocProbe = exitAllocation({ qty: 40, entryPx: 225, entryFeeEst: 90 }, 15);
+  if (!(partialAllocProbe && partialAllocProbe.remainingQty === 25 && Math.abs(partialAllocProbe.closedEntryFee - 33.75) < 1e-9)) throw new Error("RACE_SELFTEST_PARTIAL_EXIT_ALLOCATION");
+  const partialStateProbe = settledExitTransition(
+    { qty: 15, positionQtyBefore: 40, positionEntryFeeTotal: 90, remainingEntryFeeEst: 56.25,
+      entrySide: "buy", entryPx: 225, entrySweep: 100, entryId: "p", entryFeeEst: 33.75,
+      realizedScoreEst: 0, uncertainEntries: [] },
+    { outcome: "settled", px: 230, fee: 34.5 }, 120, 231
+  );
+  if (!(partialStateProbe?.partial && partialStateProbe.next.state === "open" && Math.abs(partialStateProbe.next.qty - 25) < 1e-9)) throw new Error("RACE_SELFTEST_PARTIAL_EXIT_STATE");
+  const fallbackRefs = Array.from({ length: 24 }, (_, i) => ({ px: 225 + i * 0.10 }));
+  const fallbackProbe = controlledFallbackEntry(null, { leaderGap: 1000, hoursRemaining: 100 }, fallbackRefs, [{ top: [["did:key:z6MkPeer", 300]] }], { px: 227.3 });
+  if (!(fallbackProbe?.action === "enter" && fallbackProbe.side === "buy")) throw new Error("RACE_SELFTEST_FALLBACK_ENTRY_AVAILABLE");
+  const activeMidProbe = activeContestEntry(
+    { fresh: true, move5: 0.02, move15: 0.18, move30: 0.25, move60: 0.10, move240: 0.15 },
+    { px: 228 }, { leaderGap: 1000, hoursRemaining: 100 }, { blockNewEntries: false }
+  );
+  if (!(activeMidProbe?.action === "enter" && activeMidProbe.side === "buy")) throw new Error("RACE_SELFTEST_ACTIVE_15_30_ENTRY");
   const ttlProbe = makeOffer("buy", 1, { n: 100, px: 225 }, "test");
   if (ttlProbe.until !== 101) throw new Error("RACE_SELFTEST_FAST_REPRICE_TTL");
   const base = { action: "enter", side: "buy", qty: 20, confidence: 0.9 };
@@ -1899,6 +1969,7 @@ async function findReliableOpposingOffer(decision, latest) {
   const desiredSide = String(decision?.side || "");
   const desiredQty = Number(decision?.qty);
   const openingEntry = decision?.action === "enter";
+  const closingExit = decision?.action === "exit";
   if (!["buy", "sell"].includes(desiredSide) || !Number.isFinite(desiredQty)) return null;
 
   const [roomMsgs, flowMsgs] = await Promise.all([
@@ -1946,7 +2017,7 @@ async function findReliableOpposingOffer(decision, latest) {
   }
 
   const oppositeMakerSide = desiredSide === "buy" ? "sell" : "buy";
-  const minQty = Math.max(0.1, desiredQty * 0.40);
+  const minQty = closingExit ? Math.max(0.1, desiredQty * PARTIAL_EXIT_MIN_FRACTION) : Math.max(0.1, desiredQty * 0.40);
   const maxQty = Math.min(60, desiredQty);
   const refPx = Number(latest.px);
   const candidates = [];
@@ -1988,7 +2059,7 @@ async function findReliableOpposingOffer(decision, latest) {
     const reliability = settledCount - 1.5 * fundsFails + (pristineHighConviction ? 0.25 : 0);
     const sizeFit = -Math.abs(qty - desiredQty) / Math.max(1, desiredQty);
     const priceFit = -Math.abs(px - refPx) / refPx;
-    const entryQuoteEdge = openingEntry ? takerEntryQuoteEdge(desiredSide, px, refPx) : 0;
+    const entryQuoteEdge = takerEntryQuoteEdge(desiredSide, px, refPx) || 0;
     const recency = Number(roomMsgs[i]?.seq || 0);
     candidates.push({ b, qty, px, maker, score: reliability * 10 + sizeFit * 3 + priceFit + entryQuoteEdge * 5 + recency * 1e-9 });
   }
@@ -2013,6 +2084,7 @@ function mergeOpenPosition(priorOpen, addState, settledSweep) {
     entryFeeEst: Number(priorOpen.entryFeeEst || (0.01 * oldQty * oldPx)) + Number(addState.entryFeeEst || (0.01 * addQty * addPx)),
     realizedScoreEst: Number(addState.realizedScoreEst ?? priorOpen.realizedScoreEst ?? 0),
     uncertainEntries: uncertainEntries(addState),
+    targetQty: Math.max(totalQty, Number(priorOpen.targetQty || 0), Number(addState.targetQty || 0)),
     addCount: Number(priorOpen.addCount || 0) + 1,
     lastAddQty: addQty,
     lastAddPx: addPx,
@@ -2048,6 +2120,16 @@ function scaleInDecision(openState, signal, latest, race, catalyst) {
   const favorableMove = long ? px - entryPx : entryPx - px;
   const continuation = long ? shape.continuationUp : shape.continuationDown;
   const fastAdverse = long ? shape.fastDown : shape.fastUp;
+  const targetQty = Math.max(qty, Number(openState.targetQty || qty));
+  const directionalSupport = long
+    ? Number(signal.move15) >= 0.10 && Number(signal.move30) >= 0.12
+    : Number(signal.move15) <= -0.10 && Number(signal.move30) <= -0.12;
+  if (targetQty > qty + 0.09 && favorableMove >= 0.15 && directionalSupport && !fastAdverse) {
+    const realizedCapital = Math.max(1000, 10000 + Number(openState.realizedScoreEst || 0));
+    const totalCap = Math.max(0, Math.min(60, realizedCapital / (px * 1.04)));
+    const addQty = Math.floor(Math.min(targetQty - qty, MAKER_ENTRY_CHUNK_QTY, totalCap - qty) * 100) / 100;
+    if (addQty >= 3) return { action: "enter", side: openState.side, qty: addQty, targetQty, confidence: 0.97, reason: "build_target_position" };
+  }
   if (!continuation || fastAdverse) return null;
 
   const trigger = Number(openState.addCount || 0) === 0 ? 0.80 : 1.60;
@@ -2094,7 +2176,9 @@ async function takeReliableOffer(match, decision, latest, priorState = {}, prior
     liquidityRole: "taker",
     maker: String(terms.maker),
     priorOpen: priorOpen ? { ...priorOpen } : null,
-    entryPurpose: priorOpen ? "add" : "new"
+    entryPurpose: priorOpen ? "add" : "new",
+    targetQty: Number(priorOpen?.targetQty || decision?.targetQty || decision?.qty || qty),
+    counterparty: String(terms.maker)
   };
   await setState(preflight);
   const posted = await signedPost(ROOM, text);
@@ -2246,14 +2330,27 @@ async function findOutcome(id, fromSweep = 0, flowMessages = null) {
   let omittedVoid = 0;
   let firstOmittedSweep = null;
   let lastOmittedSweep = null;
+  const authoritativeFiles = [];
 
   for (let i = msgs.length - 1; i >= 0; i--) {
     const b = parseBody(msgs[i]);
     if (b?.t !== "flow") continue;
     const n = Number(b.n);
     if (Number.isFinite(Number(fromSweep)) && Number(fromSweep) > 0 && n < Number(fromSweep)) continue;
+    if (
+      Number(fromSweep) > 0 &&
+      n <= Number(fromSweep) + ARCHIVE_SCAN_SWEEPS &&
+      /^[0-9a-f]{64}$/.test(String(b?.file || ""))
+    ) authoritativeFiles.push({ n, file: String(b.file) });
 
     if (Array.isArray(b.settled) && b.settled.includes(id)) {
+      if (/^[0-9a-f]{64}$/.test(String(b?.file || ""))) {
+        try {
+          const record = await close1ArchiveRecordByHash(n, String(b.file));
+          const direct = outcomeFromArchiveRecord(record, id, n);
+          if (direct?.outcome === "settled") return direct;
+        } catch {}
+      }
       if (Number(fromSweep) > 0) {
         try {
           const archived = await findArchiveOutcome(id, Number(fromSweep));
@@ -2268,10 +2365,14 @@ async function findOutcome(id, fromSweep = 0, flowMessages = null) {
       const hit = b.void.find((v) => Array.isArray(v) && v[0] === id);
       if (hit) {
         const reason = String(hit[1]);
-        // "settled" is emitted for a later duplicate of an id that already
-        // settled earlier. For the maker's economic state this is positive
-        // evidence that the trade id did settle.
+        // "settled" means this id already settled in an earlier copy.
         if (reason === "settled") {
+          if (Number(fromSweep) > 0) {
+            try {
+              const archived = await findArchiveOutcome(id, Number(fromSweep));
+              if (archived?.outcome === "settled") return archived;
+            } catch {}
+          }
           return { outcome: "settled", n, inferredFrom: "void:settled" };
         }
         return { outcome: "void", reason, n };
@@ -2285,6 +2386,19 @@ async function findOutcome(id, fromSweep = 0, flowMessages = null) {
       omittedVoid += Math.max(0, ov);
       firstOmittedSweep = firstOmittedSweep == null ? n : Math.min(firstOmittedSweep, n);
       lastOmittedSweep = lastOmittedSweep == null ? n : Math.max(lastOmittedSweep, n);
+    }
+  }
+
+  for (const item of authoritativeFiles.sort((a, b) => a.n - b.n)) {
+    try {
+      const record = await close1ArchiveRecordByHash(item.n, item.file);
+      const direct = outcomeFromArchiveRecord(record, id, item.n);
+      if (direct) {
+        console.log(`REFEREE_FILE_OUTCOME id=${id} outcome=${direct.outcome} reason=${direct.reason || "na"} n=${item.n}`);
+        return direct;
+      }
+    } catch (error) {
+      console.log(`REFEREE_FILE_LOOKUP_FAILED id=${id} n=${item.n} error=${String(error).slice(0,160)}`);
     }
   }
 
@@ -2374,10 +2488,40 @@ async function reconcileUncertainEntries(state, posSnapshots, latestSweep) {
   return { state: { ...state, uncertainEntries: kept }, changed: true };
 }
 
-async function findReliableExactOpposingOffer(side, qty, latest) {
-  const match = await findReliableOpposingOffer({ side, qty }, latest);
-  if (!match) return null;
-  return Math.abs(Number(match.qty) - Number(qty)) <= 0.02 ? match : null;
+async function findReliableExitOpposingOffer(side, qty, latest) {
+  return findReliableOpposingOffer({ action: "exit", side, qty }, latest);
+}
+
+function exitAllocation(openState, exitQty) {
+  const fullQty = Number(openState?.qty);
+  const q = Number(exitQty);
+  const totalEntryFee = Number(openState?.entryFeeEst || (0.01 * fullQty * Number(openState?.entryPx)));
+  if (![fullQty, q, totalEntryFee].every(Number.isFinite) || fullQty <= 0 || q <= 0 || q > fullQty + 0.02) return null;
+  const closedQty = Math.min(fullQty, q);
+  const ratio = closedQty / fullQty;
+  return { fullQty, closedQty, remainingQty: Math.max(0, fullQty - closedQty), totalEntryFee,
+    closedEntryFee: totalEntryFee * ratio, remainingEntryFee: Math.max(0, totalEntryFee * (1 - ratio)) };
+}
+
+function updateShadowAfterPartialExit(entries, id, remainingQty, remainingEntryFee) {
+  const out = [];
+  for (const item of uncertainEntries({ uncertainEntries: entries })) {
+    if (String(item.id || "") !== String(id || "")) { out.push(item); continue; }
+    if (remainingQty >= 0.1) out.push({ ...item, qty: remainingQty, entryFeeEst: remainingEntryFee });
+  }
+  return out;
+}
+
+function restoreOpenFromExitState(state, latestSweep, reason) {
+  const fullQty = Number(state.positionQtyBefore || state.qty);
+  const totalEntryFee = Number(state.positionEntryFeeTotal || state.entryFeeEst || 0);
+  return {
+    state: "open", side: state.entrySide, qty: fullQty, targetQty: fullQty,
+    entryPx: Number(state.entryPx), entrySweep: Number(state.entrySweep), entryId: state.entryId || null,
+    lastExitVoid: reason || "exit_failed", realizedScoreEst: Number(state.realizedScoreEst || 0),
+    entryFeeEst: totalEntryFee, uncertainEntries: uncertainEntries(state),
+    addCount: Number(state.addCount || 0), exitRetryAfterSweep: Number(latestSweep || 0)
+  };
 }
 
 async function takeReliableExitOffer(match, openState, latest) {
@@ -2392,12 +2536,12 @@ async function takeReliableExitOffer(match, openState, latest) {
     maker_sig: match.b.maker_sig,
     taker_sig
   });
+  const allocation = exitAllocation(openState, Number(terms.qty));
+  if (!allocation) throw new Error("INVALID_PARTIAL_EXIT_ALLOCATION");
   const preflight = {
-    state: "exit_preflight",
-    id: String(terms.id),
-    exitSide,
-    exitPx: Number(terms.px),
-    qty: Number(openState.qty),
+    state: "exit_preflight", id: String(terms.id), exitSide, exitPx: Number(terms.px),
+    qty: allocation.closedQty, positionQtyBefore: allocation.fullQty,
+    positionEntryFeeTotal: allocation.totalEntryFee, remainingEntryFeeEst: allocation.remainingEntryFee,
     entrySide: openState.side,
     entryPx: Number(openState.entryPx),
     entrySweep: Number(openState.entrySweep),
@@ -2405,11 +2549,9 @@ async function takeReliableExitOffer(match, openState, latest) {
     until: Number(terms.until),
     requestedAtSweep: Number(latest.n),
     realizedScoreEst: Number(openState.realizedScoreEst || 0),
-    entryFeeEst: Number(openState.entryFeeEst || (0.01 * Number(openState.qty) * Number(openState.entryPx))),
-    closingShadowId: openState.closingShadowId || null,
-    uncertainEntries: uncertainEntries(openState),
-    liquidityRole: "taker",
-    maker: String(terms.maker)
+    entryFeeEst: allocation.closedEntryFee, closingShadowId: openState.closingShadowId || null,
+    uncertainEntries: uncertainEntries(openState), liquidityRole: "taker", maker: String(terms.maker),
+    counterparty: String(terms.maker), addCount: Number(openState.addCount || 0)
   };
   await setState(preflight);
   const posted = await signedPost(ROOM, text);
@@ -2421,7 +2563,7 @@ async function takeReliableExitOffer(match, openState, latest) {
     acceptedAtSweep: Number(latest.n),
     taker: did
   });
-  console.log(`EXIT_TAKE side=${exitSide} qty=${Number(openState.qty).toFixed(2)} px=${Number(terms.px).toFixed(2)} maker=${String(terms.maker).slice(0,24)} seq=${posted.seq || "?"}`);
+  console.log(`EXIT_TAKE side=${exitSide} qty=${allocation.closedQty.toFixed(2)} remaining=${allocation.remainingQty.toFixed(2)} px=${Number(terms.px).toFixed(2)} maker=${String(terms.maker).slice(0,24)} seq=${posted.seq || "?"}`);
 }
 
 async function postEntry(decision, latest, priorState = {}) {
@@ -2433,7 +2575,9 @@ async function postEntry(decision, latest, priorState = {}) {
     }
   }
 
-  const offer = makeOffer(decision.side, Number(decision.qty), latest, "rd4e");
+  const desiredQty = Number(decision.qty);
+  const makerQty = Math.min(desiredQty, MAKER_ENTRY_CHUNK_QTY);
+  const offer = makeOffer(decision.side, makerQty, latest, "rd4e");
   if (!execute) {
     console.log(`DRY_ENTRY side=${decision.side} qty=${Number(decision.qty).toFixed(2)}`);
     return;
@@ -2442,7 +2586,8 @@ async function postEntry(decision, latest, priorState = {}) {
     state: "entry_preflight",
     id: offer.id,
     side: decision.side,
-    qty: Number(decision.qty),
+    qty: makerQty,
+    targetQty: desiredQty,
     entryPx: Number(offer.terms.px),
     until: offer.until,
     entrySweep: Number(latest.n),
@@ -2453,7 +2598,7 @@ async function postEntry(decision, latest, priorState = {}) {
   await setState(preflight);
   const posted = await signedPost(ROOM, offer.text);
   await setState({ ...preflight, state: "entry_offer", postedSeq: posted.seq });
-  console.log(`ENTRY_OFFER side=${decision.side} qty=${Number(decision.qty).toFixed(2)} seq=${posted.seq || "?"}`);
+  console.log(`ENTRY_OFFER side=${decision.side} qty=${makerQty.toFixed(2)} target=${desiredQty.toFixed(2)} seq=${posted.seq || "?"}`);
 }
 function realizedCloseDelta(state, outcome, fallbackMark) {
   const qty = Number(state?.qty);
@@ -2475,16 +2620,47 @@ function realizedCloseDelta(state, outcome, fallbackMark) {
   return { delta: gross - entryFee - exitFee, gross, entryFee, exitFee, exitPx };
 }
 
+function settledExitTransition(state, outcome, latestSweep, fallbackMark) {
+  const close = realizedCloseDelta(state, outcome, fallbackMark);
+  if (!close) return null;
+  const before = Number(state.positionQtyBefore || state.qty);
+  const closed = Number(state.qty);
+  const remaining = Math.max(0, before - closed);
+  const remainingFee = Number(state.remainingEntryFeeEst || 0);
+  const realizedScoreEst = Number(state.realizedScoreEst || 0) + close.delta;
+  if (state.closingShadowId) {
+    return { close, partial: remaining >= 0.1, next: {
+      state: "idle", cooldownUntilSweep: Number(latestSweep) + 1, lastClosedId: state.id, realizedScoreEst,
+      uncertainEntries: updateShadowAfterPartialExit(uncertainEntries(state), state.closingShadowId, remaining, remainingFee)
+    }};
+  }
+  if (remaining >= 0.1) {
+    return { close, partial: true, next: {
+      state: "open", side: state.entrySide, qty: remaining, targetQty: remaining,
+      entryPx: Number(state.entryPx), entrySweep: Number(state.entrySweep), entryId: state.entryId || null,
+      entryFeeEst: remainingFee, realizedScoreEst, uncertainEntries: uncertainEntries(state),
+      addCount: Number(state.addCount || 0), exitRetryAfterSweep: Number(latestSweep)
+    }};
+  }
+  return { close, partial: false, next: {
+    state: "idle", cooldownUntilSweep: Number(latestSweep) + 1, lastClosedId: state.id,
+    realizedScoreEst, uncertainEntries: uncertainEntries(state)
+  }};
+}
+
 async function postExit(openState, latest) {
   const side = openState.side === "buy" ? "sell" : "buy";
   if (execute) {
-    const exactMatch = await findReliableExactOpposingOffer(side, Number(openState.qty), latest);
-    if (exactMatch) {
-      await takeReliableExitOffer(exactMatch, openState, latest);
+    const exitMatch = await findReliableExitOpposingOffer(side, Number(openState.qty), latest);
+    if (exitMatch) {
+      await takeReliableExitOffer(exitMatch, openState, latest);
       return;
     }
   }
-  const offer = makeOffer(side, Number(openState.qty), latest, "rd4x");
+  const exitQty = Math.min(Number(openState.qty), MAKER_EXIT_CHUNK_QTY);
+  const allocation = exitAllocation(openState, exitQty);
+  if (!allocation) throw new Error("INVALID_MAKER_EXIT_ALLOCATION");
+  const offer = makeOffer(side, exitQty, latest, "rd4x");
   if (!execute) {
     console.log(`DRY_EXIT side=${side} qty=${Number(openState.qty).toFixed(2)}`);
     return;
@@ -2494,7 +2670,8 @@ async function postExit(openState, latest) {
     id: offer.id,
     exitSide: side,
     exitPx: Number(offer.terms.px),
-    qty: Number(openState.qty),
+    qty: allocation.closedQty, positionQtyBefore: allocation.fullQty,
+    positionEntryFeeTotal: allocation.totalEntryFee, remainingEntryFeeEst: allocation.remainingEntryFee,
     entrySide: openState.side,
     entryPx: Number(openState.entryPx),
     entrySweep: Number(openState.entrySweep),
@@ -2502,15 +2679,14 @@ async function postExit(openState, latest) {
     until: offer.until,
     requestedAtSweep: Number(latest.n),
     realizedScoreEst: Number(openState.realizedScoreEst || 0),
-    entryFeeEst: Number(openState.entryFeeEst || (0.01 * Number(openState.qty) * Number(openState.entryPx))),
-    closingShadowId: openState.closingShadowId || null,
-    uncertainEntries: uncertainEntries(openState),
-    liquidityRole: "maker"
+    entryFeeEst: allocation.closedEntryFee, closingShadowId: openState.closingShadowId || null,
+    uncertainEntries: uncertainEntries(openState), liquidityRole: "maker",
+    addCount: Number(openState.addCount || 0)
   };
   await setState(preflight);
   const posted = await signedPost(ROOM, offer.text);
   await setState({ ...preflight, state: "exit_offer", postedSeq: posted.seq });
-  console.log(`EXIT_OFFER side=${side} qty=${Number(openState.qty).toFixed(2)} seq=${posted.seq || "?"}`);
+  console.log(`EXIT_OFFER side=${side} qty=${allocation.closedQty.toFixed(2)} remaining=${allocation.remainingQty.toFixed(2)} seq=${posted.seq || "?"}`);
 }
 
 const now = Date.now();
@@ -2577,8 +2753,9 @@ if (state.state === "entry_preflight") {
       ...state,
       state: "entry_accepted",
       acceptedSeq: seen.seq,
-      acceptedAtSweep: Number(latest.n),
-      taker: seen.taker
+      acceptedAtSweep: Number(state.acceptedAtSweep || state.entrySweep || state.requestedAtSweep || latest.n),
+      taker: seen.taker,
+      counterparty: String(state.liquidityRole === "taker" ? state.maker || "" : seen.taker || "")
     });
     console.log("ENTRY_PREFLIGHT_RECOVERED_ACCEPTED");
     process.exit(0);
@@ -2618,8 +2795,9 @@ if (state.state === "exit_preflight") {
       ...state,
       state: "exit_accepted",
       acceptedSeq: seen.seq,
-      acceptedAtSweep: Number(latest.n),
-      taker: seen.taker
+      acceptedAtSweep: Number(state.acceptedAtSweep || state.entrySweep || state.requestedAtSweep || latest.n),
+      taker: seen.taker,
+      counterparty: String(state.liquidityRole === "taker" ? state.maker || "" : seen.taker || "")
     });
     console.log("EXIT_PREFLIGHT_RECOVERED_ACCEPTED");
     process.exit(0);
@@ -2696,7 +2874,7 @@ if (state.state === "entry_offer") {
 
 if (state.state === "entry_accepted") {
   let releasedAmbiguousEntry = false;
-  const outcome = await findOutcome(state.id, Number(state.acceptedAtSweep || state.entrySweep || 0));
+  const outcome = await findOutcome(state.id, Number(state.entrySweep || state.acceptedAtSweep || 0));
   const expectedSign = state.side === "buy" ? 1 : -1;
   const expectedVisibleQty = state.priorOpen ? Number(state.priorOpen.qty || 0) + Number(state.qty) * 0.75 : Number(state.qty) * 0.75;
   const topEvidence =
@@ -2739,7 +2917,11 @@ if (state.state === "entry_accepted") {
           qty: Number(state.qty),
           entryPx: Number(state.entryPx),
           acceptedAtSweep: acceptedAt,
-          taker: state.taker || null
+          until: Number(state.until || acceptedAt + 1),
+          taker: state.taker || null,
+          maker: state.maker || null,
+          liquidityRole: state.liquidityRole || null,
+          counterparty: state.counterparty || (state.liquidityRole === "taker" ? state.maker : state.taker) || null
         });
       }
       const env = uncertaintyEnvelope({ uncertainEntries: entries });
@@ -2786,6 +2968,7 @@ if (state.state === "entry_accepted") {
           realizedScoreEst: Number(state.realizedScoreEst || 0),
           entryFeeEst: settledEntryFee,
           uncertainEntries: uncertainEntries(state),
+          targetQty: Math.max(Number(state.targetQty || state.qty), Number(state.qty)),
           addCount: 0
         };
     await setState(open);
@@ -2820,7 +3003,7 @@ if (state.state === "entry_accepted") {
 }
 
 if (state.state === "entry_unverified") {
-  const outcome = await findOutcome(state.id, Number(state.acceptedAtSweep || state.entrySweep || 0));
+  const outcome = await findOutcome(state.id, Number(state.entrySweep || state.acceptedAtSweep || 0));
   const expectedSign = state.side === "buy" ? 1 : -1;
   const expectedVisibleQty = state.priorOpen ? Number(state.priorOpen.qty || 0) + Number(state.qty) * 0.75 : Number(state.qty) * 0.75;
   const topEvidence =
@@ -2851,6 +3034,7 @@ if (state.state === "entry_unverified") {
           realizedScoreEst: Number(state.realizedScoreEst || 0),
           entryFeeEst: settledEntryFee,
           uncertainEntries: uncertainEntries(state),
+          targetQty: Math.max(Number(state.targetQty || state.qty), Number(state.qty)),
           addCount: 0
         };
     await setState(open);
@@ -2884,7 +3068,11 @@ if (state.state === "entry_unverified") {
           qty: Number(state.qty),
           entryPx: Number(state.entryPx),
           acceptedAtSweep: acceptedAt,
-          taker: state.taker || null
+          until: Number(state.until || acceptedAt + 1),
+          taker: state.taker || null,
+          maker: state.maker || null,
+          liquidityRole: state.liquidityRole || null,
+          counterparty: state.counterparty || (state.liquidityRole === "taker" ? state.maker : state.taker) || null
         });
       }
       const env = uncertaintyEnvelope({ uncertainEntries: entries });
@@ -2971,18 +3159,7 @@ if (state.state === "exit_offer") {
     console.log(`SHADOW_EXIT_EXPIRED_REEVALUATE shadow=${state.closingShadowId}`);
     process.exit(0);
   }
-  const open = {
-    state: "open",
-    side: state.entrySide,
-    qty: Number(state.qty),
-    entryPx: Number(state.entryPx),
-    entrySweep: Number(state.entrySweep),
-    entryId: state.entryId || null,
-    exitRetryAfterSweep: Number(latest.n),
-    realizedScoreEst: Number(state.realizedScoreEst || 0),
-    entryFeeEst: Number(state.entryFeeEst || (0.01 * Number(state.qty) * Number(state.entryPx))),
-    uncertainEntries: uncertainEntries(state)
-  };
+  const open = restoreOpenFromExitState(state, latest.n, "exit_offer_expired");
   await setState(open);
   console.log("EXIT_EXPIRED_REEVALUATE");
   state = open;
@@ -2991,13 +3168,15 @@ if (state.state === "exit_offer") {
 if (state.state === "exit_accepted") {
   const outcome = await findOutcome(
     state.id,
-    Number(state.acceptedAtSweep || state.requestedAtSweep || state.entrySweep || 0)
+    Number(state.requestedAtSweep || state.acceptedAtSweep || state.entrySweep || 0)
   );
   const expectedStillOpenSign = state.entrySide === "buy" ? 1 : -1;
+  const fullExitAttempt = Number(state.qty) >= Number(state.positionQtyBefore || state.qty) - 0.02;
   const topStillOpen =
+    fullExitAttempt &&
     Number.isFinite(ownPos) &&
     Math.sign(ownPos) === expectedStillOpenSign &&
-    Math.abs(ownPos) >= Math.max(0.1, Number(state.qty) * 0.5);
+    Math.abs(ownPos) >= Math.max(0.1, Number(state.positionQtyBefore || state.qty) * 0.5);
 
   if (outcome?.outcome === "void") {
     if (state.closingShadowId) {
@@ -3011,18 +3190,7 @@ if (state.state === "exit_accepted") {
       console.log(`SHADOW_EXIT_VOID_REEVALUATE reason=${outcome.reason} n=${outcome.n ?? "na"} id=${state.id}`);
       process.exit(0);
     }
-    const open = {
-      state: "open",
-      side: state.entrySide,
-      qty: Number(state.qty),
-      entryPx: Number(state.entryPx),
-      entrySweep: Number(state.entrySweep),
-      entryId: state.entryId || null,
-      lastExitVoid: outcome.reason,
-      realizedScoreEst: Number(state.realizedScoreEst || 0),
-      entryFeeEst: Number(state.entryFeeEst || (0.01 * Number(state.qty) * Number(state.entryPx))),
-      uncertainEntries: uncertainEntries(state)
-    };
+    const open = restoreOpenFromExitState(state, latest.n, outcome.reason);
     await setState(open);
     console.log(`EXIT_VOID_REEVALUATE reason=${outcome.reason} n=${outcome.n ?? "na"} id=${state.id}`);
     state = open;
@@ -3030,18 +3198,10 @@ if (state.state === "exit_accepted") {
     outcome?.outcome === "settled" ||
     (Number.isFinite(ownPos) && !topStillOpen && Number(latest.n) >= Number(state.acceptedAtSweep || latest.n) + 1)
   ) {
-    const close = realizedCloseDelta(state, outcome, latest.px);
-    if (!close) throw new Error("EXIT_REALIZED_ACCOUNTING_INVALID");
-    await setState({
-      state: "idle",
-      cooldownUntilSweep: Number(latest.n) + 1,
-      lastClosedId: state.id,
-      realizedScoreEst: Number(state.realizedScoreEst || 0) + close.delta,
-      uncertainEntries: state.closingShadowId
-        ? removeUncertainEntry(state, state.closingShadowId)
-        : uncertainEntries(state)
-    });
-    console.log("POSITION_CLOSED");
+    const transition = settledExitTransition(state, outcome, latest.n, latest.px);
+    if (!transition) throw new Error("EXIT_REALIZED_ACCOUNTING_INVALID");
+    await setState(transition.next);
+    console.log(transition.partial ? "POSITION_PARTIAL_CLOSED" : "POSITION_CLOSED");
     process.exit(0);
   } else if (Number(latest.n) >= Number(state.acceptedAtSweep || latest.n) + 1) {
     state = { ...state, state: "exit_unverified", checkedThroughSweep: Number(latest.n) };
@@ -3054,12 +3214,14 @@ if (state.state === "exit_accepted") {
 }
 
 if (state.state === "exit_unverified") {
-  const outcome = await findOutcome(state.id, Number(state.acceptedAtSweep || 0));
+  const outcome = await findOutcome(state.id, Number(state.requestedAtSweep || state.acceptedAtSweep || 0));
   const expectedStillOpenSign = state.entrySide === "buy" ? 1 : -1;
+  const fullExitAttempt = Number(state.qty) >= Number(state.positionQtyBefore || state.qty) - 0.02;
   const topStillOpen =
+    fullExitAttempt &&
     Number.isFinite(ownPos) &&
     Math.sign(ownPos) === expectedStillOpenSign &&
-    Math.abs(ownPos) >= Math.max(0.1, Number(state.qty) * 0.5);
+    Math.abs(ownPos) >= Math.max(0.1, Number(state.positionQtyBefore || state.qty) * 0.5);
 
   if (outcome?.outcome === "void" || topStillOpen) {
     if (state.closingShadowId) {
@@ -3073,34 +3235,15 @@ if (state.state === "exit_unverified") {
       console.log(`SHADOW_EXIT_UNVERIFIED_STILL_OPEN reason=${outcome?.reason || "position_visible"}`);
       process.exit(0);
     }
-    const open = {
-      state: "open",
-      side: state.entrySide,
-      qty: Number(state.qty),
-      entryPx: Number(state.entryPx),
-      entrySweep: Number(state.entrySweep),
-      entryId: state.entryId || null,
-      lastExitVoid: outcome?.reason || "position_visible",
-      realizedScoreEst: Number(state.realizedScoreEst || 0),
-      entryFeeEst: Number(state.entryFeeEst || (0.01 * Number(state.qty) * Number(state.entryPx))),
-      uncertainEntries: uncertainEntries(state)
-    };
+    const open = restoreOpenFromExitState(state, latest.n, outcome?.reason || "position_visible");
     await setState(open);
     console.log(`EXIT_UNVERIFIED_RECOVERED_OPEN reason=${outcome?.reason || "position_visible"}`);
     state = open;
   } else if (outcome?.outcome === "settled") {
-    const close = realizedCloseDelta(state, outcome, latest.px);
-    if (!close) throw new Error("EXIT_UNVERIFIED_REALIZED_ACCOUNTING_INVALID");
-    await setState({
-      state: "idle",
-      cooldownUntilSweep: Number(latest.n) + 1,
-      lastClosedId: state.id,
-      realizedScoreEst: Number(state.realizedScoreEst || 0) + close.delta,
-      uncertainEntries: state.closingShadowId
-        ? removeUncertainEntry(state, state.closingShadowId)
-        : uncertainEntries(state)
-    });
-    console.log("EXIT_UNVERIFIED_RECOVERED_CLOSED");
+    const transition = settledExitTransition(state, outcome, latest.n, latest.px);
+    if (!transition) throw new Error("EXIT_UNVERIFIED_REALIZED_ACCOUNTING_INVALID");
+    await setState(transition.next);
+    console.log(transition.partial ? "EXIT_UNVERIFIED_RECOVERED_PARTIAL" : "EXIT_UNVERIFIED_RECOVERED_CLOSED");
     process.exit(0);
   } else if (
     (outcome?.outcome === "ambiguous_omitted" || !outcome) &&
@@ -3248,7 +3391,7 @@ const fallbackDecision = controlledFallbackEntry(
   latest
 );
 const realConfirmedDecision = applyRealNvdaSignal(
-  tacticalDecision,
+  fallbackDecision,
   realNvdaSignal,
   race,
   distinct,
