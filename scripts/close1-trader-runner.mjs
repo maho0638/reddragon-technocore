@@ -741,6 +741,36 @@ function uncertainEntries(state) {
     : [];
 }
 
+const LEGACY_LOST_UNCERTAIN_ID = "c12439-any-n1404-6635bbf409";
+function recoverLostLegacyUncertain(state) {
+  if (!state || state.legacyLostUncertain1404Recovered === true) {
+    return { state, changed: false };
+  }
+  const entries = uncertainEntries(state);
+  const exists = entries.some((x) => String(x.id || "") === LEGACY_LOST_UNCERTAIN_ID);
+  if (!exists) {
+    entries.push({
+      id: LEGACY_LOST_UNCERTAIN_ID,
+      side: "sell",
+      qty: 42.89,
+      entryPx: 226.25,
+      acceptedAtSweep: 1405,
+      fromSweep: 1404,
+      entrySweep: 1404,
+      entryFeeEst: 97.038625,
+      recoveredFrom: "taker_state_transition_regression"
+    });
+  }
+  return {
+    state: {
+      ...state,
+      uncertainEntries: entries,
+      legacyLostUncertain1404Recovered: true
+    },
+    changed: true
+  };
+}
+
 function uncertaintyEnvelope(state) {
   let lo = 0;
   let hi = 0;
@@ -1593,6 +1623,27 @@ if (raceSelftest) {
   if (!(allowedOpposite?.qty > cappedSame.qty && allowedOpposite.qty < 13)) throw new Error("RACE_SELFTEST_UNCERTAIN_CASH_RESERVE_CAP");
   if (!(uncertainReserve > 7000 && uncertainReserve < 7300)) throw new Error("RACE_SELFTEST_UNCERTAIN_CAPITAL_RESERVE");
   if (!(env.lo === -31.53 && env.hi === 0)) throw new Error("RACE_SELFTEST_UNCERTAIN_ENVELOPE");
+  const lostRecovery = recoverLostLegacyUncertain({ state: "idle", uncertainEntries: [] });
+  if (!(lostRecovery.changed && lostRecovery.state.uncertainEntries.length === 1 &&
+        lostRecovery.state.uncertainEntries[0].id === LEGACY_LOST_UNCERTAIN_ID &&
+        lostRecovery.state.uncertainEntries[0].qty === 42.89 &&
+        lostRecovery.state.uncertainEntries[0].entryPx === 226.25)) {
+    throw new Error("RACE_SELFTEST_LEGACY_UNCERTAIN_RECOVERY");
+  }
+  const lostRecoveryAgain = recoverLostLegacyUncertain(lostRecovery.state);
+  if (lostRecoveryAgain.changed || lostRecoveryAgain.state.uncertainEntries.length !== 1) {
+    throw new Error("RACE_SELFTEST_LEGACY_UNCERTAIN_RECOVERY_IDEMPOTENT");
+  }
+  const carryProbe = buildTakerEntryPreflight(
+    { id: "carry-test", qty: 1, px: 225, until: 11, maker: "did:key:z6MkMaker" },
+    { side: "buy", qty: 1, targetQty: 1 },
+    { n: 10 },
+    { realizedScoreEst: 0, uncertainEntries: [{ id: "shadow", side: "sell", qty: 2, entryPx: 226 }] },
+    null
+  );
+  if (!(carryProbe.uncertainEntries.length === 1 && carryProbe.uncertainEntries[0].id === "shadow")) {
+    throw new Error("RACE_SELFTEST_TAKER_PRESERVES_UNCERTAIN");
+  }
   if (inferSweepFromTradeId("c12439-any-n1404-6635bbf409", 1405) !== 1404) throw new Error("RACE_SELFTEST_LEGACY_SWEEP_INFERENCE");
   if (inferSweepFromTradeId("n100-too-old", 1405) !== null) throw new Error("RACE_SELFTEST_REJECT_STALE_SWEEP_INFERENCE");
   const confirmedShadow = { id: "legacy-short", side: "sell", qty: 31.53, entryPx: 224.26, confirmedOutcome: "settled" };
@@ -2263,6 +2314,29 @@ function scaleInDecision(openState, signal, latest, race, catalyst) {
   return { action: "enter", side: openState.side, qty: addQty, confidence: 0.98, reason: Number(openState.addCount || 0) === 0 ? "scale_in_winner_1" : "scale_in_winner_2" };
 }
 
+function buildTakerEntryPreflight(terms, decision, executionRef, priorState = {}, priorOpen = null) {
+  const side = String(decision.side);
+  const qty = Number(terms.qty);
+  const px = Number(terms.px);
+  return {
+    state: "entry_preflight",
+    id: String(terms.id),
+    side,
+    qty,
+    entryPx: px,
+    until: Number(terms.until),
+    entrySweep: Number(executionRef.n),
+    realizedScoreEst: Number(priorState.realizedScoreEst || 0),
+    uncertainEntries: uncertainEntries(priorState),
+    liquidityRole: "taker",
+    maker: String(terms.maker),
+    priorOpen: priorOpen ? { ...priorOpen } : null,
+    entryPurpose: priorOpen ? "add" : "new",
+    targetQty: Number(priorOpen?.targetQty || decision?.targetQty || decision?.qty || qty),
+    counterparty: String(terms.maker)
+  };
+}
+
 async function takeReliableOffer(match, decision, latest, priorState = {}, priorOpen = null) {
   const terms = match.b.terms;
   const side = String(decision.side);
@@ -2284,22 +2358,7 @@ async function takeReliableOffer(match, decision, latest, priorState = {}, prior
     taker_sig
   });
 
-  const preflight = {
-    state: "entry_preflight",
-    id: String(terms.id),
-    side,
-    qty,
-    entryPx: px,
-    until: Number(terms.until),
-    entrySweep: Number(executionRef.n),
-    realizedScoreEst: Number(priorState.realizedScoreEst || 0),
-    liquidityRole: "taker",
-    maker: String(terms.maker),
-    priorOpen: priorOpen ? { ...priorOpen } : null,
-    entryPurpose: priorOpen ? "add" : "new",
-    targetQty: Number(priorOpen?.targetQty || decision?.targetQty || decision?.qty || qty),
-    counterparty: String(terms.maker)
-  };
+  const preflight = buildTakerEntryPreflight(terms, decision, executionRef, priorState, priorOpen);
   await setState(preflight);
   const posted = await signedPost(ROOM, text);
   await setState({
@@ -2962,6 +3021,12 @@ if (stateSelftest) {
   await setState({ state: "idle", selftestOkAt: new Date().toISOString() }, true);
   console.log("STATE_MAILBOX_SELFTEST_OK");
   process.exit(0);
+}
+const recoveredLegacy = recoverLostLegacyUncertain(state);
+if (recoveredLegacy.changed) {
+  state = recoveredLegacy.state;
+  await setState(state);
+  console.log(`LEGACY_UNCERTAIN_RECOVERED id=${LEGACY_LOST_UNCERTAIN_ID} qty=42.89 side=sell from=1404 accepted=1405`);
 }
 const reconciled = await reconcileUncertainEntries(state, positions, latest.n);
 if (reconciled.changed) {
