@@ -2540,17 +2540,33 @@ function acceptedTradeBodyById(roomMessages, id) {
   return candidates[0]?.b || null;
 }
 
+function inferSweepFromTradeId(id, acceptedAtSweep = 0) {
+  const match = String(id || "").match(/(?:^|-)n(\d+)(?:-|$)/);
+  if (!match) return null;
+  const n = Number(match[1]);
+  const accepted = Number(acceptedAtSweep || 0);
+  if (!Number.isInteger(n) || n < 1) return null;
+  // Only trust the embedded sweep when it is close to the observed acceptance.
+  if (accepted > 0 && (n > accepted + 1 || n < accepted - 24)) return null;
+  return n;
+}
+
 function hydrateUncertainEntry(entry, roomMessages) {
   if (!entry?.id || entry.kind === "pending_exit") return entry;
   const accepted = acceptedTradeBodyById(roomMessages, entry.id);
   const terms = accepted?.terms;
-  if (!terms) return entry;
+  if (!terms) {
+    const inferred = inferSweepFromTradeId(entry.id, entry.acceptedAtSweep);
+    return inferred && !entry.fromSweep ? { ...entry, fromSweep: inferred, entrySweep: Number(entry.entrySweep || inferred) } : entry;
+  }
   const ourMaker = String(terms.maker || "") === did, ourTaker = String(accepted.taker || "") === did;
   if (!ourMaker && !ourTaker) return entry;
   const makerSide = String(terms.side || "");
   const ourSide = ourMaker ? makerSide : makerSide === "buy" ? "sell" : makerSide === "sell" ? "buy" : entry.side;
   return {
     ...entry, side: ourSide,
+    fromSweep: Number(entry.fromSweep || entry.entrySweep || inferSweepFromTradeId(entry.id, entry.acceptedAtSweep) || entry.acceptedAtSweep || 0),
+    entrySweep: Number(entry.entrySweep || entry.fromSweep || inferSweepFromTradeId(entry.id, entry.acceptedAtSweep) || entry.acceptedAtSweep || 0),
     qty: Number.isFinite(Number(terms.qty)) ? Number(terms.qty) : Number(entry.qty),
     entryPx: Number.isFinite(Number(terms.px)) ? Number(terms.px) : Number(entry.entryPx),
     until: Number.isInteger(Number(terms.until)) ? Number(terms.until) : Number(entry.until || 0),
@@ -2560,7 +2576,7 @@ function hydrateUncertainEntry(entry, roomMessages) {
   };
 }
 function uncertainMetadataChanged(a, b) {
-  for (const key of ["side","qty","entryPx","until","maker","taker","liquidityRole","counterparty"]) {
+  for (const key of ["side","qty","entryPx","fromSweep","entrySweep","until","maker","taker","liquidityRole","counterparty"]) {
     if (String(a?.[key] ?? "") !== String(b?.[key] ?? "")) return true;
   }
   return false;
@@ -2608,9 +2624,9 @@ async function reconcileUncertainEntries(state, posSnapshots, latestSweep) {
 
     const outcomeFromSweep = Number(entry.fromSweep || entry.entrySweep || entry.acceptedAtSweep || 0);
     let outcome = await findOutcome(String(entry.id || ""), outcomeFromSweep, flowMessages);
-    if (!outcome && Number(entry.until) > 0) outcome = await proveArchiveAbsence(String(entry.id || ""), Number(entry.acceptedAtSweep || 0), Number(entry.until));
-    if (!outcome && legacyMissingMetadata && Number(entry.acceptedAtSweep) > 0) {
-      outcome = await proveArchiveProcessingAbsence(String(entry.id || ""), Number(entry.acceptedAtSweep), Number(latestSweep), 6);
+    if (!outcome && Number(entry.until) > 0) outcome = await proveArchiveAbsence(String(entry.id || ""), outcomeFromSweep, Number(entry.until));
+    if (!outcome && legacyMissingMetadata && outcomeFromSweep > 0) {
+      outcome = await proveArchiveProcessingAbsence(String(entry.id || ""), outcomeFromSweep, Number(latestSweep), 6);
     }
     if (outcome?.outcome === "void") {
       changed = true;
@@ -2933,14 +2949,24 @@ if (state.state === "entry_preflight") {
     process.exit(0);
   }
   if (Number(latest.n) > Number(state.entrySweep || 0) + 1) {
-    await setState({
-      state: "idle",
-      cooldownUntilSweep: Number(latest.n) + 1,
-      lastPreflight: state.id,
-      realizedScoreEst: Number(state.realizedScoreEst || 0),
-      uncertainEntries: uncertainEntries(state)
-    });
-    console.log("ENTRY_PREFLIGHT_CLEARED");
+    if (state.liquidityRole === "taker") {
+      await setState({
+        ...state,
+        state: "entry_unverified",
+        acceptedAtSweep: Number(state.acceptedAtSweep || state.entrySweep || latest.n),
+        checkedThroughSweep: Number(latest.n)
+      });
+      console.log("ENTRY_PREFLIGHT_TAKER_UNVERIFIED");
+    } else {
+      await setState({
+        state: "idle",
+        cooldownUntilSweep: Number(latest.n) + 1,
+        lastPreflight: state.id,
+        realizedScoreEst: Number(state.realizedScoreEst || 0),
+        uncertainEntries: uncertainEntries(state)
+      });
+      console.log("ENTRY_PREFLIGHT_CLEARED");
+    }
     process.exit(0);
   }
   console.log("ENTRY_PREFLIGHT_WAIT");
@@ -2975,22 +3001,32 @@ if (state.state === "exit_preflight") {
     process.exit(0);
   }
   if (Number(latest.n) > Number(state.requestedAtSweep || 0) + 1) {
-    const open = {
-      state: "open",
-      side: state.entrySide,
-      qty: Number(state.positionQtyBefore || state.qty),
-      targetQty: Number(state.positionQtyBefore || state.qty),
-      entryPx: Number(state.entryPx),
-      entrySweep: Number(state.entrySweep),
-      entryId: state.entryId || null,
-      lastPreflight: state.id,
-      realizedScoreEst: Number(state.realizedScoreEst || 0),
-      entryFeeEst: Number(state.positionEntryFeeTotal || state.entryFeeEst || (0.01 * Number(state.positionQtyBefore || state.qty) * Number(state.entryPx))),
-      uncertainEntries: uncertainEntries(state),
-      addCount: Number(state.addCount || 0)
-    };
-    await setState(open);
-    console.log("EXIT_PREFLIGHT_CLEARED");
+    if (state.liquidityRole === "taker") {
+      await setState({
+        ...state,
+        state: "exit_unverified",
+        acceptedAtSweep: Number(state.acceptedAtSweep || state.requestedAtSweep || latest.n),
+        checkedThroughSweep: Number(latest.n)
+      });
+      console.log("EXIT_PREFLIGHT_TAKER_UNVERIFIED");
+    } else {
+      const open = {
+        state: "open",
+        side: state.entrySide,
+        qty: Number(state.positionQtyBefore || state.qty),
+        targetQty: Number(state.positionQtyBefore || state.qty),
+        entryPx: Number(state.entryPx),
+        entrySweep: Number(state.entrySweep),
+        entryId: state.entryId || null,
+        lastPreflight: state.id,
+        realizedScoreEst: Number(state.realizedScoreEst || 0),
+        entryFeeEst: Number(state.positionEntryFeeTotal || state.entryFeeEst || (0.01 * Number(state.positionQtyBefore || state.qty) * Number(state.entryPx))),
+        uncertainEntries: uncertainEntries(state),
+        addCount: Number(state.addCount || 0)
+      };
+      await setState(open);
+      console.log("EXIT_PREFLIGHT_CLEARED");
+    }
     process.exit(0);
   }
   console.log("EXIT_PREFLIGHT_WAIT");
