@@ -855,6 +855,31 @@ function uncertaintyEnvelope(state) {
   return { lo, hi, worst: Math.max(Math.abs(lo), Math.abs(hi)) };
 }
 
+function positionExposureBounds(state) {
+  let certain = 0;
+  let uncertainLo = 0;
+  let uncertainHi = 0;
+  for (const x of uncertainEntries(state)) {
+    const delta = (x.side === "buy" ? 1 : -1) * Number(x.qty);
+    if (x.confirmedOutcome === "settled") {
+      certain += delta;
+    } else {
+      uncertainLo += Math.min(0, delta);
+      uncertainHi += Math.max(0, delta);
+    }
+  }
+  return { lo: certain + uncertainLo, hi: certain + uncertainHi, certain };
+}
+
+function safeConfirmedShadowExitQty(entry, state) {
+  const qty = Number(entry?.qty);
+  if (!Number.isFinite(qty) || qty <= 0) return 0;
+  const bounds = positionExposureBounds(state);
+  if (entry.side === "sell" && bounds.hi < -0.099) return Math.min(qty, -bounds.hi);
+  if (entry.side === "buy" && bounds.lo > 0.099) return Math.min(qty, bounds.lo);
+  return 0;
+}
+
 function uncertainCapitalReserve(state) {
   let reserve = 0;
   for (const x of uncertainEntries(state)) {
