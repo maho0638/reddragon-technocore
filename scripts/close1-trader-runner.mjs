@@ -2263,8 +2263,7 @@ async function postScaleIn(decision, latest, openState) {
     console.log(`SCALE_IN_NO_LIQUIDITY side=${decision.side} qty=${Number(decision.qty).toFixed(2)}`);
     return false;
   }
-  await takeReliableOffer(match, decision, latest, openState, openState);
-  return true;
+  return await takeReliableOffer(match, decision, latest, openState, openState);
 }
 
 async function findOwnTakerAcceptance(id) {
@@ -2965,14 +2964,20 @@ if (state.state === "entry_preflight") {
       });
       console.log("ENTRY_PREFLIGHT_TAKER_UNVERIFIED");
     } else {
-      await setState({
-        state: "idle",
-        cooldownUntilSweep: Number(latest.n) + 1,
-        lastPreflight: state.id,
-        realizedScoreEst: Number(state.realizedScoreEst || 0),
-        uncertainEntries: uncertainEntries(state)
-      });
-      console.log("ENTRY_PREFLIGHT_CLEARED");
+      const restoredOpen = restorePriorOpen(state, latest.n, "entry_preflight_not_posted");
+      if (restoredOpen) {
+        await setState(restoredOpen);
+        console.log("ADD_PREFLIGHT_CLEARED_RESTORE_OPEN");
+      } else {
+        await setState({
+          state: "idle",
+          cooldownUntilSweep: Number(latest.n) + 1,
+          lastPreflight: state.id,
+          realizedScoreEst: Number(state.realizedScoreEst || 0),
+          uncertainEntries: uncertainEntries(state)
+        });
+        console.log("ENTRY_PREFLIGHT_CLEARED");
+      }
     }
     process.exit(0);
   }
@@ -3062,7 +3067,8 @@ if (state.state === "entry_offer") {
     console.log("ENTRY_OFFER_LIVE");
     process.exit(0);
   }
-  state = {
+  const restoredExpiredOpen = restorePriorOpen(state, latest.n, "entry_offer_expired");
+  state = restoredExpiredOpen || {
     state: "idle",
     cooldownUntilSweep: Number(latest.n),
     lastExpiredId: state.id,
@@ -3070,7 +3076,7 @@ if (state.state === "entry_offer") {
     uncertainEntries: uncertainEntries(state)
   };
   await setState(state);
-  console.log("ENTRY_EXPIRED_FAST_REPRICE");
+  console.log(restoredExpiredOpen ? "ADD_OFFER_EXPIRED_RESTORE_OPEN" : "ENTRY_EXPIRED_FAST_REPRICE");
   realNvdaSignal = await fetchRealNvdaSignal(now);
   if (realNvdaSignal?.fresh) {
     const trend = multiTimeframeTrend(realNvdaSignal);
