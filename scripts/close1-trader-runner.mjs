@@ -3888,18 +3888,21 @@ if (confirmedShadowActions.length) {
     `entry=${Number(entry.entryPx).toFixed(2)} mark=${Number(latest.px).toFixed(2)} net=${shadowDecision.net.toFixed(2)} ` +
     `reason=${shadowDecision.reason} trend=${shadowDecision.trend.label}`
   );
+  const fullShadowQty = Number(entry.qty);
+  const fullShadowFee = Number.isFinite(Number(entry.entryFeeEst))
+    ? Number(entry.entryFeeEst)
+    : 0.01 * fullShadowQty * Number(entry.entryPx);
   await postExit({
     state: "open",
     side: entry.side,
-    qty: Number(entry.qty),
+    qty: safeQty,
+    targetQty: safeQty,
     entryPx: Number(entry.entryPx),
     entrySweep: Number(entry.confirmedAtSweep || entry.acceptedAtSweep || latest.n),
     entryId: entry.id,
     closingShadowId: entry.id,
     realizedScoreEst: Number(state.realizedScoreEst || 0),
-    entryFeeEst: Number.isFinite(Number(entry.entryFeeEst))
-      ? Number(entry.entryFeeEst)
-      : 0.01 * Number(entry.qty) * Number(entry.entryPx),
+    entryFeeEst: fullShadowFee * (safeQty / fullShadowQty),
     uncertainEntries: uncertainEntries(state)
   }, latest);
   process.exit(0);
