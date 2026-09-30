@@ -546,9 +546,11 @@ async function getState() {
 }
 function mergePersistentStateMeta(nextState, previousState) {
   const out = { ...(nextState || {}) };
-  if (previousState?.legacyLostUncertain1404Recovered === true &&
-      out.legacyLostUncertain1404Recovered !== false) {
-    out.legacyLostUncertain1404Recovered = true;
+  if (!Object.prototype.hasOwnProperty.call(out, "uncertainEntries") && Array.isArray(previousState?.uncertainEntries)) {
+    out.uncertainEntries = uncertainEntries(previousState);
+  }
+  for (const key of ["legacyLostUncertain1404Recovered", "historicalLedgerRecoveryV2Applied"]) {
+    if (previousState?.[key] === true && out[key] !== false) out[key] = true;
   }
   return out;
 }
@@ -753,6 +755,66 @@ function uncertainEntries(state) {
 }
 
 const LEGACY_LOST_UNCERTAIN_ID = "c12439-any-n1404-6635bbf409";
+const HISTORICAL_LEDGER_RECOVERY_V2 = [
+  {
+    kind: "position_shadow", id: "rd4e-305-uifc397", side: "sell", qty: 31.53, entryPx: 224.26,
+    entryFeeEst: 70.709178, acceptedAtSweep: 305, fromSweep: 305, entrySweep: 305,
+    confirmedOutcome: "settled", confirmedAtSweep: 306, liquidityRole: "maker",
+    recoveredFrom: "verified_actions_and_archive_reconciliation"
+  },
+  {
+    id: "m_1212_bb_12001", side: "sell", qty: 8.00, entryPx: 229.40,
+    acceptedAtSweep: 1212, fromSweep: 1212, entrySweep: 1212, postedSeq: 9499799,
+    liquidityRole: "taker", maker: "did:key:z6MkqK9A8b9qAVtX", counterparty: "did:key:z6MkqK9A8b9qAVtX",
+    recoveredFrom: "verified_actions_acceptance"
+  },
+  {
+    id: "cc-a05-auto-maker-1790703210663", side: "sell", qty: 25.80, entryPx: 229.12,
+    acceptedAtSweep: 1219, fromSweep: 1219, entrySweep: 1219, postedSeq: 9598041,
+    liquidityRole: "taker", maker: "did:key:z6Mkpkk2j7ww3qBU", counterparty: "did:key:z6Mkpkk2j7ww3qBU",
+    recoveredFrom: "verified_actions_acceptance"
+  },
+  {
+    id: "m_1230_bb_65659", side: "sell", qty: 8.00, entryPx: 227.86,
+    acceptedAtSweep: 1230, fromSweep: 1230, entrySweep: 1230, postedSeq: 9775623,
+    liquidityRole: "taker", maker: "did:key:z6MkqK9A8b9qAVtX", counterparty: "did:key:z6MkqK9A8b9qAVtX",
+    recoveredFrom: "verified_actions_acceptance"
+  },
+  {
+    id: "cc-a05-auto-maker-1790709210450", side: "sell", qty: 25.80, entryPx: 228.53,
+    acceptedAtSweep: 1238, fromSweep: 1238, entrySweep: 1238, postedSeq: 9887843,
+    liquidityRole: "taker", maker: "did:key:z6Mkpkk2j7ww3qBU", counterparty: "did:key:z6Mkpkk2j7ww3qBU",
+    recoveredFrom: "verified_actions_acceptance"
+  },
+  {
+    id: "kc-7764ef181d0d", side: "sell", qty: 15.00, entryPx: 230.19,
+    acceptedAtSweep: 1245, fromSweep: 1245, entrySweep: 1245, postedSeq: 10005422,
+    liquidityRole: "taker", maker: "did:key:z6MkgxsvfrJneVqP", counterparty: "did:key:z6MkgxsvfrJneVqP",
+    recoveredFrom: "verified_actions_acceptance"
+  },
+  {
+    id: "c118543-any-n1285-9a9ee0f661", side: "buy", qty: 42.15, entryPx: 230.48,
+    acceptedAtSweep: 1286, fromSweep: 1285, entrySweep: 1285, postedSeq: 10621388,
+    liquidityRole: "taker", maker: "did:key:z6MktdNSv7Z1DWFU", counterparty: "did:key:z6MktdNSv7Z1DWFU",
+    recoveredFrom: "verified_actions_acceptance"
+  }
+];
+
+function recoverHistoricalLedgerV2(state) {
+  if (!state || state.historicalLedgerRecoveryV2Applied === true) return { state, changed: false };
+  const entries = uncertainEntries(state);
+  const ids = new Set(entries.map((x) => String(x.id || "")));
+  for (const item of HISTORICAL_LEDGER_RECOVERY_V2) {
+    if (ids.has(item.id)) continue;
+    entries.push({ ...item });
+    ids.add(item.id);
+  }
+  return {
+    state: { ...state, uncertainEntries: entries, historicalLedgerRecoveryV2Applied: true },
+    changed: true
+  };
+}
+
 function recoverLostLegacyUncertain(state) {
   if (!state || state.legacyLostUncertain1404Recovered === true) {
     return { state, changed: false };
@@ -793,6 +855,31 @@ function uncertaintyEnvelope(state) {
   return { lo, hi, worst: Math.max(Math.abs(lo), Math.abs(hi)) };
 }
 
+function positionExposureBounds(state) {
+  let certain = 0;
+  let uncertainLo = 0;
+  let uncertainHi = 0;
+  for (const x of uncertainEntries(state)) {
+    const delta = (x.side === "buy" ? 1 : -1) * Number(x.qty);
+    if (x.confirmedOutcome === "settled") {
+      certain += delta;
+    } else {
+      uncertainLo += Math.min(0, delta);
+      uncertainHi += Math.max(0, delta);
+    }
+  }
+  return { lo: certain + uncertainLo, hi: certain + uncertainHi, certain };
+}
+
+function safeConfirmedShadowExitQty(entry, state) {
+  const qty = Number(entry?.qty);
+  if (!Number.isFinite(qty) || qty <= 0) return 0;
+  const bounds = positionExposureBounds(state);
+  if (entry.side === "sell" && bounds.hi < -0.099) return Math.min(qty, -bounds.hi);
+  if (entry.side === "buy" && bounds.lo > 0.099) return Math.min(qty, bounds.lo);
+  return 0;
+}
+
 function uncertainCapitalReserve(state) {
   let reserve = 0;
   for (const x of uncertainEntries(state)) {
@@ -823,6 +910,16 @@ function confirmedShadowCloseNet(entry, mark) {
   const entryFee = finiteNonnegativeSettlementFee(entry?.entryFeeEst) ?? (0.01 * qty * entryPx);
   const exitFee = 0.01 * qty * current;
   return gross - entryFee - exitFee;
+}
+
+function confirmedLedgerCloseNet(state, mark) {
+  let total = Number(state?.realizedScoreEst || 0);
+  for (const x of uncertainEntries(state)) {
+    if (x.confirmedOutcome !== "settled") continue;
+    const net = confirmedShadowCloseNet(x, mark);
+    if (Number.isFinite(net)) total += net;
+  }
+  return total;
 }
 
 function removeUncertainEntry(state, id) {
@@ -1644,6 +1741,60 @@ if (raceSelftest) {
   const lostRecoveryAgain = recoverLostLegacyUncertain(lostRecovery.state);
   if (lostRecoveryAgain.changed || lostRecoveryAgain.state.uncertainEntries.length !== 1) {
     throw new Error("RACE_SELFTEST_LEGACY_UNCERTAIN_RECOVERY_IDEMPOTENT");
+  }
+  const ledgerRecovery = recoverHistoricalLedgerV2({ state: "idle", uncertainEntries: [] });
+  if (!(ledgerRecovery.changed &&
+        ledgerRecovery.state.uncertainEntries.length === HISTORICAL_LEDGER_RECOVERY_V2.length &&
+        ledgerRecovery.state.historicalLedgerRecoveryV2Applied === true)) {
+    throw new Error("RACE_SELFTEST_HISTORICAL_LEDGER_RECOVERY");
+  }
+  const recovered305 = ledgerRecovery.state.uncertainEntries.find((x) => x.id === "rd4e-305-uifc397");
+  if (!(recovered305?.confirmedOutcome === "settled" &&
+        Math.abs(Number(recovered305.qty) - 31.53) < 1e-9 &&
+        Math.abs(Number(recovered305.entryPx) - 224.26) < 1e-9 &&
+        Math.abs(Number(recovered305.entryFeeEst) - 70.709178) < 1e-9)) {
+    throw new Error("RACE_SELFTEST_HISTORICAL_CONFIRMED_POSITION");
+  }
+  const ledgerRecoveryAgain = recoverHistoricalLedgerV2(ledgerRecovery.state);
+  if (ledgerRecoveryAgain.changed ||
+      ledgerRecoveryAgain.state.uncertainEntries.length !== HISTORICAL_LEDGER_RECOVERY_V2.length) {
+    throw new Error("RACE_SELFTEST_HISTORICAL_LEDGER_IDEMPOTENT");
+  }
+  const carriedLedger = mergePersistentStateMeta({ state: "entry_offer" }, ledgerRecovery.state);
+  if (carriedLedger.uncertainEntries?.length !== HISTORICAL_LEDGER_RECOVERY_V2.length) {
+    throw new Error("RACE_SELFTEST_LEDGER_CARRY_ON_OMITTED_FIELD");
+  }
+  const explicitLedgerClear = mergePersistentStateMeta({ state: "idle", uncertainEntries: [] }, ledgerRecovery.state);
+  if (explicitLedgerClear.uncertainEntries.length !== 0) {
+    throw new Error("RACE_SELFTEST_LEDGER_EXPLICIT_CLEAR");
+  }
+  const crossingBounds = positionExposureBounds({
+    uncertainEntries: [
+      { id: "certain-short", side: "sell", qty: 31.53, entryPx: 224.26, confirmedOutcome: "settled" },
+      { id: "maybe-buy", side: "buy", qty: 42.15, entryPx: 230.48 }
+    ]
+  });
+  if (!(crossingBounds.lo < 0 && crossingBounds.hi > 0)) {
+    throw new Error("RACE_SELFTEST_EXPOSURE_CROSSES_ZERO");
+  }
+  if (safeConfirmedShadowExitQty(
+    { id: "certain-short", side: "sell", qty: 31.53, entryPx: 224.26, confirmedOutcome: "settled" },
+    { uncertainEntries: [
+      { id: "certain-short", side: "sell", qty: 31.53, entryPx: 224.26, confirmedOutcome: "settled" },
+      { id: "maybe-buy", side: "buy", qty: 42.15, entryPx: 230.48 }
+    ] }
+  ) !== 0) {
+    throw new Error("RACE_SELFTEST_BLOCK_UNSAFE_SHADOW_EXIT");
+  }
+  const guaranteedShortQty = safeConfirmedShadowExitQty(
+    { id: "certain-short", side: "sell", qty: 31.53, entryPx: 224.26, confirmedOutcome: "settled" },
+    { uncertainEntries: [
+      { id: "certain-short", side: "sell", qty: 31.53, entryPx: 224.26, confirmedOutcome: "settled" },
+      { id: "maybe-sell", side: "sell", qty: 8, entryPx: 229.4 }
+    ] }
+  );
+  if (Math.abs(guaranteedShortQty - 31.53) > 1e-9) {
+    throw new Error("RACE_SELFTEST_ALLOW_GUARANTEED_SHADOW_EXIT");
   }
   const durableMeta = mergePersistentStateMeta(
     { state: "entry_offer", uncertainEntries: lostRecovery.state.uncertainEntries },
@@ -3047,6 +3198,12 @@ if (stateSelftest) {
   console.log("STATE_MAILBOX_SELFTEST_OK");
   process.exit(0);
 }
+const recoveredLedger = recoverHistoricalLedgerV2(state);
+if (recoveredLedger.changed) {
+  state = recoveredLedger.state;
+  await setState(state);
+  console.log(`HISTORICAL_LEDGER_RECOVERED count=${HISTORICAL_LEDGER_RECOVERY_V2.length}`);
+}
 const recoveredLegacy = recoverLostLegacyUncertain(state);
 if (recoveredLegacy.changed) {
   state = recoveredLegacy.state;
@@ -3063,6 +3220,13 @@ let race = raceContext({ now, pnlSnapshots: pnl, state, latest });
 console.log(
   `STATUS execute=${execute} n=${latest.n} ref=${latest.px} state=${state.state} ownTopPos=${ownPos ?? "na"} leader=${race.leaderScore ?? "na"} ownEst=${race.ownScoreEst.toFixed(2)} downside=${race.ownDownsideFloor.toFixed(2)} gap=${race.leaderGap ?? "na"} hLeft=${race.hoursRemaining.toFixed(1)}`
 );
+{
+  const bounds = positionExposureBounds(state);
+  const unresolved = uncertainEntries(state).filter((x) => x.confirmedOutcome !== "settled").length;
+  console.log(
+    `LEDGER_PNL realized=${Number(state.realizedScoreEst || 0).toFixed(2)} confirmedMtm=${uncertainConfirmedMark(state, latest.px).toFixed(2)} closeNow=${confirmedLedgerCloseNet(state, latest.px).toFixed(2)} unresolved=${unresolved} posLo=${bounds.lo.toFixed(2)} posHi=${bounds.hi.toFixed(2)}`
+  );
+}
 if (!execute) {
   await logRecentRedDragonVoids();
   await logPeerRecentHistory(state?.taker);
@@ -3742,10 +3906,25 @@ if (Number(state.cooldownUntilSweep || 0) > Number(latest.n)) {
   process.exit(0);
 }
 
-const confirmedShadowActions = uncertainEntries(state)
+const confirmedShadowCandidates = uncertainEntries(state)
   .filter((x) => x.confirmedOutcome === "settled")
-  .map((entry) => ({ entry, decision: confirmedShadowExitDecision(entry, realNvdaSignal, latest, race, catalyst) }))
-  .filter((x) => x.decision?.exit)
+  .map((entry) => ({
+    entry,
+    decision: confirmedShadowExitDecision(entry, realNvdaSignal, latest, race, catalyst),
+    safeQty: safeConfirmedShadowExitQty(entry, state)
+  }));
+
+for (const candidate of confirmedShadowCandidates) {
+  if (candidate.decision?.exit && candidate.safeQty < 0.1) {
+    const bounds = positionExposureBounds(state);
+    console.log(
+      `CONFIRMED_SHADOW_EXIT_BLOCKED id=${candidate.entry.id} reason=uncertain_net_exposure posLo=${bounds.lo.toFixed(2)} posHi=${bounds.hi.toFixed(2)}`
+    );
+  }
+}
+
+const confirmedShadowActions = confirmedShadowCandidates
+  .filter((x) => x.decision?.exit && x.safeQty >= 0.1)
   .sort((a, b) => {
     const riskReason = (reason) => /stop|capital_release|breakout|breakdown|reversal/.test(String(reason || ""));
     const ar = riskReason(a.decision.reason);
@@ -3757,24 +3936,27 @@ const confirmedShadowActions = uncertainEntries(state)
   });
 
 if (confirmedShadowActions.length) {
-  const { entry, decision: shadowDecision } = confirmedShadowActions[0];
+  const { entry, decision: shadowDecision, safeQty } = confirmedShadowActions[0];
   console.log(
     `CONFIRMED_SHADOW_EXIT id=${entry.id} side=${entry.side} qty=${Number(entry.qty).toFixed(2)} ` +
     `entry=${Number(entry.entryPx).toFixed(2)} mark=${Number(latest.px).toFixed(2)} net=${shadowDecision.net.toFixed(2)} ` +
     `reason=${shadowDecision.reason} trend=${shadowDecision.trend.label}`
   );
+  const fullShadowQty = Number(entry.qty);
+  const fullShadowFee = Number.isFinite(Number(entry.entryFeeEst))
+    ? Number(entry.entryFeeEst)
+    : 0.01 * fullShadowQty * Number(entry.entryPx);
   await postExit({
     state: "open",
     side: entry.side,
-    qty: Number(entry.qty),
+    qty: safeQty,
+    targetQty: safeQty,
     entryPx: Number(entry.entryPx),
     entrySweep: Number(entry.confirmedAtSweep || entry.acceptedAtSweep || latest.n),
     entryId: entry.id,
     closingShadowId: entry.id,
     realizedScoreEst: Number(state.realizedScoreEst || 0),
-    entryFeeEst: Number.isFinite(Number(entry.entryFeeEst))
-      ? Number(entry.entryFeeEst)
-      : 0.01 * Number(entry.qty) * Number(entry.entryPx),
+    entryFeeEst: fullShadowFee * (safeQty / fullShadowQty),
     uncertainEntries: uncertainEntries(state)
   }, latest);
   process.exit(0);
