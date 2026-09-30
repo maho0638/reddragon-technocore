@@ -3134,6 +3134,12 @@ if (stateSelftest) {
   console.log("STATE_MAILBOX_SELFTEST_OK");
   process.exit(0);
 }
+const recoveredLedger = recoverHistoricalLedgerV2(state);
+if (recoveredLedger.changed) {
+  state = recoveredLedger.state;
+  await setState(state);
+  console.log(`HISTORICAL_LEDGER_RECOVERED count=${HISTORICAL_LEDGER_RECOVERY_V2.length}`);
+}
 const recoveredLegacy = recoverLostLegacyUncertain(state);
 if (recoveredLegacy.changed) {
   state = recoveredLegacy.state;
