@@ -319,12 +319,21 @@ async function close1ArchiveRecordByHash(n, fileHash) {
   if (!Number.isInteger(sweep) || sweep < 1 || !/^[0-9a-f]{64}$/.test(hash)) return null;
   const cacheKey = `flow:${sweep}:${hash}`;
   if (archiveRecordCache.has(cacheKey)) return archiveRecordCache.get(cacheKey);
+  const index = await close1ArchiveIndex();
+  const meta = index?.byN?.get?.(sweep);
+  if (meta && (String(meta.file || "") === hash || String(meta.sha256 || "") === hash)) {
+    const indexed = await close1ArchiveRecord(meta);
+    if (indexed) { archiveRecordCache.set(cacheKey, indexed); return indexed; }
+  }
   const { r, text } = await request(
     `${ARCHIVE_BASE}/sweeps/${hash}.json`,
     { headers: { accept: "application/json", "cache-control": "no-cache" } },
     2
   );
-  if (!r.ok || text.length > 12_000_000) return null;
+  if (!r.ok || text.length > 12_000_000) {
+    console.log(`REFEREE_FILE_HTTP n=${sweep} status=${r.status} indexed=${meta?.status || "missing"} path=${meta?.path || "na"}`);
+    return null;
+  }
   const actual = createHash("sha256").update(Buffer.from(text, "utf8")).digest("hex");
   if (actual !== hash) return null;
   let record;
@@ -2479,10 +2488,16 @@ async function proveArchiveProcessingAbsence(id, fromSweep, latestSweep, span = 
   if (!id || !Number.isInteger(start) || start <= 0 || !Number.isInteger(latest) || latest < start + 3) return null;
   const end = Math.min(latest - 1, start + Math.max(3, Number(span)));
   const index = await close1ArchiveIndex();
-  if (!index || index.maxN < end) return null;
+  if (!index || index.maxN < end) {
+    console.log(`ARCHIVE_PROOF_BLOCKED id=${id} reason=index_coverage max=${index?.maxN ?? "na"} need=${end}`);
+    return null;
+  }
   for (let n = start; n <= end; n++) {
     const meta = index.byN.get(n);
-    if (!meta || meta.status !== "full") return null;
+    if (!meta || meta.status !== "full") {
+      console.log(`ARCHIVE_PROOF_BLOCKED id=${id} reason=sweep_status n=${n} status=${meta?.status || "missing"} path=${meta?.path || "na"}`);
+      return null;
+    }
     const record = await close1ArchiveRecord(meta);
     if (!record) return null;
     const direct = outcomeFromArchiveRecord(record, id, n);
