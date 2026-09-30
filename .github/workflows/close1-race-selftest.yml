@@ -1,7 +1,7 @@
 name: Close-1 Race Selftest
 on:
   push:
-    branches: [main]
+    branches: [main, fix/close1-ledger-recovery-v2-20260930]
     paths:
       - "scripts/close1-trader-runner.mjs"
       - ".github/workflows/close1-race-selftest.yml"
