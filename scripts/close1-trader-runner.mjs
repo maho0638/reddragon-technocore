@@ -2473,6 +2473,24 @@ async function proveArchiveAbsence(id, fromSweep, untilSweep) {
   return { outcome: "void", reason: "not_seen_in_authoritative_archive", n: end, inferredFrom: "official_archive_absence" };
 }
 
+async function proveArchiveProcessingAbsence(id, fromSweep, latestSweep, span = 6) {
+  const start = Number(fromSweep);
+  const latest = Number(latestSweep);
+  if (!id || !Number.isInteger(start) || start <= 0 || !Number.isInteger(latest) || latest < start + 3) return null;
+  const end = Math.min(latest - 1, start + Math.max(3, Number(span)));
+  const index = await close1ArchiveIndex();
+  if (!index || index.maxN < end) return null;
+  for (let n = start; n <= end; n++) {
+    const meta = index.byN.get(n);
+    if (!meta || meta.status !== "full") return null;
+    const record = await close1ArchiveRecord(meta);
+    if (!record) return null;
+    const direct = outcomeFromArchiveRecord(record, id, n);
+    if (direct) return direct;
+  }
+  return { outcome:"void", reason:"legacy_not_seen_in_full_archive_window", n:end, inferredFrom:"official_archive_absence_window" };
+}
+
 function acceptedTradeBodyById(roomMessages, id) {
   const candidates = [];
   for (const msg of roomMessages || []) {
@@ -2514,17 +2532,24 @@ function uncertainMetadataChanged(a, b) {
 async function reconcileUncertainEntries(state, posSnapshots, latestSweep) {
   const entries = uncertainEntries(state);
   if (!entries.length) return { state, changed: false };
+  console.log("UNCERTAIN_SCAN " + entries.map((x) =>
+    `id=${String(x.id || "").slice(0,40)} kind=${x.kind || "entry"} at=${x.acceptedAtSweep || "na"} until=${x.until || "na"} role=${x.liquidityRole || "na"} confirmed=${x.confirmedOutcome || "no"}`
+  ).join(" | "));
+
   const flowMessages = await readExport("d-close1-flow");
   const needRoomHydration = entries.some((x) => x?.kind !== "pending_exit" && (!x?.until || !x?.liquidityRole || !x?.counterparty));
   const roomMessages = needRoomHydration ? await readExport(ROOM) : [];
   const kept = [];
   let changed = false, realizedDelta = 0;
+
   for (const rawEntry of entries) {
     const entry = needRoomHydration ? hydrateUncertainEntry(rawEntry, roomMessages) : rawEntry;
+    const legacyMissingMetadata = entry?.kind !== "pending_exit" && (!entry?.until || !entry?.liquidityRole || !entry?.counterparty);
     if (uncertainMetadataChanged(rawEntry, entry)) {
       changed = true;
       console.log(`UNCERTAIN_METADATA_RECOVERED id=${entry.id} until=${entry.until || "na"} role=${entry.liquidityRole || "na"}`);
     }
+
     if (entry.kind === "pending_exit") {
       let outcome = await findOutcome(String(entry.exitId || ""), Number(entry.requestedAtSweep || entry.acceptedAtSweep || 0), flowMessages);
       if (!outcome && Number(entry.until) > 0) outcome = await proveArchiveAbsence(String(entry.exitId || ""), Number(entry.requestedAtSweep || entry.acceptedAtSweep || 0), Number(entry.until));
@@ -2537,17 +2562,24 @@ async function reconcileUncertainEntries(state, posSnapshots, latestSweep) {
       }
       if (outcome?.outcome === "void") {
         changed = true;
-        kept.push({ ...entry, kind:"position_shadow", id:entry.originalEntryId || `restored-${entry.exitId}`, confirmedOutcome:"settled", confirmedAtSweep:Number(entry.entrySweep || latestSweep), exitId:undefined, exitPx:undefined, requestedAtSweep:undefined });
+        kept.push({ ...entry, kind:"position_shadow", id:`restored-${entry.exitId}`, confirmedOutcome:"settled", confirmedAtSweep:Number(entry.entrySweep || latestSweep), exitId:undefined, exitPx:undefined, requestedAtSweep:undefined });
         console.log(`PENDING_EXIT_RESOLVED_VOID exit=${entry.exitId} reason=${outcome.reason || "void"}`);
         continue;
       }
       kept.push(entry); continue;
     }
+
     let outcome = await findOutcome(String(entry.id || ""), Number(entry.acceptedAtSweep || 0), flowMessages);
     if (!outcome && Number(entry.until) > 0) outcome = await proveArchiveAbsence(String(entry.id || ""), Number(entry.acceptedAtSweep || 0), Number(entry.until));
-    if (outcome?.outcome === "void") {
-      changed = true; console.log(`UNCERTAIN_RESOLVED_VOID id=${entry.id} reason=${outcome.reason} n=${outcome.n ?? "na"}`); continue;
+    if (!outcome && legacyMissingMetadata && Number(entry.acceptedAtSweep) > 0) {
+      outcome = await proveArchiveProcessingAbsence(String(entry.id || ""), Number(entry.acceptedAtSweep), Number(latestSweep), 6);
     }
+    if (outcome?.outcome === "void") {
+      changed = true;
+      console.log(`UNCERTAIN_RESOLVED_VOID id=${entry.id} reason=${outcome.reason} n=${outcome.n ?? "na"}`);
+      continue;
+    }
+
     const peerEvidence = peerSettlementEvidence(posSnapshots, entry, latestSweep);
     const settled = outcome?.outcome === "settled" || peerEvidence?.settled === true;
     if (settled && entry.confirmedOutcome !== "settled") {
@@ -2555,10 +2587,12 @@ async function reconcileUncertainEntries(state, posSnapshots, latestSweep) {
       const settledPx = Number.isFinite(Number(outcome?.px)) ? Number(outcome.px) : Number(entry.entryPx);
       const settledFee = Number.isFinite(Number(outcome?.fee)) ? Number(outcome.fee) : Number(entry.entryFeeEst || (0.01*Number(entry.qty)*settledPx));
       kept.push({ ...entry, entryPx:settledPx, entryFeeEst:settledFee, confirmedOutcome:"settled", confirmedAtSweep:Number(outcome?.n || peerEvidence?.after?.n || latestSweep) });
-      console.log(`UNCERTAIN_CONFIRMED_SETTLED id=${entry.id} n=${outcome?.n ?? peerEvidence?.after?.n ?? "na"}`); continue;
+      console.log(`UNCERTAIN_CONFIRMED_SETTLED id=${entry.id} n=${outcome?.n ?? peerEvidence?.after?.n ?? "na"}`);
+      continue;
     }
     kept.push(entry);
   }
+
   if (!changed && !realizedDelta) return { state, changed:false };
   return { state:{ ...state, realizedScoreEst:Number(state.realizedScoreEst || 0)+realizedDelta, uncertainEntries:kept }, changed:true };
 }
@@ -3342,7 +3376,18 @@ if (state.state === "exit_unverified") {
     const attempted = Number(state.qty);
     const guaranteedRemaining = Math.max(0, before - attempted);
     let entries = uncertainEntries(state);
-    if (state.closingShadowId) entries = entries.filter((x) => String(x.id || "") !== String(state.closingShadowId));
+    if (state.closingShadowId) {
+      entries = entries.filter((x) => String(x.id || "") !== String(state.closingShadowId));
+      if (guaranteedRemaining >= 0.1) {
+        entries.push({
+          kind:"position_shadow", id:`${state.closingShadowId}-remaining-${state.id}`,
+          side:state.entrySide, qty:guaranteedRemaining, entryPx:Number(state.entryPx),
+          entryFeeEst:Number(state.remainingEntryFeeEst || 0),
+          acceptedAtSweep:Number(state.entrySweep || latest.n),
+          confirmedOutcome:"settled", confirmedAtSweep:Number(state.entrySweep || latest.n)
+        });
+      }
+    }
     if (!entries.some((x) => x.kind === "pending_exit" && String(x.exitId || "") === String(state.id))) {
       entries.push({
         kind:"pending_exit", id:`pending-exit-${state.id}`, exitId:state.id,
