@@ -1488,6 +1488,8 @@ if (raceSelftest) {
   if (!acceptableTakerEntryQuote("buy", 228.48, 228.40)) throw new Error("RACE_SELFTEST_ACCEPT_NEAR_MARK_BUY");
   if (!acceptableTakerEntryQuote("sell", 228.65, 228.40)) throw new Error("RACE_SELFTEST_ACCEPT_FAVORABLE_SELL");
   if (!acceptableTakerEntryQuote("buy", 228.10, 228.40)) throw new Error("RACE_SELFTEST_ACCEPT_FAVORABLE_BUY");
+  if (!acceptableTakerExitQuote("sell", 228.00, 228.40)) throw new Error("RACE_SELFTEST_ACCEPT_EXIT_SLIPPAGE");
+  if (acceptableTakerExitQuote("sell", 227.00, 228.40)) throw new Error("RACE_SELFTEST_REJECT_BAD_EXIT_SLIPPAGE");
   if (!(101 >= 100 + 1) || (100 >= 100 + 1)) throw new Error("RACE_SELFTEST_NEXT_SWEEP_UNTIL");
   const partialAllocProbe = exitAllocation({ qty: 40, entryPx: 225, entryFeeEst: 90 }, 15);
   if (!(partialAllocProbe && partialAllocProbe.remainingQty === 25 && Math.abs(partialAllocProbe.closedEntryFee - 33.75) < 1e-9)) throw new Error("RACE_SELFTEST_PARTIAL_EXIT_ALLOCATION");
@@ -2016,6 +2018,16 @@ function acceptableTakerEntryQuote(side, offerPx, refPx) {
   return edge >= -maxAdverse - 1e-9;
 }
 
+function acceptableTakerExitQuote(side, offerPx, refPx) {
+  const edge = takerEntryQuoteEdge(side, offerPx, refPx);
+  if (edge == null) return false;
+  // Exits need more urgency than entries, but never cross the venue's full
+  // ±5% window just to get a fill. Limit immediate adverse slippage to 35 bp,
+  // capped at 0.80 POLF/contract.
+  const maxAdverse = Math.min(0.80, Number(refPx) * 0.0035);
+  return edge >= -maxAdverse - 1e-9;
+}
+
 async function findReliableOpposingOffer(decision, latest) {
   const desiredSide = String(decision?.side || "");
   const desiredQty = Number(decision?.qty);
@@ -2093,21 +2105,33 @@ async function findReliableOpposingOffer(decision, latest) {
     if (!Number.isFinite(px) || !Number.isFinite(refPx) || refPx <= 0) continue;
     if (Math.abs(px - refPx) / refPx > 0.045) continue;
     if (openingEntry && !acceptableTakerEntryQuote(desiredSide, px, refPx)) continue;
+    if (closingExit && !acceptableTakerExitQuote(desiredSide, px, refPx)) continue;
     if (openingEntry && !directionalFeeRoom(desiredSide, px)) continue;
 
     const maker = String(terms.maker);
     const settledCount = makerSettled.get(maker) || 0;
     const fundsFails = makerFundsVoid.get(maker) || 0;
     const confidence = Number(decision?.confidence || 0);
-    const pristineHighConviction =
+    // Compact flow posts omit most settlement ids under load, so absence of
+    // visible settled history is not evidence that a maker is unreliable.
+    // Keep positive bad evidence (funds voids), cryptographic validity, price,
+    // freshness and size as the gates for otherwise-unseen makers.
+    const unseenEntryAllowed =
+      openingEntry &&
       settledCount === 0 &&
       fundsFails === 0 &&
-      confidence >= 0.97 &&
-      Math.abs(px - refPx) / refPx <= 0.015 &&
-      qty <= desiredQty * 1.10;
-    if (settledCount < 1 && !pristineHighConviction) continue;
+      confidence >= 0.94 &&
+      Math.abs(px - refPx) / refPx <= 0.003 &&
+      qty <= desiredQty;
+    const unseenExitAllowed =
+      closingExit &&
+      settledCount === 0 &&
+      fundsFails === 0 &&
+      Math.abs(px - refPx) / refPx <= 0.0035 &&
+      qty <= desiredQty;
+    if (settledCount < 1 && !unseenEntryAllowed && !unseenExitAllowed) continue;
 
-    const reliability = settledCount - 1.5 * fundsFails + (pristineHighConviction ? 0.25 : 0);
+    const reliability = settledCount - 1.5 * fundsFails + (unseenEntryAllowed || unseenExitAllowed ? 0.20 : 0);
     const sizeFit = -Math.abs(qty - desiredQty) / Math.max(1, desiredQty);
     const priceFit = -Math.abs(px - refPx) / refPx;
     const entryQuoteEdge = takerEntryQuoteEdge(desiredSide, px, refPx) || 0;
