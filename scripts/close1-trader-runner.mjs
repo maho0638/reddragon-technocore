@@ -3852,10 +3852,25 @@ if (Number(state.cooldownUntilSweep || 0) > Number(latest.n)) {
   process.exit(0);
 }
 
-const confirmedShadowActions = uncertainEntries(state)
+const confirmedShadowCandidates = uncertainEntries(state)
   .filter((x) => x.confirmedOutcome === "settled")
-  .map((entry) => ({ entry, decision: confirmedShadowExitDecision(entry, realNvdaSignal, latest, race, catalyst) }))
-  .filter((x) => x.decision?.exit)
+  .map((entry) => ({
+    entry,
+    decision: confirmedShadowExitDecision(entry, realNvdaSignal, latest, race, catalyst),
+    safeQty: safeConfirmedShadowExitQty(entry, state)
+  }));
+
+for (const candidate of confirmedShadowCandidates) {
+  if (candidate.decision?.exit && candidate.safeQty < 0.1) {
+    const bounds = positionExposureBounds(state);
+    console.log(
+      `CONFIRMED_SHADOW_EXIT_BLOCKED id=${candidate.entry.id} reason=uncertain_net_exposure posLo=${bounds.lo.toFixed(2)} posHi=${bounds.hi.toFixed(2)}`
+    );
+  }
+}
+
+const confirmedShadowActions = confirmedShadowCandidates
+  .filter((x) => x.decision?.exit && x.safeQty >= 0.1)
   .sort((a, b) => {
     const riskReason = (reason) => /stop|capital_release|breakout|breakdown|reversal/.test(String(reason || ""));
     const ar = riskReason(a.decision.reason);
@@ -3867,7 +3882,7 @@ const confirmedShadowActions = uncertainEntries(state)
   });
 
 if (confirmedShadowActions.length) {
-  const { entry, decision: shadowDecision } = confirmedShadowActions[0];
+  const { entry, decision: shadowDecision, safeQty } = confirmedShadowActions[0];
   console.log(
     `CONFIRMED_SHADOW_EXIT id=${entry.id} side=${entry.side} qty=${Number(entry.qty).toFixed(2)} ` +
     `entry=${Number(entry.entryPx).toFixed(2)} mark=${Number(latest.px).toFixed(2)} net=${shadowDecision.net.toFixed(2)} ` +
