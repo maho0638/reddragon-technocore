@@ -1547,9 +1547,13 @@ if (raceSelftest) {
   const cappedSame = applyUncertainRiskCap({ action: "enter", side: "sell", qty: 30, confidence: 0.9 }, uncertain, 224.5);
   const allowedOpposite = applyUncertainRiskCap({ action: "enter", side: "buy", qty: 30, confidence: 0.9 }, uncertain, 224.5);
   const env = uncertaintyEnvelope(uncertain);
+  const uncertainReserve = uncertainCapitalReserve(uncertain);
   if (!(cappedSame?.qty > 0.1 && cappedSame.qty < 12)) throw new Error("RACE_SELFTEST_UNCERTAIN_SAME_SIDE_CAP");
-  if (!(allowedOpposite?.qty === 30)) throw new Error("RACE_SELFTEST_UNCERTAIN_OPPOSITE_BLOCKED");
+  if (!(allowedOpposite?.qty > cappedSame.qty && allowedOpposite.qty < 13)) throw new Error("RACE_SELFTEST_UNCERTAIN_CASH_RESERVE_CAP");
+  if (!(uncertainReserve > 7000 && uncertainReserve < 7300)) throw new Error("RACE_SELFTEST_UNCERTAIN_CAPITAL_RESERVE");
   if (!(env.lo === -31.53 && env.hi === 0)) throw new Error("RACE_SELFTEST_UNCERTAIN_ENVELOPE");
+  if (inferSweepFromTradeId("c12439-any-n1404-6635bbf409", 1405) !== 1404) throw new Error("RACE_SELFTEST_LEGACY_SWEEP_INFERENCE");
+  if (inferSweepFromTradeId("n100-too-old", 1405) !== null) throw new Error("RACE_SELFTEST_REJECT_STALE_SWEEP_INFERENCE");
   const confirmedShadow = { id: "legacy-short", side: "sell", qty: 31.53, entryPx: 224.26, confirmedOutcome: "settled" };
   const shadowProfitNet = confirmedShadowCloseNet(confirmedShadow, 219.30);
   const shadowLossNet = confirmedShadowCloseNet(confirmedShadow, 230.00);
