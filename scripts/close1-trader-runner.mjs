@@ -3691,5 +3691,11 @@ if (decision?.action === "enter") {
   );
   await postEntry(decision, latest, state);
 } else {
-  console.log("NO_TRADE");
+  let noTradeReason = "unknown";
+  if (!tacticalDecision && !fallbackDecision && !realConfirmedDecision) noTradeReason = "no_signal";
+  else if (fallbackDecision && !realConfirmedDecision) noTradeReason = "real_nvda_veto";
+  else if (realConfirmedDecision && !calendarDecision) noTradeReason = "calendar_block";
+  else if (calendarDecision && !sizedDecision) noTradeReason = "sizing_block";
+  else if (sizedDecision && !decision) noTradeReason = "uncertain_risk";
+  console.log(`NO_TRADE reason=${noTradeReason}`);
 }
