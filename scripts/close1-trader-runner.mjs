@@ -2090,6 +2090,8 @@ if (raceSelftest) {
   if (archivedVoid?.outcome !== "void" || archivedVoid?.reason !== "not_owner/funds") {
     throw new Error("RACE_SELFTEST_ARCHIVE_VOID");
   }
+  const archive576 = await findArchiveOutcome("rd4e-576-ujrqapi", 576);
+  console.log("ARCHIVE_DIAG_576 " + JSON.stringify(archive576));
   console.log("RACE_SIZING_SELFTEST_OK");
   process.exit(0);
 }
