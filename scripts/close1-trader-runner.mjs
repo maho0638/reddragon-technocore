@@ -2144,7 +2144,7 @@ if (raceSelftest) {
   const fallbackFeeBlocked = controlledFallbackEntry(
     null,
     { leaderGap: 1400, hoursRemaining: 60 },
-    Array.from({ length: 24 }, (_, i) => ({ px: 230.60 + i * 0.025 })),
+    Array.from({ length: 24 }, (_, i) => ({ px: 230.23 + i * 0.04 })),
     [{ top: [["did:key:z6MkPeer", 300]] }],
     { px: 231.15 }
   );
