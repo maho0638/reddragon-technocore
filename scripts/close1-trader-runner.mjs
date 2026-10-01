@@ -2110,6 +2110,14 @@ if (raceSelftest) {
   const fallbackRefs = Array.from({ length: 24 }, (_, i) => ({ px: 225 + i * 0.10 }));
   const fallbackProbe = controlledFallbackEntry(null, { leaderGap: 1000, hoursRemaining: 100 }, fallbackRefs, [{ top: [["did:key:z6MkPeer", 300]] }], { px: 227.3 });
   if (!(fallbackProbe?.action === "enter" && fallbackProbe.side === "buy")) throw new Error("RACE_SELFTEST_FALLBACK_ENTRY_AVAILABLE");
+  const fallbackFeeBlocked = controlledFallbackEntry(
+    null,
+    { leaderGap: 1400, hoursRemaining: 60 },
+    Array.from({ length: 24 }, (_, i) => ({ px: 230.60 + i * 0.025 })),
+    [{ top: [["did:key:z6MkPeer", 300]] }],
+    { px: 231.15 }
+  );
+  if (fallbackFeeBlocked !== null) throw new Error("RACE_SELFTEST_FALLBACK_FEE_HURDLE");
   const activeMidProbe = activeContestEntry(
     { fresh: true, move5: 0.02, move15: 0.18, move30: 0.25, move60: 0.10, move240: 0.15 },
     { px: 228 }, { leaderGap: 1000, hoursRemaining: 100 }, { blockNewEntries: false }
@@ -2697,6 +2705,13 @@ function controlledFallbackEntry(rawDecision, race, distinct, positionSnapshots,
     qty = strongConsensus ? 40 : 28;
   }
   const side = direction > 0 ? "buy" : "sell";
+  if (!directionalFeeRoom(side, Number(latest.px))) {
+    const roundTripFeeMove = 0.02 * Math.abs(Number(latest.px));
+    console.log(
+      `FALLBACK_FEE_ROOM_BLOCK side=${side} px=${Number(latest.px).toFixed(2)} roundTrip=${roundTripFeeMove.toFixed(2)} move=${move.toFixed(2)} reason=${reason}`
+    );
+    return rawDecision;
+  }
   console.log(
     `FALLBACK_SIGNAL side=${side} move=${move.toFixed(2)} r2=${r2.toFixed(2)} topNet=${topNet.toFixed(2)} strong=${strongConsensus} catchUp=${catchUpConsensus} gap=${gap.toFixed(2)} hLeft=${hLeft.toFixed(1)} qty=${qty.toFixed(2)} reason=${reason}`
   );
