@@ -2219,6 +2219,49 @@ if (raceSelftest) {
   }
   acceptedRoomTrades.sort((a, b) => a.seq - b.seq);
   console.log("REDDRAGON_ACCEPTED_ROOM_TRADES " + JSON.stringify(acceptedRoomTrades));
+
+  const currentDiagState = await getState();
+  const stateUncertainDiag = uncertainEntries(currentDiagState).map((x) => ({
+    id: String(x.id || ""),
+    kind: x.kind || "entry",
+    side: x.side,
+    qty: Number(x.qty),
+    entryPx: Number(x.entryPx),
+    acceptedAtSweep: Number(x.acceptedAtSweep || 0) || null,
+    fromSweep: Number(x.fromSweep || x.entrySweep || 0) || null,
+    until: Number(x.until || 0) || null,
+    postedSeq: Number(x.postedSeq || x.acceptedSeq || 0) || null,
+    liquidityRole: x.liquidityRole || null,
+    maker: x.maker || null,
+    taker: x.taker || null,
+    counterparty: x.counterparty || null,
+    confirmedOutcome: x.confirmedOutcome || null
+  }));
+  console.log("STATE_UNCERTAIN_DIAG " + JSON.stringify(stateUncertainDiag));
+
+  const close1MissedRanges = missedRanges
+    .map(([lo, hi, sweep]) => ({ lo:Number(lo), hi:Number(hi), sweep:Number(sweep) }))
+    .filter((x) => Number.isFinite(x.lo) && Number.isFinite(x.hi));
+  const seqTargets = [
+    ...HISTORICAL_LEDGER_RECOVERY_V2,
+    ...uncertainEntries(currentDiagState)
+  ];
+  const seenSeqDiag = new Set();
+  const seqMissedDiag = [];
+  for (const item of seqTargets) {
+    const id = String(item?.id || "");
+    if (!id || seenSeqDiag.has(id)) continue;
+    seenSeqDiag.add(id);
+    const seq = Number(item?.postedSeq || item?.acceptedSeq || 0);
+    const hit = Number.isFinite(seq) && seq > 0
+      ? close1MissedRanges.find((r) => seq >= r.lo && seq <= r.hi) || null
+      : null;
+    seqMissedDiag.push({ id, seq: seq || null, missed: Boolean(hit), hit });
+  }
+  console.log("SEQ_MISSED_DIAG " + JSON.stringify({
+    close1MissedRanges,
+    entries: seqMissedDiag
+  }));
   console.log("RACE_SIZING_SELFTEST_OK");
   process.exit(0);
 }
