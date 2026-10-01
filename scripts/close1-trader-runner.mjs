@@ -1252,6 +1252,57 @@ function applyUncertainRiskCap(decision, state, latestPx, race = null) {
   return { ...decision, qty: clipped };
 }
 
+function applyRecentUncertainFlipCap(decision, state, latest) {
+  if (!decision || decision.action !== "enter") return decision;
+  const sweep = Number(latest?.n);
+  const px = Number(latest?.px);
+  if (!Number.isFinite(sweep) || !Number.isFinite(px) || px <= 0) return decision;
+
+  const opposite = uncertainEntries(state)
+    .filter((x) => x?.kind !== "pending_exit" && x?.confirmedOutcome !== "settled")
+    .filter((x) => ["buy","sell"].includes(String(x?.side)) && String(x.side) !== String(decision.side))
+    .filter((x) => {
+      const n = Number(x.acceptedAtSweep || x.fromSweep || x.entrySweep || 0);
+      return Number.isFinite(n) && n > 0 && n >= sweep - 2 && n <= sweep;
+    });
+
+  if (!opposite.length) return decision;
+
+  const newest = [...opposite].sort((a,b) =>
+    Number(b.acceptedAtSweep || b.fromSweep || b.entrySweep || 0) -
+    Number(a.acceptedAtSweep || a.fromSweep || a.entrySweep || 0)
+  )[0];
+  const recentQty = opposite.reduce((sum, x) => {
+    const q = Number(x.qty);
+    return sum + (Number.isFinite(q) && q > 0 ? q : 0);
+  }, 0);
+  const recentPx = Number(newest?.entryPx);
+  if (!Number.isFinite(recentPx) || recentQty < 0.1) return decision;
+
+  const favorableMove = String(decision.side) === "sell" ? recentPx - px : px - recentPx;
+  const fullFlipThreshold = 0.0125 * px;
+  if (favorableMove >= fullFlipThreshold) {
+    console.log(
+      `RECENT_FLIP_BREAKOUT side=${decision.side} recent=${newest.side} move=${favorableMove.toFixed(2)} need=${fullFlipThreshold.toFixed(2)} requested=${Number(decision.qty).toFixed(2)}`
+    );
+    return decision;
+  }
+
+  const requested = Number(decision.qty);
+  const allowed = Math.min(requested, recentQty);
+  if (!Number.isFinite(allowed) || allowed < 0.1) {
+    console.log(
+      `RECENT_FLIP_BLOCK side=${decision.side} recent=${newest.side} move=${favorableMove.toFixed(2)} need=${fullFlipThreshold.toFixed(2)}`
+    );
+    return null;
+  }
+  const clipped = Math.floor(allowed * 100) / 100;
+  console.log(
+    `RECENT_FLIP_CAP side=${decision.side} recent=${newest.side} requested=${requested.toFixed(2)} allowed=${clipped.toFixed(2)} recentQty=${recentQty.toFixed(2)} move=${favorableMove.toFixed(2)} need=${fullFlipThreshold.toFixed(2)}`
+  );
+  return { ...decision, qty: clipped, reason: String(decision.reason || "entry") + "+recent_flip_cap" };
+}
+
 function ownScoreEstimate(state, latestMark) {
   const realized = Number(state?.realizedScoreEst || 0);
   const confirmedShadow = uncertainConfirmedMark(state, latestMark);
@@ -1922,6 +1973,23 @@ if (raceSelftest) {
   if (Math.abs(minimumTakerFillQty({ race:{ allIn:false } }, 42, false) - 16.8) > 1e-9) {
     throw new Error("RACE_SELFTEST_NORMAL_TAKER_FILL");
   }
+  const flipProbeState = {
+    uncertainEntries:[{ id:"recent-buy", side:"buy", qty:20, entryPx:231.80, acceptedAtSweep:1823 }]
+  };
+  const flipCapped = applyRecentUncertainFlipCap(
+    { action:"enter", side:"sell", qty:35, confidence:0.97, reason:"probe" },
+    flipProbeState,
+    { n:1823, px:231.71 }
+  );
+  if (!(flipCapped?.qty === 20 && String(flipCapped.reason).includes("recent_flip_cap"))) {
+    throw new Error("RACE_SELFTEST_RECENT_FLIP_CAP");
+  }
+  const flipBreakout = applyRecentUncertainFlipCap(
+    { action:"enter", side:"sell", qty:35, confidence:0.97, reason:"probe" },
+    flipProbeState,
+    { n:1824, px:228.50 }
+  );
+  if (!(flipBreakout?.qty === 35)) throw new Error("RACE_SELFTEST_RECENT_FLIP_BREAKOUT");
   const allInRace = { leaderGap: 1700, timeRemainingFrac: 0.25, hoursRemaining: 60, realizedCapital: 10000 };
   if (!allInRaceMode(allInRace) || allInRaceMode({ leaderGap: -1, hoursRemaining: 60 }) || allInRaceMode({ leaderGap: 100, hoursRemaining: 80 })) {
     throw new Error("RACE_SELFTEST_ALL_IN_MODE");
@@ -4458,7 +4526,8 @@ const realConfirmedDecision = applyRealNvdaSignal(
 );
 const calendarDecision = applyCalendarRiskGate(realConfirmedDecision, realNvdaSignal, race, catalyst);
 const sizedDecision = applyRaceSizing(calendarDecision, race, latest.px);
-const decision = applyUncertainRiskCap(sizedDecision, state, latest.px, race);
+const riskDecision = applyUncertainRiskCap(sizedDecision, state, latest.px, race);
+const decision = applyRecentUncertainFlipCap(riskDecision, state, latest);
 if (decision?.action === "enter") {
   console.log(
     `RACE_SIZE leaderGap=${decision.race?.leaderGap ?? "na"} hLeft=${decision.race?.hoursRemaining ?? "na"} mult=${decision.race?.multiplier ?? "na"} qty=${Number(decision.qty).toFixed(2)}`
@@ -4470,7 +4539,8 @@ if (decision?.action === "enter") {
   else if (fallbackDecision && !realConfirmedDecision) noTradeReason = "real_nvda_veto";
   else if (realConfirmedDecision && !calendarDecision) noTradeReason = "calendar_block";
   else if (calendarDecision && !sizedDecision) noTradeReason = "sizing_block";
-  else if (sizedDecision && !decision) noTradeReason = "uncertain_risk";
+  else if (sizedDecision && !riskDecision) noTradeReason = "uncertain_risk";
+  else if (riskDecision && !decision) noTradeReason = "recent_flip_guard";
   else if (decision && decision.action !== "enter") noTradeReason = `strategy_${String(decision.action || decision.reason || "hold")}`;
   console.log(`NO_TRADE reason=${noTradeReason}`);
 }
