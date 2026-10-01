@@ -87,4 +87,28 @@ jobs:
             if(hit) oursPnl.push({n:Number(b.n),row:hit,mark:String(b.mark||"")});
           }
           console.log("OUR_PNL_TOP "+JSON.stringify(oursPnl.slice(-5)));
+
+          const ARCH="https://challenges.technocore.chat/close-1";
+          const fileChecks=[];
+          for(const m of flow){
+            const b=body(m);
+            if(b?.t!=="flow" || Number(b.n)<1718 || !/^[0-9a-f]{64}$/.test(String(b.file||""))) continue;
+            try{
+              const rr=await fetch(ARCH+"/sweeps/"+String(b.file)+".json",{headers:{"cache-control":"no-cache"}});
+              if(!rr.ok){ fileChecks.push({n:Number(b.n),status:rr.status}); continue; }
+              const rec=await rr.json();
+              const ins=Array.isArray(rec?.input?.trades)?rec.input.trades:[];
+              const outs=Array.isArray(rec?.output?.trades)?rec.output.trades:[];
+              for(let i=0;i<Math.max(ins.length,outs.length);i++){
+                const ii=ins[i], oo=outs[i];
+                if(String(ii?.id||oo?.id||"")!==TARGET) continue;
+                fileChecks.push({
+                  n:Number(b.n), status:200,
+                  input:{id:ii?.id,side:ii?.side,qty:ii?.qty,px:ii?.px,maker:ii?.maker,countersigner:ii?.countersigner},
+                  output:{outcome:oo?.outcome,reason:oo?.reason,maker_fee:oo?.maker_fee,taker_fee:oo?.taker_fee}
+                });
+              }
+            }catch(e){fileChecks.push({n:Number(b.n),error:String(e).slice(0,120)})}
+          }
+          console.log("TARGET_FILES "+JSON.stringify(fileChecks));
           NODE
