@@ -61,4 +61,30 @@ jobs:
           }
           snaps.sort((a,b)=>a.n-b.n);
           console.log("LATEST_REF "+JSON.stringify(snaps.at(-1)||null));
+
+          const TARGET="fcl01-139113";
+          const flow=parseMany(await get(BASE+"/r/d-close1-flow/export"));
+          const hits=[];
+          let latestFlow=null;
+          for(const m of flow){
+            const b=body(m);
+            if(b?.t!=="flow") continue;
+            if(!latestFlow || Number(b.n)>Number(latestFlow.n)) latestFlow=b;
+            if(Array.isArray(b.settled)&&b.settled.includes(TARGET)) hits.push({n:Number(b.n),outcome:"settled"});
+            if(Array.isArray(b.void)){
+              const v=b.void.find(x=>Array.isArray(x)&&String(x[0])===TARGET);
+              if(v) hits.push({n:Number(b.n),outcome:"void",reason:String(v[1]||"")});
+            }
+          }
+          console.log("TARGET_FLOW "+JSON.stringify({target:TARGET,hits,latest:latestFlow?{n:Number(latestFlow.n),omitted:latestFlow.omitted||null}:null}));
+
+          const pnl=parseMany(await get(BASE+"/r/d-close1-pnl/export"));
+          const oursPnl=[];
+          for(const m of pnl){
+            const b=body(m);
+            if(b?.t!=="pnl"||!Array.isArray(b.top)) continue;
+            const hit=b.top.find(x=>Array.isArray(x)&&String(x[0])===DID);
+            if(hit) oursPnl.push({n:Number(b.n),row:hit,mark:String(b.mark||"")});
+          }
+          console.log("OUR_PNL_TOP "+JSON.stringify(oursPnl.slice(-5)));
           NODE
