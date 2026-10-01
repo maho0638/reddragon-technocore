@@ -1314,6 +1314,39 @@ function directionalFeeRoom(side, px) {
   return Math.abs(target - p) >= 0.02 * p + 0.55;
 }
 
+function allInDirectionalEntry(signal, latest, race) {
+  if (!signal?.fresh || !allInRaceMode(race)) return null;
+  const px = Number(latest?.px);
+  if (!Number.isFinite(px) || px <= 0) return null;
+
+  const trend = multiTimeframeTrend(signal);
+  const ratio = Number(trend.ratio);
+  const m60 = Number(signal?.move60);
+  const m240 = Number(signal?.move240);
+
+  let side = null;
+  if (Number.isFinite(ratio) && ratio >= 0.20) side = "buy";
+  else if (Number.isFinite(ratio) && ratio <= -0.20) side = "sell";
+  else if (
+    Number.isFinite(m60) && Number.isFinite(m240) &&
+    Math.sign(m60) === Math.sign(m240) && Math.abs(m240) >= 0.80
+  ) {
+    side = m240 > 0 ? "buy" : "sell";
+  }
+  if (!side) return null;
+
+  console.log(
+    `ALL_IN_DIRECTION side=${side} ratio=${Number.isFinite(ratio) ? ratio.toFixed(2) : "na"} m60=${Number.isFinite(m60) ? m60.toFixed(2) : "na"} m240=${Number.isFinite(m240) ? m240.toFixed(2) : "na"} gap=${Number(race?.leaderGap).toFixed(2)} hLeft=${Number(race?.hoursRemaining).toFixed(1)}`
+  );
+  return {
+    action: "enter",
+    side,
+    qty: 60,
+    confidence: Math.abs(ratio) >= 0.35 ? 0.94 : 0.90,
+    reason: "all_in_rank_chase_momentum"
+  };
+}
+
 function activeContestEntry(signal, latest, race, catalyst) {
   if (!signal?.fresh) return null;
   const allIn = allInRaceMode(race);
@@ -1865,6 +1898,14 @@ if (raceSelftest) {
     { blockNewEntries:true, requireVeryStrong:false, active:{ name:"TEST", phase:"pre" } }
   );
   if (!allInCalendar) throw new Error("RACE_SELFTEST_ALL_IN_CATALYST_OVERRIDE");
+  const allInSoftMomentum = allInDirectionalEntry(
+    { fresh:true, move5:0.00, move15:0.04, move30:0.17, move60:0.49, move240:1.46 },
+    { px:231.01 },
+    allInRace
+  );
+  if (!(allInSoftMomentum?.action === "enter" && allInSoftMomentum.side === "buy" && allInSoftMomentum.qty === 60)) {
+    throw new Error("RACE_SELFTEST_ALL_IN_SOFT_MOMENTUM");
+  }
   const allInModerateEntry = activeContestEntry(
     { fresh:true, move5:0.00, move15:0.26, move30:0.29, move60:0.32, move240:1.45 },
     { px:231.01 },
@@ -4311,9 +4352,10 @@ const rawDecision = decide({
   latest,
   race
 });
+const allInDecision = allInDirectionalEntry(realNvdaSignal, latest, race);
 const activeDecision = activeContestEntry(realNvdaSignal, latest, race, catalyst);
 const aggressiveDecision = aggressiveDirectionalEntry(realNvdaSignal, latest, race, catalyst);
-const tacticalDecision = activeDecision || aggressiveDecision || tacticalRangeEntry(realNvdaSignal, latest, race, catalyst) || rawDecision;
+const tacticalDecision = allInDecision || activeDecision || aggressiveDecision || tacticalRangeEntry(realNvdaSignal, latest, race, catalyst) || rawDecision;
 const fallbackDecision = controlledFallbackEntry(
   tacticalDecision,
   race,
