@@ -1008,6 +1008,30 @@ function feasibleUncertainLedger(state) {
   };
 }
 
+function maxFeasibleAllInEntryQty(state, side, px, hardCap = 60) {
+  const price = Number(px);
+  if (!["buy", "sell"].includes(String(side)) || !Number.isFinite(price) || price <= 0) return 0;
+  const modeled = feasibleUncertainLedger(state);
+  if (!modeled?.reliable || !Array.isArray(modeled.states) || !modeled.states.length) return null;
+
+  let best = 0;
+  const feeCushion = 0.035;
+  for (const candidate of modeled.states) {
+    const cash = Math.max(0, Number(candidate.cash));
+    const pos = ledgerPosition(candidate.lots);
+    const closingQty = side === "buy" ? Math.max(0, -pos) : Math.max(0, pos);
+    const feeOnlyCap = cash / (price * feeCushion);
+    let cap;
+    if (feeOnlyCap <= closingQty) {
+      cap = feeOnlyCap;
+    } else {
+      cap = (cash / price + closingQty) / (1 + feeCushion);
+    }
+    if (Number.isFinite(cap)) best = Math.max(best, cap);
+  }
+  return Math.max(0, Math.min(Number(hardCap), best));
+}
+
 function pruneFundingImpossibleUncertain(state) {
   const modeled = feasibleUncertainLedger(state);
   if (!modeled?.reliable || !modeled.forcedVoidIds?.length) return { state, changed: false, modeled };
@@ -1136,10 +1160,18 @@ function applyUncertainRiskCap(decision, state, latestPx, race = null) {
   const requested = Number(decision.qty);
   const allIn = allInRaceMode(race) && Number(decision.confidence || 0) >= ALL_IN_MIN_CONFIDENCE;
   if (allIn && Number.isFinite(requested) && requested >= 0.1) {
-    const clipped = Math.floor(Math.min(60, requested) * 100) / 100;
     const modeled = feasibleUncertainLedger(state);
+    const feasibleCap = maxFeasibleAllInEntryQty(state, decision.side, latestPx, 60);
+    const allowed = Number.isFinite(feasibleCap)
+      ? Math.min(requested, feasibleCap)
+      : Math.min(60, requested);
+    const clipped = Math.floor(Math.max(0, allowed) * 100) / 100;
+    if (clipped < 0.1) {
+      console.log(`ALL_IN_FUNDS_BLOCK side=${decision.side} requested=${requested.toFixed(2)} feasibleCap=${Number.isFinite(feasibleCap) ? feasibleCap.toFixed(2) : "na"}`);
+      return null;
+    }
     console.log(
-      `ALL_IN_UNCERTAIN_BYPASS requested=${requested.toFixed(2)} allowed=${clipped.toFixed(2)} states=${modeled?.reliable ? modeled.states.length : "na"} minCash=${modeled?.reliable ? modeled.minCash.toFixed(2) : "na"} referee=funds`
+      `ALL_IN_UNCERTAIN_MAX_RISK side=${decision.side} requested=${requested.toFixed(2)} allowed=${clipped.toFixed(2)} feasibleCap=${Number.isFinite(feasibleCap) ? feasibleCap.toFixed(2) : "na"} states=${modeled?.reliable ? modeled.states.length : "na"} minCash=${modeled?.reliable ? modeled.minCash.toFixed(2) : "na"} maxCash=${modeled?.reliable ? modeled.maxCash.toFixed(2) : "na"} referee=funds`
     );
     return { ...decision, qty: clipped };
   }
@@ -1314,39 +1346,6 @@ function directionalFeeRoom(side, px) {
   return Math.abs(target - p) >= 0.02 * p + 0.55;
 }
 
-function allInDirectionalEntry(signal, latest, race) {
-  if (!signal?.fresh || !allInRaceMode(race)) return null;
-  const px = Number(latest?.px);
-  if (!Number.isFinite(px) || px <= 0) return null;
-
-  const trend = multiTimeframeTrend(signal);
-  const ratio = Number(trend.ratio);
-  const m60 = Number(signal?.move60);
-  const m240 = Number(signal?.move240);
-
-  let side = null;
-  if (Number.isFinite(ratio) && ratio >= 0.20) side = "buy";
-  else if (Number.isFinite(ratio) && ratio <= -0.20) side = "sell";
-  else if (
-    Number.isFinite(m60) && Number.isFinite(m240) &&
-    Math.sign(m60) === Math.sign(m240) && Math.abs(m240) >= 0.80
-  ) {
-    side = m240 > 0 ? "buy" : "sell";
-  }
-  if (!side) return null;
-
-  console.log(
-    `ALL_IN_DIRECTION side=${side} ratio=${Number.isFinite(ratio) ? ratio.toFixed(2) : "na"} m60=${Number.isFinite(m60) ? m60.toFixed(2) : "na"} m240=${Number.isFinite(m240) ? m240.toFixed(2) : "na"} gap=${Number(race?.leaderGap).toFixed(2)} hLeft=${Number(race?.hoursRemaining).toFixed(1)}`
-  );
-  return {
-    action: "enter",
-    side,
-    qty: 60,
-    confidence: Math.abs(ratio) >= 0.35 ? 0.94 : 0.90,
-    reason: "all_in_rank_chase_momentum"
-  };
-}
-
 function activeContestEntry(signal, latest, race, catalyst) {
   if (!signal?.fresh) return null;
   const allIn = allInRaceMode(race);
@@ -1377,10 +1376,7 @@ function activeContestEntry(signal, latest, race, catalyst) {
     : m5 <= -0.03 && (!Number.isFinite(m60) || m60 <= 0.10);
 
   const side = up ? "buy" : "sell";
-  if (!directionalFeeRoom(side, px) && !allIn) return null;
-  if (!directionalFeeRoom(side, px) && allIn) {
-    console.log(`ALL_IN_FEE_ROOM_OVERRIDE side=${side} px=${px.toFixed(2)} source=active`);
-  }
+  if (!directionalFeeRoom(side, px)) return null;
 
   const highPressure = Number.isFinite(gap) && gap >= 750;
   const qty = highPressure ? (supported ? 40 : 34) : (supported ? 30 : 24);
@@ -1406,7 +1402,7 @@ function aggressiveDirectionalEntry(signal, latest, race, catalyst) {
 
   const s = directionalShape(signal);
   const roundTripFeeMove = 0.02 * px;
-  const viable = (target) => allIn || Math.abs(Number(target) - px) >= roundTripFeeMove + 0.55;
+  const viable = (target) => Math.abs(Number(target) - px) >= roundTripFeeMove + 0.55;
   const highPressure = Number.isFinite(gap) && gap >= 750;
   const qtyStrong = highPressure ? 38 : Number.isFinite(gap) && gap >= 350 ? 30 : 22;
   const qtyTurn = highPressure ? 30 : 20;
@@ -1577,7 +1573,7 @@ function tacticalRangeEntry(signal, latest, race, catalyst) {
   const px = Number(latest?.px);
   if (!Number.isFinite(px) || px <= 0) return null;
   const roundTripFeeMove = 0.02 * px;
-  const viable = (target) => allIn || Math.abs(Number(target) - px) >= roundTripFeeMove + 0.75;
+  const viable = (target) => Math.abs(Number(target) - px) >= roundTripFeeMove + 0.75;
 
   if (px >= 231.5 && px <= 234.5 && trend.strongDown && viable(223)) {
     return { action: "enter", side: "sell", qty: trend.veryStrongDown ? 20 : 12, confidence: trend.veryStrongDown ? 0.97 : 0.94, reason: "upper_band_reversal" };
@@ -1748,13 +1744,9 @@ function applyRealNvdaSignal(decision, signal, race, distinct, latest) {
   }
 
   if (!Number.isFinite(gap) || gap < 175 || !alignedOrLagging) return decision;
-  const allIn = allInRaceMode(race);
-  if (!directionalFeeRoom(side, Number(latest?.px)) && !allIn) {
+  if (!directionalFeeRoom(side, Number(latest?.px))) {
     console.log(`REAL_NVDA_FEE_ROOM_BLOCK side=${side} px=${Number(latest?.px).toFixed(2)}`);
     return decision;
-  }
-  if (!directionalFeeRoom(side, Number(latest?.px)) && allIn) {
-    console.log(`ALL_IN_FEE_ROOM_OVERRIDE side=${side} px=${Number(latest?.px).toFixed(2)} source=real_nvda`);
   }
 
   const veryStrong = trend.veryStrongUp || trend.veryStrongDown;
@@ -1882,14 +1874,30 @@ if (raceSelftest) {
   if (!(allInSized?.race?.allIn === true && allInSized.qty > 41 && allInSized.qty < 43)) {
     throw new Error("RACE_SELFTEST_ALL_IN_FULL_CAPITAL");
   }
-  const allInUncertain = applyUncertainRiskCap(
-    allInSized,
-    { uncertainEntries:[{ id:"u", side:"sell", qty:31.53, entryPx:224.26, confirmedOutcome:"settled" }] },
+  const allInKnownShortState = {
+    realizedScoreEst: 0,
+    uncertainEntries:[{
+      kind:"position_shadow", id:"u", side:"sell", qty:31.53, entryPx:224.26,
+      entryFeeEst:70.709178, confirmedOutcome:"settled", fromSweep:1
+    }]
+  };
+  const allInSameSide = applyUncertainRiskCap(
+    { ...allInSized, side:"sell" },
+    allInKnownShortState,
     230,
     allInRace
   );
-  if (!(allInUncertain?.qty > 41 && allInUncertain?.qty < 43)) {
-    throw new Error("RACE_SELFTEST_ALL_IN_UNCERTAIN_BYPASS");
+  const allInReverseSide = applyUncertainRiskCap(
+    { ...allInSized, side:"buy" },
+    allInKnownShortState,
+    230,
+    allInRace
+  );
+  if (!(allInSameSide?.qty > 11 && allInSameSide?.qty < 13)) {
+    throw new Error("RACE_SELFTEST_ALL_IN_SAME_SIDE_FUNDS_CAP");
+  }
+  if (!(allInReverseSide?.qty > 41 && allInReverseSide?.qty < 43)) {
+    throw new Error("RACE_SELFTEST_ALL_IN_REVERSE_FULL_CAPITAL");
   }
   const allInCalendar = applyCalendarRiskGate(
     { action:"enter", side:"sell", qty:10, confidence:0.9 },
@@ -1898,23 +1906,6 @@ if (raceSelftest) {
     { blockNewEntries:true, requireVeryStrong:false, active:{ name:"TEST", phase:"pre" } }
   );
   if (!allInCalendar) throw new Error("RACE_SELFTEST_ALL_IN_CATALYST_OVERRIDE");
-  const allInSoftMomentum = allInDirectionalEntry(
-    { fresh:true, move5:0.00, move15:0.04, move30:0.17, move60:0.49, move240:1.46 },
-    { px:231.01 },
-    allInRace
-  );
-  if (!(allInSoftMomentum?.action === "enter" && allInSoftMomentum.side === "buy" && allInSoftMomentum.qty === 60)) {
-    throw new Error("RACE_SELFTEST_ALL_IN_SOFT_MOMENTUM");
-  }
-  const allInModerateEntry = activeContestEntry(
-    { fresh:true, move5:0.00, move15:0.26, move30:0.29, move60:0.32, move240:1.45 },
-    { px:231.01 },
-    allInRace,
-    { blockNewEntries:false, requireVeryStrong:false, active:null }
-  );
-  if (!(allInModerateEntry?.action === "enter" && allInModerateEntry.side === "buy" && allInModerateEntry.confidence >= 0.97)) {
-    throw new Error("RACE_SELFTEST_ALL_IN_MODERATE_ENTRY");
-  }
   const allInWinner = tacticalExitDecision(
     { state:"open", side:"sell", qty:30, entryPx:230, entryFeeEst:69 },
     { fresh:true, move5:-0.2, move15:-0.5, move30:-0.7, move60:-0.8, move240:-1.5 },
@@ -4352,10 +4343,9 @@ const rawDecision = decide({
   latest,
   race
 });
-const allInDecision = allInDirectionalEntry(realNvdaSignal, latest, race);
 const activeDecision = activeContestEntry(realNvdaSignal, latest, race, catalyst);
 const aggressiveDecision = aggressiveDirectionalEntry(realNvdaSignal, latest, race, catalyst);
-const tacticalDecision = allInDecision || activeDecision || aggressiveDecision || tacticalRangeEntry(realNvdaSignal, latest, race, catalyst) || rawDecision;
+const tacticalDecision = activeDecision || aggressiveDecision || tacticalRangeEntry(realNvdaSignal, latest, race, catalyst) || rawDecision;
 const fallbackDecision = controlledFallbackEntry(
   tacticalDecision,
   race,
