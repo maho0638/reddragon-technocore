@@ -38,7 +38,7 @@ jobs:
           CLOSE1_EXECUTE: "true"
           CLOSE1_STATE_SELFTEST: "false"
           CLOSE1_RACE_SELFTEST: "false"
-          CLOSE1_LOOP_COUNT: ${{ github.event_name == 'workflow_dispatch' && '12' || '1' }}
+          CLOSE1_LOOP_COUNT: ${{ github.event_name == 'workflow_dispatch' && '10' || '1' }}
         shell: bash
         run: |
           set -euo pipefail
