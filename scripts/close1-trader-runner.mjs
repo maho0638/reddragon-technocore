@@ -1474,7 +1474,7 @@ function directionalFeeRoom(side, px) {
 function activeContestEntry(signal, latest, race, catalyst) {
   if (!signal?.fresh) return null;
   const allIn = allInRaceMode(race);
-  if (catalyst?.blockNewEntries && !allIn) return null;
+  if (catalyst?.blockNewEntries) return null;
   const hours = Number(race?.hoursRemaining);
   if (!Number.isFinite(hours) || (hours <= FINAL_NO_NEW_ENTRY_HOURS && !allIn) || hours <= ALL_IN_FINAL_BLOCK_HOURS) return null;
   const px = Number(latest?.px);
@@ -1518,7 +1518,7 @@ function activeContestEntry(signal, latest, race, catalyst) {
 function aggressiveDirectionalEntry(signal, latest, race, catalyst) {
   if (!signal?.fresh) return null;
   const allIn = allInRaceMode(race);
-  if (catalyst?.blockNewEntries && !allIn) return null;
+  if (catalyst?.blockNewEntries) return null;
   const hours = Number(race?.hoursRemaining);
   if (!Number.isFinite(hours) || (hours <= FINAL_NO_NEW_ENTRY_HOURS && !allIn) || hours <= ALL_IN_FINAL_BLOCK_HOURS) return null;
   const px = Number(latest?.px);
@@ -1688,7 +1688,7 @@ function confirmedShadowExitDecision(entry, signal, latest, race, catalyst) {
 function tacticalRangeEntry(signal, latest, race, catalyst) {
   if (!signal?.fresh) return null;
   const allIn = allInRaceMode(race);
-  if (catalyst?.blockNewEntries && !allIn) return null;
+  if (catalyst?.blockNewEntries) return null;
   const hours = Number(race?.hoursRemaining);
   if (Number.isFinite(hours) && ((hours <= FINAL_NO_NEW_ENTRY_HOURS && !allIn) || hours <= ALL_IN_FINAL_BLOCK_HOURS)) return null;
   const trend = multiTimeframeTrend(signal);
@@ -1719,16 +1719,13 @@ function applyCalendarRiskGate(decision, signal, race, catalyst) {
   if (!decision || decision.action !== "enter") return decision;
   const trend = multiTimeframeTrend(signal);
   const allIn = allInRaceMode(race);
-  if (catalyst?.blockNewEntries && !allIn) {
-    console.log(`CATALYST_ENTRY_BLOCK name=${catalyst.active?.name || "unknown"} phase=pre`);
+  if (catalyst?.blockNewEntries) {
+    console.log(`CATALYST_ENTRY_BLOCK name=${catalyst.active?.name || "unknown"} phase=pre allIn=${allIn}`);
     return null;
   }
-  if (catalyst?.blockNewEntries && allIn) {
-    console.log(`ALL_IN_CATALYST_OVERRIDE name=${catalyst.active?.name || "unknown"} phase=pre`);
-  }
   const shape = directionalShape(signal);
-  if (catalyst?.requireVeryStrong && !allIn && !(shape.continuationUp || shape.continuationDown)) {
-    console.log(`CATALYST_POST_WAIT name=${catalyst.active?.name || "unknown"} trend=${trend.label} ratio=${trend.ratio.toFixed(2)}`);
+  if (catalyst?.requireVeryStrong && !(shape.continuationUp || shape.continuationDown)) {
+    console.log(`CATALYST_POST_WAIT name=${catalyst.active?.name || "unknown"} trend=${trend.label} ratio=${trend.ratio.toFixed(2)} allIn=${allIn}`);
     return null;
   }
   if (Number(race?.hoursRemaining) <= ALL_IN_FINAL_BLOCK_HOURS) {
@@ -2053,7 +2050,21 @@ if (raceSelftest) {
     allInRace,
     { blockNewEntries:true, requireVeryStrong:false, active:{ name:"TEST", phase:"pre" } }
   );
-  if (!allInCalendar) throw new Error("RACE_SELFTEST_ALL_IN_CATALYST_OVERRIDE");
+  if (allInCalendar !== null) throw new Error("RACE_SELFTEST_ALL_IN_CATALYST_PRE_BLOCK");
+  const postWeakCalendar = applyCalendarRiskGate(
+    { action:"enter", side:"sell", qty:10, confidence:0.9 },
+    { fresh:true, move5:-0.05, move15:-0.12, move30:-0.18, move60:-0.20, move240:-0.30 },
+    allInRace,
+    { blockNewEntries:false, requireVeryStrong:true, active:{ name:"TEST", phase:"post" } }
+  );
+  if (postWeakCalendar !== null) throw new Error("RACE_SELFTEST_ALL_IN_CATALYST_POST_WAIT");
+  const postStrongCalendar = applyCalendarRiskGate(
+    { action:"enter", side:"sell", qty:10, confidence:0.9 },
+    { fresh:true, move5:-0.25, move15:-0.50, move30:-0.70, move60:-0.80, move240:-1.30 },
+    allInRace,
+    { blockNewEntries:false, requireVeryStrong:true, active:{ name:"TEST", phase:"post" } }
+  );
+  if (!postStrongCalendar) throw new Error("RACE_SELFTEST_CATALYST_POST_CONTINUATION_ALLOWED");
   const allInWinner = tacticalExitDecision(
     { state:"open", side:"sell", qty:30, entryPx:230, entryFeeEst:69 },
     { fresh:true, move5:-0.2, move15:-0.5, move30:-0.7, move60:-0.8, move240:-1.5 },
