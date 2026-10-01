@@ -1,0 +1,29 @@
+name: Close-1 Objective Snapshot
+on:
+  push:
+    branches: [diag/close1-objective-snapshot-20261002]
+    paths:
+      - ".github/workflows/close1-objective-snapshot.yml"
+permissions:
+  contents: read
+jobs:
+  snapshot:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: "24"
+          package-manager-cache: false
+      - name: Dry-run current race decision
+        env:
+          TECHNOCORE_PRIVATE_KEY_PKCS8_B64: ${{ secrets.TECHNOCORE_PRIVATE_KEY_PKCS8_B64 }}
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          CLOSE1_EXECUTE: "false"
+          CLOSE1_STATE_SELFTEST: "false"
+          CLOSE1_RACE_SELFTEST: "false"
+        run: node scripts/close1-trader-runner.mjs
