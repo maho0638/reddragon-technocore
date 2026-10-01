@@ -1,0 +1,23 @@
+name: Close-1 Cancel Stale Run
+on:
+  push:
+    branches: [diag/close1-cancel-20261002]
+    paths:
+      - ".github/workflows/close1-cancel-stale-run.yml"
+permissions:
+  actions: write
+  contents: read
+jobs:
+  cancel:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - name: Cancel stale trader
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh run cancel 36924979462 --repo "$REPO" || true
+          echo "STALE_RUN_CANCEL_REQUESTED=36924979462"
