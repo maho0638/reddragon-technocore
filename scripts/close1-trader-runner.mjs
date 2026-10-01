@@ -1058,6 +1058,35 @@ function feasibleUncertainLedger(state) {
   };
 }
 
+function feasibleCloseNowPnlRange(state, mark) {
+  const current = Number(mark);
+  if (!Number.isFinite(current) || current <= 0) return null;
+  const modeled = feasibleUncertainLedger(state);
+  if (!modeled?.reliable || !Array.isArray(modeled.states) || !modeled.states.length) return null;
+
+  const pnls = [];
+  for (const candidate of modeled.states) {
+    let equity = Number(candidate.cash);
+    if (!Number.isFinite(equity)) continue;
+    for (const lot of cloneLedgerLots(candidate.lots)) {
+      const signedQty = Number(lot?.[0]);
+      const entryPx = Number(lot?.[1]);
+      if (!Number.isFinite(signedQty) || Math.abs(signedQty) <= 1e-9 || !Number.isFinite(entryPx) || entryPx <= 0) continue;
+      const qty = Math.abs(signedQty);
+      if (signedQty > 0) equity += qty * current;
+      else equity += qty * (2 * entryPx - current);
+      equity -= 0.01 * qty * current;
+    }
+    pnls.push(equity - 10000);
+  }
+  if (!pnls.length) return null;
+  return {
+    min: Math.min(...pnls),
+    max: Math.max(...pnls),
+    states: pnls.length
+  };
+}
+
 function maxFeasibleAllInEntryQty(state, side, px, hardCap = 60) {
   const price = Number(px);
   if (!["buy", "sell"].includes(String(side)) || !Number.isFinite(price) || price <= 0) return 0;
@@ -2065,6 +2094,20 @@ function applyRaceSizing(decision, race, latestPx) {
 }
 
 if (raceSelftest) {
+  const pnlRangeLong = feasibleCloseNowPnlRange({
+    realizedScoreEst: 0,
+    uncertainEntries:[{ kind:"position_shadow", id:"pnl-long", side:"buy", qty:10, entryPx:220, entryFeeEst:22, confirmedOutcome:"settled", fromSweep:1 }]
+  }, 225);
+  if (!(pnlRangeLong && Math.abs(pnlRangeLong.min - 5.5) < 1e-9 && Math.abs(pnlRangeLong.max - 5.5) < 1e-9)) {
+    throw new Error("RACE_SELFTEST_PNL_RANGE_LONG");
+  }
+  const pnlRangeShort = feasibleCloseNowPnlRange({
+    realizedScoreEst: 0,
+    uncertainEntries:[{ kind:"position_shadow", id:"pnl-short", side:"sell", qty:10, entryPx:225, entryFeeEst:22.5, confirmedOutcome:"settled", fromSweep:1 }]
+  }, 220);
+  if (!(pnlRangeShort && Math.abs(pnlRangeShort.min - 5.5) < 1e-9 && Math.abs(pnlRangeShort.max - 5.5) < 1e-9)) {
+    throw new Error("RACE_SELFTEST_PNL_RANGE_SHORT");
+  }
   if (Math.abs(minimumTakerFillQty({ race:{ allIn:true } }, 42, false) - 14.7) > 1e-9) {
     throw new Error("RACE_SELFTEST_ALL_IN_MIN_MEANINGFUL_TAKER_FILL");
   }
@@ -3914,8 +3957,9 @@ console.log(
 {
   const bounds = positionExposureBounds(state);
   const unresolved = uncertainEntries(state).filter((x) => x.confirmedOutcome !== "settled").length;
+  const pnlRange = feasibleCloseNowPnlRange(state, latest.px);
   console.log(
-    `LEDGER_PNL realized=${Number(state.realizedScoreEst || 0).toFixed(2)} confirmedMtm=${uncertainConfirmedMark(state, latest.px).toFixed(2)} closeNow=${confirmedLedgerCloseNet(state, latest.px).toFixed(2)} unresolved=${unresolved} posLo=${bounds.lo.toFixed(2)} posHi=${bounds.hi.toFixed(2)}`
+    `LEDGER_PNL realized=${Number(state.realizedScoreEst || 0).toFixed(2)} confirmedMtm=${uncertainConfirmedMark(state, latest.px).toFixed(2)} closeNow=${confirmedLedgerCloseNet(state, latest.px).toFixed(2)} unresolved=${unresolved} posLo=${bounds.lo.toFixed(2)} posHi=${bounds.hi.toFixed(2)} pnlLo=${pnlRange ? pnlRange.min.toFixed(2) : "na"} pnlHi=${pnlRange ? pnlRange.max.toFixed(2) : "na"} states=${pnlRange?.states ?? "na"}`
   );
 }
 if (!execute) {
