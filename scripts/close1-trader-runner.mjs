@@ -239,6 +239,7 @@ async function readExport(room) {
 let archiveIndexCache = null;
 let archiveIndexFetchedAt = 0;
 const archiveRecordCache = new Map();
+const archiveMissingCache = new Set();
 
 async function close1ArchiveIndex() {
   const nowMs = Date.now();
@@ -339,6 +340,7 @@ async function close1ArchiveRecordByHash(n, fileHash) {
   if (!Number.isInteger(sweep) || sweep < 1 || !/^[0-9a-f]{64}$/.test(hash)) return null;
   const cacheKey = `flow:${sweep}:${hash}`;
   if (archiveRecordCache.has(cacheKey)) return archiveRecordCache.get(cacheKey);
+  if (archiveMissingCache.has(cacheKey)) return null;
   const index = await close1ArchiveIndex();
   const meta = index?.byN?.get?.(sweep);
   if (meta && (String(meta.file || "") === hash || String(meta.sha256 || "") === hash)) {
@@ -351,6 +353,7 @@ async function close1ArchiveRecordByHash(n, fileHash) {
     2
   );
   if (!r.ok || text.length > 12_000_000) {
+    if (r.status === 404) archiveMissingCache.add(cacheKey);
     console.log(`REFEREE_FILE_HTTP n=${sweep} status=${r.status} indexed=${meta?.status || "missing"} path=${meta?.path || "na"}`);
     return null;
   }
