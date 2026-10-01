@@ -869,6 +869,161 @@ function uncertaintyEnvelope(state) {
   return { lo, hi, worst: Math.max(Math.abs(lo), Math.abs(hi)) };
 }
 
+function ledgerEntryOrder(entry) {
+  return Number(entry?.fromSweep || entry?.entrySweep || entry?.acceptedAtSweep || Number.MAX_SAFE_INTEGER);
+}
+
+function minimumLedgerFee(entry) {
+  const qty = Number(entry?.qty);
+  const px = Number(entry?.entryPx);
+  return Number.isFinite(qty) && qty > 0 && Number.isFinite(px) && px > 0
+    ? 0.01 * qty * px
+    : null;
+}
+
+function cloneLedgerLots(lots) {
+  return (Array.isArray(lots) ? lots : []).map((lot) => [Number(lot[0]), Number(lot[1])]);
+}
+
+function ledgerPosition(lots) {
+  return cloneLedgerLots(lots).reduce((sum, lot) => sum + Number(lot[0]), 0);
+}
+
+function ledgerOpeningQty(lots, side, qty) {
+  const held = ledgerPosition(lots);
+  return qty - Math.min(qty, Math.max(-side * held, 0));
+}
+
+function applyLedgerTradeState(candidate, entry, fee) {
+  const qty = Number(entry.qty);
+  const px = Number(entry.entryPx);
+  const side = entry.side === "buy" ? 1 : -1;
+  let cash = Number(candidate.cash) - Number(fee);
+  const lots = cloneLedgerLots(candidate.lots);
+  let left = qty;
+
+  while (left > 1e-9 && lots.length && Number(lots[0][0]) * side < 0) {
+    const [lotQty, lotPx] = lots[0];
+    const size = Math.min(left, Math.abs(lotQty));
+    cash += side < 0 ? size * px : size * (2 * lotPx - px);
+    left -= size;
+    if (Math.abs(size - Math.abs(lotQty)) <= 1e-9) {
+      lots.shift();
+    } else {
+      lots[0][0] = lotQty + side * size;
+    }
+  }
+  if (left > 1e-9) {
+    cash -= left * px;
+    lots.push([side * left, px]);
+  }
+  return { cash, lots };
+}
+
+function dedupeLedgerStates(states) {
+  const out = new Map();
+  for (const candidate of states) {
+    const key = [
+      Number(candidate.cash).toFixed(6),
+      ...cloneLedgerLots(candidate.lots).map(([qty, px]) => `${qty.toFixed(6)}@${px.toFixed(6)}`)
+    ].join("|");
+    if (!out.has(key)) out.set(key, candidate);
+  }
+  return [...out.values()];
+}
+
+function feasibleUncertainLedger(state) {
+  const entries = uncertainEntries(state);
+  if (!entries.length) {
+    return {
+      reliable: true,
+      states: [{ cash: Math.max(0, 10000 + Number(state?.realizedScoreEst || 0)), lots: [] }],
+      forcedVoidIds: [],
+      bounds: { lo: 0, hi: 0, certain: 0 }
+    };
+  }
+  // pending_exit stores the entry side, not the exit trade side; do not infer
+  // exposure from it until its settlement direction is reconstructed.
+  if (entries.some((x) => x?.kind === "pending_exit")) return { reliable: false };
+
+  const ordered = [...entries].sort((a, b) => ledgerEntryOrder(a) - ledgerEntryOrder(b));
+  let states = [{ cash: Math.max(0, 10000 + Number(state?.realizedScoreEst || 0)), lots: [] }];
+  const forcedVoidIds = [];
+
+  for (const entry of ordered) {
+    const qty = Number(entry.qty);
+    const px = Number(entry.entryPx);
+    const side = entry.side === "buy" ? 1 : entry.side === "sell" ? -1 : 0;
+    const fee = entry.confirmedOutcome === "settled"
+      ? (finiteNonnegativeSettlementFee(entry.entryFeeEst) ?? minimumLedgerFee(entry))
+      : minimumLedgerFee(entry);
+    if (!side || !Number.isFinite(qty) || qty <= 0 || !Number.isFinite(px) || px <= 0 || !Number.isFinite(fee)) {
+      return { reliable: false };
+    }
+
+    const next = [];
+    let canSettleAnywhere = false;
+    for (const candidate of states) {
+      const openingQty = ledgerOpeningQty(candidate.lots, side, qty);
+      const required = openingQty * px + fee;
+      const canSettle = Number(candidate.cash) + 1e-7 >= required;
+
+      if (entry.confirmedOutcome === "settled") {
+        if (!canSettle) return { reliable: false };
+        next.push(applyLedgerTradeState(candidate, entry, fee));
+        canSettleAnywhere = true;
+        continue;
+      }
+
+      // Any unresolved acceptance may have voided for the counterparty or another
+      // referee rule, so keep the void branch. Settlement is added only where our
+      // own no-leverage funds rule makes it possible even at the mandatory minimum fee.
+      next.push({ cash: Number(candidate.cash), lots: cloneLedgerLots(candidate.lots) });
+      if (canSettle) {
+        canSettleAnywhere = true;
+        next.push(applyLedgerTradeState(candidate, entry, fee));
+      }
+    }
+    states = dedupeLedgerStates(next);
+    if (!states.length) return { reliable: false };
+    if (entry.confirmedOutcome !== "settled" && !canSettleAnywhere) {
+      forcedVoidIds.push(String(entry.id || ""));
+    }
+  }
+
+  const positions = states.map((candidate) => ledgerPosition(candidate.lots));
+  return {
+    reliable: true,
+    states,
+    forcedVoidIds: forcedVoidIds.filter(Boolean),
+    bounds: {
+      lo: Math.min(...positions),
+      hi: Math.max(...positions),
+      certain: Math.min(...positions) === Math.max(...positions) ? positions[0] : null
+    },
+    minCash: Math.min(...states.map((candidate) => Number(candidate.cash))),
+    maxCash: Math.max(...states.map((candidate) => Number(candidate.cash)))
+  };
+}
+
+function pruneFundingImpossibleUncertain(state) {
+  const modeled = feasibleUncertainLedger(state);
+  if (!modeled?.reliable || !modeled.forcedVoidIds?.length) return { state, changed: false, modeled };
+  const forced = new Set(modeled.forcedVoidIds);
+  const kept = uncertainEntries(state).filter((entry) => !forced.has(String(entry.id || "")));
+  return {
+    state: { ...state, uncertainEntries: kept },
+    changed: kept.length !== uncertainEntries(state).length,
+    modeled
+  };
+}
+
+function feasiblePositionExposureBounds(state) {
+  const modeled = feasibleUncertainLedger(state);
+  if (modeled?.reliable && modeled?.bounds) return modeled.bounds;
+  return positionExposureBounds(state);
+}
+
 function positionExposureBounds(state) {
   let certain = 0;
   let uncertainLo = 0;
@@ -976,29 +1131,30 @@ function applyUncertainRiskCap(decision, state, latestPx) {
   if (!decision || decision.action !== "enter") return decision;
   if (!uncertainEntries(state).length) return decision;
 
-  const px = Number(latestPx);
-  const realizedCapital = Math.max(1000, 10000 + Number(state?.realizedScoreEst || 0));
-  const reserved = uncertainCapitalReserve(state);
-  const freeCapital = Math.max(0, realizedCapital - reserved);
-  const cashCapacity = Number.isFinite(px) && px > 0
-    ? Math.max(0, freeCapital / (px * 1.035))
-    : 0;
-  const env = uncertaintyEnvelope(state);
+  const modeled = feasibleUncertainLedger(state);
+  const env = modeled?.reliable && modeled?.bounds
+    ? modeled.bounds
+    : uncertaintyEnvelope(state);
   const side = String(decision.side);
   const directionalCapacity =
-    side === "buy" ? UNCERTAIN_MAX_ABS_QTY - env.hi :
-    side === "sell" ? UNCERTAIN_MAX_ABS_QTY + env.lo :
+    side === "buy" ? UNCERTAIN_MAX_ABS_QTY - Number(env.hi) :
+    side === "sell" ? UNCERTAIN_MAX_ABS_QTY + Number(env.lo) :
     0;
-  const capacity = Math.max(0, Math.min(directionalCapacity, cashCapacity));
   const requested = Number(decision.qty);
-  const qty = Math.min(requested, capacity);
+  const qty = Math.min(requested, Math.max(0, directionalCapacity));
+
+  // Do not sum every unresolved notional as though mutually-exclusive historical
+  // accepts all settled. The referee's own no-leverage rule will void an order
+  // that lacks cash; a void costs no fee. Here the safety invariant is exposure:
+  // if this new order settles, every mathematically feasible historical ledger
+  // branch remains inside the configured absolute-position cap.
   if (!Number.isFinite(qty) || qty < 0.1) {
-    console.log(`UNCERTAIN_RISK_BLOCK side=${side} lo=${env.lo.toFixed(2)} hi=${env.hi.toFixed(2)} dirCap=${directionalCapacity.toFixed(2)} cashCap=${cashCapacity.toFixed(2)} reserved=${reserved.toFixed(2)} free=${freeCapital.toFixed(2)}`);
+    console.log(`UNCERTAIN_RISK_BLOCK side=${side} lo=${Number(env.lo).toFixed(2)} hi=${Number(env.hi).toFixed(2)} dirCap=${directionalCapacity.toFixed(2)} states=${modeled?.reliable ? modeled.states.length : "na"}`);
     return null;
   }
   const clipped = Math.floor(qty * 100) / 100;
-  if (clipped < requested) {
-    console.log(`UNCERTAIN_RISK_CAP side=${side} requested=${requested.toFixed(2)} allowed=${clipped.toFixed(2)} lo=${env.lo.toFixed(2)} hi=${env.hi.toFixed(2)} dirCap=${directionalCapacity.toFixed(2)} cashCap=${cashCapacity.toFixed(2)} reserved=${reserved.toFixed(2)} free=${freeCapital.toFixed(2)}`);
+  if (clipped < requested || modeled?.reliable) {
+    console.log(`UNCERTAIN_RISK_CAP side=${side} requested=${requested.toFixed(2)} allowed=${clipped.toFixed(2)} lo=${Number(env.lo).toFixed(2)} hi=${Number(env.hi).toFixed(2)} dirCap=${directionalCapacity.toFixed(2)} states=${modeled?.reliable ? modeled.states.length : "na"} minCash=${modeled?.reliable ? modeled.minCash.toFixed(2) : "na"}`);
   }
   return { ...decision, qty: clipped };
 }
@@ -1397,6 +1553,12 @@ function applyCalendarRiskGate(decision, signal, race, catalyst) {
   return decision;
 }
 
+function isFreshRealNvdaAge(ageSec) {
+  // Yahoo's active 5m bar timestamp can lead the GitHub runner clock slightly.
+  // Accept up to two minutes of forward skew; reject genuinely stale quotes.
+  return Number.isFinite(Number(ageSec)) && Number(ageSec) >= -120 && Number(ageSec) <= 600;
+}
+
 async function fetchRealNvdaSignal(nowMs = Date.now()) {
   try {
     const { r, text } = await request(
@@ -1442,7 +1604,7 @@ async function fetchRealNvdaSignal(nowMs = Date.now()) {
     const p240 = atMinutesAgo(240);
     const move = (p) => Number.isFinite(p) ? last.px - p : null;
     const signal = {
-      fresh: ageSec >= -30 && ageSec <= 600,
+      fresh: isFreshRealNvdaAge(ageSec),
       px: last.px,
       ageSec,
       move5: move(p5),
@@ -1736,14 +1898,43 @@ if (raceSelftest) {
   if (!(compoundedCatchUp?.qty > highConvictionCatchUp.qty)) {
     throw new Error("RACE_SELFTEST_COMPOUND_CAPITAL_NOT_USED");
   }
+  if (!isFreshRealNvdaAge(-47) || !isFreshRealNvdaAge(90) || isFreshRealNvdaAge(-121) || isFreshRealNvdaAge(601)) {
+    throw new Error("RACE_SELFTEST_REAL_NVDA_CLOCK_SKEW");
+  }
+  const historicalFeasibleProbe = {
+    state: "idle",
+    realizedScoreEst: 0,
+    uncertainEntries: [
+      { kind:"position_shadow", id:"rd4e-305-uifc397", side:"sell", qty:31.53, entryPx:224.26, entryFeeEst:70.709178, acceptedAtSweep:305, fromSweep:305, confirmedOutcome:"settled" },
+      { id:"m_1212_bb_12001", side:"sell", qty:8, entryPx:229.40, acceptedAtSweep:1212, fromSweep:1212 },
+      { id:"cc-a05-auto-maker-1790703210663", side:"sell", qty:25.80, entryPx:229.12, acceptedAtSweep:1219, fromSweep:1219 },
+      { id:"m_1230_bb_65659", side:"sell", qty:8, entryPx:227.86, acceptedAtSweep:1230, fromSweep:1230 },
+      { id:"cc-a05-auto-maker-1790709210450", side:"sell", qty:25.80, entryPx:228.53, acceptedAtSweep:1238, fromSweep:1238 },
+      { id:"kc-7764ef181d0d", side:"sell", qty:15, entryPx:230.19, acceptedAtSweep:1245, fromSweep:1245 },
+      { id:"c118543-any-n1285-9a9ee0f661", side:"buy", qty:42.15, entryPx:230.48, acceptedAtSweep:1286, fromSweep:1285 },
+      { id:"c12439-any-n1404-6635bbf409", side:"sell", qty:42.89, entryPx:226.25, acceptedAtSweep:1405, fromSweep:1404 },
+      { id:"0gatsby-L-TWAP-1-stand0-1790779554", side:"sell", qty:0.1, entryPx:230.76, acceptedAtSweep:1472, fromSweep:1472 },
+      { id:"rd4e-1517-uofvgrk", side:"buy", qty:0.32, entryPx:230.65, acceptedAtSweep:1517, fromSweep:1517 }
+    ]
+  };
+  const historicalFeasible = feasibleUncertainLedger(historicalFeasibleProbe);
+  for (const forcedId of ["cc-a05-auto-maker-1790703210663","cc-a05-auto-maker-1790709210450","kc-7764ef181d0d","c12439-any-n1404-6635bbf409"]) {
+    if (!historicalFeasible?.forcedVoidIds?.includes(forcedId)) throw new Error("RACE_SELFTEST_FUNDS_PRUNE_" + forcedId);
+  }
+  if (!(historicalFeasible?.reliable && historicalFeasible.bounds.lo > -40 && historicalFeasible.bounds.lo < -39 &&
+        historicalFeasible.bounds.hi > 10 && historicalFeasible.bounds.hi < 11)) {
+    throw new Error("RACE_SELFTEST_FEASIBLE_LEDGER_BOUNDS");
+  }
+  const feasibleSell = applyUncertainRiskCap({ action:"enter", side:"sell", qty:30, confidence:0.98 }, historicalFeasibleProbe, 231);
+  if (!(feasibleSell?.qty > 20 && feasibleSell.qty < 21)) throw new Error("RACE_SELFTEST_FEASIBLE_UNCERTAIN_ENTRY");
   const uncertain = { state: "idle", uncertainEntries: [{ id: "u1", side: "sell", qty: 31.53, entryPx: 224.26 }] };
   const cappedSame = applyUncertainRiskCap({ action: "enter", side: "sell", qty: 30, confidence: 0.9 }, uncertain, 224.5);
   const allowedOpposite = applyUncertainRiskCap({ action: "enter", side: "buy", qty: 30, confidence: 0.9 }, uncertain, 224.5);
   const env = uncertaintyEnvelope(uncertain);
   const uncertainReserve = uncertainCapitalReserve(uncertain);
-  if (!(cappedSame?.qty > 0.1 && cappedSame.qty < 12)) throw new Error("RACE_SELFTEST_UNCERTAIN_SAME_SIDE_CAP");
-  if (!(allowedOpposite?.qty > cappedSame.qty && allowedOpposite.qty < 13)) throw new Error("RACE_SELFTEST_UNCERTAIN_CASH_RESERVE_CAP");
-  if (!(uncertainReserve > 7000 && uncertainReserve < 7300)) throw new Error("RACE_SELFTEST_UNCERTAIN_CAPITAL_RESERVE");
+  if (!(cappedSame?.qty > 28 && cappedSame.qty <= 30)) throw new Error("RACE_SELFTEST_UNCERTAIN_SAME_SIDE_CAP");
+  if (!(allowedOpposite?.qty >= 29.99)) throw new Error("RACE_SELFTEST_UNCERTAIN_OPPOSITE_ALLOWED");
+  if (!(uncertainReserve > 7000 && uncertainReserve < 7300)) throw new Error("RACE_SELFTEST_UNCERTAIN_CAPITAL_RESERVE_DIAGNOSTIC");
   if (!(env.lo === -31.53 && env.hi === 0)) throw new Error("RACE_SELFTEST_UNCERTAIN_ENVELOPE");
   const lostRecovery = recoverLostLegacyUncertain({ state: "idle", uncertainEntries: [] });
   if (!(lostRecovery.changed && lostRecovery.state.uncertainEntries.length === 1 &&
@@ -3430,6 +3621,13 @@ if (recoveredLegacy.changed) {
   state = recoveredLegacy.state;
   await setState(state);
   console.log(`LEGACY_UNCERTAIN_RECOVERED id=${LEGACY_LOST_UNCERTAIN_ID} qty=42.89 side=sell from=1404 accepted=1405`);
+}
+const fundsPruned = pruneFundingImpossibleUncertain(state);
+if (fundsPruned.changed) {
+  const removed = fundsPruned.modeled?.forcedVoidIds || [];
+  state = fundsPruned.state;
+  await setState(state);
+  console.log(`UNCERTAIN_FUNDS_IMPOSSIBLE_PRUNED ids=${removed.join(",")} states=${fundsPruned.modeled?.states?.length ?? "na"} lo=${fundsPruned.modeled?.bounds?.lo?.toFixed?.(2) ?? "na"} hi=${fundsPruned.modeled?.bounds?.hi?.toFixed?.(2) ?? "na"}`);
 }
 const reconciled = await reconcileUncertainEntries(state, positions, latest.n);
 if (reconciled.changed) {
