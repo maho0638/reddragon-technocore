@@ -1,0 +1,46 @@
+name: Close-1 Current Diagnostic
+on:
+  push:
+    branches: [diag/close1-room-20261001]
+    paths:
+      - ".github/workflows/close1-current-diag.yml"
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - name: Inspect public contest rooms
+        shell: bash
+        run: |
+          node <<'NODE'
+          const BASE="https://technocore.chat";
+          const DID="did:key:z6MkuhrsP4tDZjWYdZLPxaur19WvrF1yuLGsGB2S8Q1gwS6K";
+          async function get(room){
+            const r=await fetch(`${BASE}/r/${room}/export`,{headers:{accept:"application/json,text/plain,application/x-ndjson","cache-control":"no-cache"}});
+            const t=await r.text(); if(!r.ok) throw new Error(room+" "+r.status); return t;
+          }
+          function parseMany(text){const s=text.trim();if(!s)return[];try{const v=JSON.parse(s);return Array.isArray(v)?v:(v.messages||v.items||[])}catch{return s.split(/\r?\n/).filter(Boolean).map(x=>{try{return JSON.parse(x)}catch{return null}}).filter(Boolean)}}
+          function body(m){try{return JSON.parse(String(m?.text??m?.message??m?.body??""))}catch{return null}}
+          const [roomT,flowT,priceT]=await Promise.all([get("close1"),get("d-close1-flow"),get("d-close1-price")]);
+          const room=parseMany(roomT), flow=parseMany(flowT), price=parseMany(priceT);
+          const ours=[];
+          for(const m of room){
+            const b=body(m), t=b?.terms;
+            if(b?.t!=="trade"||!t) continue;
+            const maker=String(t.maker||""), taker=String(b.taker||"");
+            if(maker!==DID && taker!==DID) continue;
+            ours.push({seq:Number(m?.seq||0),id:String(t.id||""),maker_side:String(t.side||""),our_role:maker===DID?"maker":"taker",our_side:maker===DID?String(t.side||""):(t.side==="buy"?"sell":"buy"),qty:String(t.qty||""),px:String(t.px||""),until:Number(t.until||0),accepted:Boolean(b.taker_sig),counterparty:maker===DID?taker:maker});
+          }
+          ours.sort((a,b)=>a.seq-b.seq);
+          console.log("OURS "+JSON.stringify(ours.slice(-30)));
+          const flows=[];
+          for(const m of flow){const b=body(m);if(b?.t==="flow") flows.push(b)}
+          flows.sort((a,b)=>Number(a.n)-Number(b.n));
+          console.log("FLOW_LATEST "+JSON.stringify(flows.slice(-8).map(b=>({n:Number(b.n),settled:Array.isArray(b.settled)?b.settled:[],void:Array.isArray(b.void)?b.void:[],omitted:b.omitted||null,missed:b.missed||null,file:b.file||null}))));
+          const prices=[];
+          for(const m of price){const b=body(m);if(b?.t==="price") prices.push({n:Number(b.n),px:String(b?.ref?.px||""),applied:String(b?.applied||""),time:String(b?.ref?.time||"")})}
+          prices.sort((a,b)=>a.n-b.n);
+          console.log("PRICE_LATEST "+JSON.stringify(prices.slice(-5)));
+          NODE
