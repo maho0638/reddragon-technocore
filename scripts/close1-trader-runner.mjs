@@ -1008,6 +1008,30 @@ function feasibleUncertainLedger(state) {
   };
 }
 
+function maxFeasibleAllInEntryQty(state, side, px, hardCap = 60) {
+  const price = Number(px);
+  if (!["buy", "sell"].includes(String(side)) || !Number.isFinite(price) || price <= 0) return 0;
+  const modeled = feasibleUncertainLedger(state);
+  if (!modeled?.reliable || !Array.isArray(modeled.states) || !modeled.states.length) return null;
+
+  let best = 0;
+  const feeCushion = 0.035;
+  for (const candidate of modeled.states) {
+    const cash = Math.max(0, Number(candidate.cash));
+    const pos = ledgerPosition(candidate.lots);
+    const closingQty = side === "buy" ? Math.max(0, -pos) : Math.max(0, pos);
+    const feeOnlyCap = cash / (price * feeCushion);
+    let cap;
+    if (feeOnlyCap <= closingQty) {
+      cap = feeOnlyCap;
+    } else {
+      cap = (cash / price + closingQty) / (1 + feeCushion);
+    }
+    if (Number.isFinite(cap)) best = Math.max(best, cap);
+  }
+  return Math.max(0, Math.min(Number(hardCap), best));
+}
+
 function pruneFundingImpossibleUncertain(state) {
   const modeled = feasibleUncertainLedger(state);
   if (!modeled?.reliable || !modeled.forcedVoidIds?.length) return { state, changed: false, modeled };
@@ -1136,10 +1160,18 @@ function applyUncertainRiskCap(decision, state, latestPx, race = null) {
   const requested = Number(decision.qty);
   const allIn = allInRaceMode(race) && Number(decision.confidence || 0) >= ALL_IN_MIN_CONFIDENCE;
   if (allIn && Number.isFinite(requested) && requested >= 0.1) {
-    const clipped = Math.floor(Math.min(60, requested) * 100) / 100;
     const modeled = feasibleUncertainLedger(state);
+    const feasibleCap = maxFeasibleAllInEntryQty(state, decision.side, latestPx, 60);
+    const allowed = Number.isFinite(feasibleCap)
+      ? Math.min(requested, feasibleCap)
+      : Math.min(60, requested);
+    const clipped = Math.floor(Math.max(0, allowed) * 100) / 100;
+    if (clipped < 0.1) {
+      console.log(`ALL_IN_FUNDS_BLOCK side=${decision.side} requested=${requested.toFixed(2)} feasibleCap=${Number.isFinite(feasibleCap) ? feasibleCap.toFixed(2) : "na"}`);
+      return null;
+    }
     console.log(
-      `ALL_IN_UNCERTAIN_BYPASS requested=${requested.toFixed(2)} allowed=${clipped.toFixed(2)} states=${modeled?.reliable ? modeled.states.length : "na"} minCash=${modeled?.reliable ? modeled.minCash.toFixed(2) : "na"} referee=funds`
+      `ALL_IN_UNCERTAIN_MAX_RISK side=${decision.side} requested=${requested.toFixed(2)} allowed=${clipped.toFixed(2)} feasibleCap=${Number.isFinite(feasibleCap) ? feasibleCap.toFixed(2) : "na"} states=${modeled?.reliable ? modeled.states.length : "na"} minCash=${modeled?.reliable ? modeled.minCash.toFixed(2) : "na"} maxCash=${modeled?.reliable ? modeled.maxCash.toFixed(2) : "na"} referee=funds`
     );
     return { ...decision, qty: clipped };
   }
@@ -1842,14 +1874,30 @@ if (raceSelftest) {
   if (!(allInSized?.race?.allIn === true && allInSized.qty > 41 && allInSized.qty < 43)) {
     throw new Error("RACE_SELFTEST_ALL_IN_FULL_CAPITAL");
   }
-  const allInUncertain = applyUncertainRiskCap(
-    allInSized,
-    { uncertainEntries:[{ id:"u", side:"sell", qty:31.53, entryPx:224.26, confirmedOutcome:"settled" }] },
+  const allInKnownShortState = {
+    realizedScoreEst: 0,
+    uncertainEntries:[{
+      kind:"position_shadow", id:"u", side:"sell", qty:31.53, entryPx:224.26,
+      entryFeeEst:70.709178, confirmedOutcome:"settled", fromSweep:1
+    }]
+  };
+  const allInSameSide = applyUncertainRiskCap(
+    { ...allInSized, side:"sell" },
+    allInKnownShortState,
     230,
     allInRace
   );
-  if (!(allInUncertain?.qty > 41 && allInUncertain?.qty < 43)) {
-    throw new Error("RACE_SELFTEST_ALL_IN_UNCERTAIN_BYPASS");
+  const allInReverseSide = applyUncertainRiskCap(
+    { ...allInSized, side:"buy" },
+    allInKnownShortState,
+    230,
+    allInRace
+  );
+  if (!(allInSameSide?.qty > 11 && allInSameSide?.qty < 13)) {
+    throw new Error("RACE_SELFTEST_ALL_IN_SAME_SIDE_FUNDS_CAP");
+  }
+  if (!(allInReverseSide?.qty > 41 && allInReverseSide?.qty < 43)) {
+    throw new Error("RACE_SELFTEST_ALL_IN_REVERSE_FULL_CAPITAL");
   }
   const allInCalendar = applyCalendarRiskGate(
     { action:"enter", side:"sell", qty:10, confidence:0.9 },
