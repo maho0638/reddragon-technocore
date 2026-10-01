@@ -3812,35 +3812,37 @@ if (state.state === "entry_offer") {
       ...state,
       state: "entry_accepted",
       acceptedSeq: accepted.seq,
-      acceptedAtSweep: Number(latest.n),
-      taker: accepted.taker
+      acceptedAtSweep: Number(state.acceptedAtSweep || state.entrySweep || latest.n),
+      taker: accepted.taker,
+      counterparty: String(accepted.taker || state.counterparty || "")
     };
     await setState(next);
-    console.log("ENTRY_ACCEPTED");
-    process.exit(0);
-  }
-  const effectiveEntryUntil = Math.min(
-    Number(state.until || latest.n),
-    Number(state.entrySweep || latest.n) + 1
-  );
-  if (Number(latest.n) <= effectiveEntryUntil) {
-    console.log("ENTRY_OFFER_LIVE");
-    process.exit(0);
-  }
-  const restoredExpiredOpen = restorePriorOpen(state, latest.n, "entry_offer_expired");
-  state = restoredExpiredOpen || {
-    state: "idle",
-    cooldownUntilSweep: Number(latest.n),
-    lastExpiredId: state.id,
-    realizedScoreEst: Number(state.realizedScoreEst || 0),
-    uncertainEntries: uncertainEntries(state)
-  };
-  await setState(state);
-  console.log(restoredExpiredOpen ? "ADD_OFFER_EXPIRED_RESTORE_OPEN" : "ENTRY_EXPIRED_FAST_REPRICE");
-  realNvdaSignal = await fetchRealNvdaSignal(now);
-  if (realNvdaSignal?.fresh) {
-    const trend = multiTimeframeTrend(realNvdaSignal);
-    console.log(`MTF_REPRICE trend=${trend.label} ratio=${trend.ratio.toFixed(2)} score=${trend.score}/${trend.weight}`);
+    state = next;
+    console.log("ENTRY_ACCEPTED_CONTINUE");
+  } else {
+    const effectiveEntryUntil = Math.min(
+      Number(state.until || latest.n),
+      Number(state.entrySweep || latest.n) + 1
+    );
+    if (Number(latest.n) <= effectiveEntryUntil) {
+      console.log("ENTRY_OFFER_LIVE");
+      process.exit(0);
+    }
+    const restoredExpiredOpen = restorePriorOpen(state, latest.n, "entry_offer_expired");
+    state = restoredExpiredOpen || {
+      state: "idle",
+      cooldownUntilSweep: Number(latest.n),
+      lastExpiredId: state.id,
+      realizedScoreEst: Number(state.realizedScoreEst || 0),
+      uncertainEntries: uncertainEntries(state)
+    };
+    await setState(state);
+    console.log(restoredExpiredOpen ? "ADD_OFFER_EXPIRED_RESTORE_OPEN" : "ENTRY_EXPIRED_FAST_REPRICE");
+    realNvdaSignal = await fetchRealNvdaSignal(now);
+    if (realNvdaSignal?.fresh) {
+      const trend = multiTimeframeTrend(realNvdaSignal);
+      console.log(`MTF_REPRICE trend=${trend.label} ratio=${trend.ratio.toFixed(2)} score=${trend.score}/${trend.weight}`);
+    }
   }
 }
 
@@ -4141,36 +4143,38 @@ if (state.state === "exit_offer") {
       ...state,
       state: "exit_accepted",
       acceptedSeq: accepted.seq,
-      acceptedAtSweep: Number(latest.n),
-      taker: accepted.taker
+      acceptedAtSweep: Number(state.acceptedAtSweep || state.requestedAtSweep || latest.n),
+      taker: accepted.taker,
+      counterparty: String(accepted.taker || state.counterparty || "")
     };
     await setState(next);
-    console.log("EXIT_ACCEPTED");
-    process.exit(0);
+    state = next;
+    console.log("EXIT_ACCEPTED_CONTINUE");
+  } else {
+    const effectiveExitUntil = Math.min(
+      Number(state.until || latest.n),
+      Number(state.requestedAtSweep || latest.n) + 1
+    );
+    if (Number(latest.n) <= effectiveExitUntil) {
+      console.log("EXIT_OFFER_LIVE");
+      process.exit(0);
+    }
+    if (state.closingShadowId) {
+      await setState({
+        state: "idle",
+        cooldownUntilSweep: Number(latest.n) + 1,
+        realizedScoreEst: Number(state.realizedScoreEst || 0),
+        uncertainEntries: uncertainEntries(state),
+        lastShadowExitExpiredId: state.id
+      });
+      console.log(`SHADOW_EXIT_EXPIRED_REEVALUATE shadow=${state.closingShadowId}`);
+      process.exit(0);
+    }
+    const open = restoreOpenFromExitState(state, latest.n, "exit_offer_expired");
+    await setState(open);
+    console.log("EXIT_EXPIRED_REEVALUATE");
+    state = open;
   }
-  const effectiveExitUntil = Math.min(
-    Number(state.until || latest.n),
-    Number(state.requestedAtSweep || latest.n) + 1
-  );
-  if (Number(latest.n) <= effectiveExitUntil) {
-    console.log("EXIT_OFFER_LIVE");
-    process.exit(0);
-  }
-  if (state.closingShadowId) {
-    await setState({
-      state: "idle",
-      cooldownUntilSweep: Number(latest.n) + 1,
-      realizedScoreEst: Number(state.realizedScoreEst || 0),
-      uncertainEntries: uncertainEntries(state),
-      lastShadowExitExpiredId: state.id
-    });
-    console.log(`SHADOW_EXIT_EXPIRED_REEVALUATE shadow=${state.closingShadowId}`);
-    process.exit(0);
-  }
-  const open = restoreOpenFromExitState(state, latest.n, "exit_offer_expired");
-  await setState(open);
-  console.log("EXIT_EXPIRED_REEVALUATE");
-  state = open;
 }
 
 if (state.state === "exit_accepted") {
