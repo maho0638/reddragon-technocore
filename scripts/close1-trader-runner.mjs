@@ -1066,13 +1066,36 @@ function positionExposureBounds(state) {
   return { lo: certain + uncertainLo, hi: certain + uncertainHi, certain };
 }
 
-function safeConfirmedShadowExitQty(entry, state) {
+function safeConfirmedShadowExitQty(entry, state, latestPx = null) {
   const qty = Number(entry?.qty);
   if (!Number.isFinite(qty) || qty <= 0) return 0;
   const bounds = feasiblePositionExposureBounds(state);
-  if (entry.side === "sell" && bounds.hi < -0.099) return Math.min(qty, -bounds.hi);
-  if (entry.side === "buy" && bounds.lo > 0.099) return Math.min(qty, bounds.lo);
-  return 0;
+
+  // A confirmed shadow is a real settled position. Closing it should not be
+  // blocked merely because unrelated historical accepts have unknown outcomes.
+  // Bound only the *opposite-side* exposure created by the close. If an
+  // unresolved branch would lack funds, the referee's no-leverage rule voids
+  // that branch rather than creating leverage.
+  let exposureCap = 0;
+  if (entry.side === "sell") {
+    // Closing a short is a BUY. It reduces the worst short branch and may move
+    // the high branch long, so cap only against the configured long limit.
+    exposureCap = Math.max(0, UNCERTAIN_MAX_ABS_QTY - Number(bounds.hi));
+  } else if (entry.side === "buy") {
+    // Closing a long is a SELL. It reduces the worst long branch and may move
+    // the low branch short, so cap only against the configured short limit.
+    exposureCap = Math.max(0, UNCERTAIN_MAX_ABS_QTY + Number(bounds.lo));
+  } else {
+    return 0;
+  }
+
+  const allowed = Math.min(qty, exposureCap);
+  if (Number.isFinite(Number(latestPx)) && Number(latestPx) > 0 && allowed >= 0.1) {
+    console.log(
+      `CONFIRMED_SHADOW_EXIT_CAP id=${entry.id || "?"} side=${entry.side} requested=${qty.toFixed(2)} allowed=${allowed.toFixed(2)} lo=${Number(bounds.lo).toFixed(2)} hi=${Number(bounds.hi).toFixed(2)} px=${Number(latestPx).toFixed(2)}`
+    );
+  }
+  return allowed >= 0.1 ? allowed : 0;
 }
 
 function uncertainCapitalReserve(state) {
@@ -1538,8 +1561,8 @@ function confirmedShadowExitDecision(entry, signal, latest, race, catalyst) {
   if (favorableMove <= slowStop && continuationAdverse) {
     return { exit: true, reason: "shadow_directional_stop", net, trend };
   }
-  if (net <= -120 && (!allIn || adverseStrong)) {
-    return { exit: true, reason: allIn ? "shadow_all_in_adverse_release" : "shadow_capital_release_stop", net, trend };
+  if (net <= -120) {
+    return { exit: true, reason: allIn ? "shadow_all_in_hard_loss_release" : "shadow_capital_release_stop", net, trend };
   }
   if (net >= profit.bank && (!allIn || adverseStrong || !favorableStrong)) {
     return { exit: true, reason: allIn ? "shadow_all_in_bank_on_fade" : "shadow_bank_meaningful_profit", net, trend, profit };
@@ -2114,21 +2137,24 @@ if (raceSelftest) {
   if (!(crossingBounds.lo < 0 && crossingBounds.hi > 0)) {
     throw new Error("RACE_SELFTEST_EXPOSURE_CROSSES_ZERO");
   }
-  if (safeConfirmedShadowExitQty(
+  const crossingExitQty = safeConfirmedShadowExitQty(
     { id: "certain-short", side: "sell", qty: 31.53, entryPx: 224.26, confirmedOutcome: "settled" },
     { uncertainEntries: [
-      { id: "certain-short", side: "sell", qty: 31.53, entryPx: 224.26, confirmedOutcome: "settled" },
-      { id: "maybe-buy", side: "buy", qty: 42.15, entryPx: 230.48 }
-    ] }
-  ) !== 0) {
-    throw new Error("RACE_SELFTEST_BLOCK_UNSAFE_SHADOW_EXIT");
+      { id: "certain-short", side: "sell", qty: 31.53, entryPx: 224.26, entryFeeEst:70.709178, confirmedOutcome: "settled", fromSweep:1 },
+      { id: "maybe-buy", side: "buy", qty: 42.15, entryPx: 230.48, fromSweep:2 }
+    ] },
+    230.50
+  );
+  if (Math.abs(crossingExitQty - 31.53) > 1e-9) {
+    throw new Error("RACE_SELFTEST_ALLOW_RISK_REDUCING_CONFIRMED_SHADOW_EXIT");
   }
   const guaranteedShortQty = safeConfirmedShadowExitQty(
     { id: "certain-short", side: "sell", qty: 31.53, entryPx: 224.26, confirmedOutcome: "settled" },
     { uncertainEntries: [
-      { id: "certain-short", side: "sell", qty: 31.53, entryPx: 224.26, confirmedOutcome: "settled" },
-      { id: "maybe-sell", side: "sell", qty: 8, entryPx: 229.4 }
-    ] }
+      { id: "certain-short", side: "sell", qty: 31.53, entryPx: 224.26, entryFeeEst:70.709178, confirmedOutcome: "settled", fromSweep:1 },
+      { id: "maybe-sell", side: "sell", qty: 8, entryPx: 229.4, fromSweep:2 }
+    ] },
+    230.50
   );
   if (Math.abs(guaranteedShortQty - 31.53) > 1e-9) {
     throw new Error("RACE_SELFTEST_ALLOW_GUARANTEED_SHADOW_EXIT");
@@ -2314,6 +2340,16 @@ if (raceSelftest) {
   if (!(shadowRescue?.exit === true && shadowRescue.reason === "shadow_lower_band_reversal")) throw new Error("RACE_SELFTEST_SHADOW_RESCUE");
   if (!(shadowHardTake?.exit === true && shadowHardTake.reason === "shadow_bank_meaningful_profit")) throw new Error("RACE_SELFTEST_SHADOW_HARD_TAKE");
   if (!(shadowRelease?.exit === true && shadowRelease.reason === "shadow_capital_release_stop")) throw new Error("RACE_SELFTEST_SHADOW_CAPITAL_RELEASE");
+  const allInShadowHardLoss = confirmedShadowExitDecision(
+    confirmedShadow,
+    { fresh: true, move5: 0.00, move15: -0.10, move30: 0.10, move60: 0.10, move240: 0.20 },
+    { px: 230.74 },
+    { leaderGap: 1700, hoursRemaining: 64 },
+    { active: null }
+  );
+  if (!(allInShadowHardLoss?.exit === true && allInShadowHardLoss.reason === "shadow_all_in_hard_loss_release")) {
+    throw new Error("RACE_SELFTEST_ALL_IN_CONFIRMED_HARD_LOSS_RELEASE");
+  }
   const openStop = tacticalExitDecision({ state: "open", side: "sell", qty: 10, entryPx: 232, entryFeeEst: 23.2 }, strongUpSignal, { px: 235 }, { hoursRemaining: 100 }, { active: null });
   if (!(openStop?.exit === true && ["fast_directional_stop", "directional_stop"].includes(openStop.reason))) throw new Error("RACE_SELFTEST_OPEN_STOP");
   const catchUpRefs = Array.from({ length: 24 }, (_, i) => ({ px: 224.50 + i * 0.001 }));
@@ -4290,12 +4326,12 @@ const confirmedShadowCandidates = uncertainEntries(state)
   .map((entry) => ({
     entry,
     decision: confirmedShadowExitDecision(entry, realNvdaSignal, latest, race, catalyst),
-    safeQty: safeConfirmedShadowExitQty(entry, state)
+    safeQty: safeConfirmedShadowExitQty(entry, state, latest.px)
   }));
 
 for (const candidate of confirmedShadowCandidates) {
   if (candidate.decision?.exit && candidate.safeQty < 0.1) {
-    const bounds = positionExposureBounds(state);
+    const bounds = feasiblePositionExposureBounds(state);
     console.log(
       `CONFIRMED_SHADOW_EXIT_BLOCKED id=${candidate.entry.id} reason=uncertain_net_exposure posLo=${bounds.lo.toFixed(2)} posHi=${bounds.hi.toFixed(2)}`
     );
