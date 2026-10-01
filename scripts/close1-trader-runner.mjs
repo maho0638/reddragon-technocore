@@ -1905,6 +1905,22 @@ function applyRankObjectiveGate(decision, race, signal, latest) {
     (side === "buy" && trend.veryStrongUp) ||
     (side === "sell" && trend.veryStrongDown);
 
+  const hours = Number(race?.hoursRemaining);
+  const mustHaveRealConfirmation =
+    gap >= 750 &&
+    Number.isFinite(hours) &&
+    hours <= ALL_IN_RACE_HOURS;
+
+  // When the race gap is large and time is short, a high-confidence internal
+  // strategy score is not enough to justify a full-capital directional bet.
+  // Require a fresh, same-direction real NVDA trend before all-in sizing can run.
+  if (mustHaveRealConfirmation && (!signal?.fresh || !alignedStrong)) {
+    console.log(
+      `RANK_CONFIRM_BLOCK side=${side} gap=${gap.toFixed(2)} hLeft=${hours.toFixed(1)} conf=${confidence.toFixed(2)} fresh=${Boolean(signal?.fresh)} trend=${trend.label}`
+    );
+    return null;
+  }
+
   // A race entry must have enough plausible price room to do more than merely
   // pay the 2% round-trip fee. When far behind, require each new position to
   // have enough room to recover a meaningful fraction of the leader gap.
@@ -1915,7 +1931,6 @@ function applyRankObjectiveGate(decision, race, signal, latest) {
     confidence >= 0.94 && alignedStrong ? 0.10 :
     0.16;
 
-  const hours = Number(race?.hoursRemaining);
   if (Number.isFinite(hours) && hours <= 36) captureShare += 0.04;
   if (Number.isFinite(hours) && hours <= 18) captureShare += 0.06;
 
@@ -2080,6 +2095,22 @@ if (raceSelftest) {
     { px:227.30 }
   );
   if (rankWeakBlocked !== null) throw new Error("RACE_SELFTEST_RANK_WEAK_NOT_BLOCKED");
+  const rankMixedHighConfidenceBlocked = applyRankObjectiveGate(
+    { action:"enter", side:"sell", qty:40, confidence:0.97, reason:"internal_high_conf" },
+    { leaderGap:1400, hoursRemaining:60, realizedCapital:10000 },
+    { fresh:true, move5:-0.09, move15:-0.15, move30:-0.25, move60:-0.15, move240:0.51 },
+    { px:231.15 }
+  );
+  if (rankMixedHighConfidenceBlocked !== null) throw new Error("RACE_SELFTEST_RANK_MIXED_ALL_IN_NOT_BLOCKED");
+  const rankStrongSellAllowed = applyRankObjectiveGate(
+    { action:"enter", side:"sell", qty:40, confidence:0.97, reason:"confirmed_short" },
+    { leaderGap:1400, hoursRemaining:60, realizedCapital:10000 },
+    { fresh:true, move5:-0.25, move15:-0.55, move30:-0.80, move60:-1.10, move240:-2.80 },
+    { px:231.15 }
+  );
+  if (!(rankStrongSellAllowed?.action === "enter" && String(rankStrongSellAllowed.reason).includes("rank_upside"))) {
+    throw new Error("RACE_SELFTEST_RANK_STRONG_SELL_BLOCKED");
+  }
   const rankVeryStrongAllowed = applyRankObjectiveGate(
     { action:"enter", side:"buy", qty:40, confidence:0.98, reason:"strong_breakout" },
     { leaderGap:1400, hoursRemaining:60, realizedCapital:10000 },
