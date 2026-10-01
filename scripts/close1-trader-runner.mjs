@@ -239,6 +239,7 @@ async function readExport(room) {
 let archiveIndexCache = null;
 let archiveIndexFetchedAt = 0;
 const archiveRecordCache = new Map();
+const archiveMissingCache = new Set();
 
 async function close1ArchiveIndex() {
   const nowMs = Date.now();
@@ -339,6 +340,7 @@ async function close1ArchiveRecordByHash(n, fileHash) {
   if (!Number.isInteger(sweep) || sweep < 1 || !/^[0-9a-f]{64}$/.test(hash)) return null;
   const cacheKey = `flow:${sweep}:${hash}`;
   if (archiveRecordCache.has(cacheKey)) return archiveRecordCache.get(cacheKey);
+  if (archiveMissingCache.has(cacheKey)) return null;
   const index = await close1ArchiveIndex();
   const meta = index?.byN?.get?.(sweep);
   if (meta && (String(meta.file || "") === hash || String(meta.sha256 || "") === hash)) {
@@ -351,6 +353,7 @@ async function close1ArchiveRecordByHash(n, fileHash) {
     2
   );
   if (!r.ok || text.length > 12_000_000) {
+    if (r.status === 404) archiveMissingCache.add(cacheKey);
     console.log(`REFEREE_FILE_HTTP n=${sweep} status=${r.status} indexed=${meta?.status || "missing"} path=${meta?.path || "na"}`);
     return null;
   }
@@ -1405,10 +1408,13 @@ function profitThresholds(qty, entryPx, markPx) {
     return { bank: 25, protect: 12 };
   }
   const avgNotional = q * ((entry + mark) / 2);
-  // Net PnL already subtracts the estimated 1% entry + 1% exit fees.
-  // Keep extra room for clawback / execution mismatch instead of banking dust.
-  const bank = Math.max(20, 0.0030 * avgNotional);
-  const protect = Math.max(10, 0.0015 * avgNotional);
+  // Net PnL already subtracts estimated entry + exit fees. Scale the absolute
+  // floor with position size so small risk-capped positions can bank real net
+  // profit without waiting for an unrealistic per-contract move.
+  const bankFloor = clamp(0.75 * q, 0.75, 20);
+  const protectFloor = clamp(0.35 * q, 0.35, 10);
+  const bank = Math.max(bankFloor, 0.0030 * avgNotional);
+  const protect = Math.max(protectFloor, 0.0015 * avgNotional);
   return { bank, protect };
 }
 
@@ -2051,6 +2057,21 @@ if (raceSelftest) {
   const earlyShort = aggressiveDirectionalEntry(earlyDownSignal, { px: 230.8 }, { leaderGap: 1200, hoursRemaining: 100 }, { blockNewEntries: false, requireVeryStrong: false });
   if (!(earlyLong?.side === "buy" && earlyLong.qty >= 38)) throw new Error("RACE_SELFTEST_EARLY_LONG");
   if (!(earlyShort?.side === "sell" && earlyShort.qty >= 30)) throw new Error("RACE_SELFTEST_EARLY_SHORT");
+  const smallProfitThreshold = profitThresholds(3, 230.69, 225.00);
+  if (!(smallProfitThreshold.bank > 2 && smallProfitThreshold.bank < 3 &&
+        smallProfitThreshold.protect > 1 && smallProfitThreshold.protect < 1.2)) {
+    throw new Error("RACE_SELFTEST_SMALL_POSITION_PROFIT_THRESHOLD");
+  }
+  const smallShortBank = tacticalExitDecision(
+    { state: "open", side: "sell", qty: 3, entryPx: 230.69, entryFeeEst: 6.9207 },
+    { fresh: true, move5: -0.20, move15: -0.50, move30: -0.70, move60: -0.60, move240: -0.80 },
+    { px: 225.0 },
+    { hoursRemaining: 60 },
+    { active: null }
+  );
+  if (!(smallShortBank?.exit === true && smallShortBank.reason === "bank_meaningful_profit")) {
+    throw new Error("RACE_SELFTEST_SMALL_POSITION_BANK");
+  }
   const profitLock = tacticalExitDecision(
     { state: "open", side: "buy", qty: 30, entryPx: 220, entryFeeEst: 66 },
     { fresh: true, move5: -0.25, move15: -0.45, move30: 0.10, move60: 0.40, move240: 1.20 },
@@ -3577,35 +3598,37 @@ if (state.state === "entry_offer") {
       ...state,
       state: "entry_accepted",
       acceptedSeq: accepted.seq,
-      acceptedAtSweep: Number(latest.n),
-      taker: accepted.taker
+      acceptedAtSweep: Number(state.acceptedAtSweep || state.entrySweep || latest.n),
+      taker: accepted.taker,
+      counterparty: String(accepted.taker || state.counterparty || "")
     };
     await setState(next);
-    console.log("ENTRY_ACCEPTED");
-    process.exit(0);
-  }
-  const effectiveEntryUntil = Math.min(
-    Number(state.until || latest.n),
-    Number(state.entrySweep || latest.n) + 1
-  );
-  if (Number(latest.n) <= effectiveEntryUntil) {
-    console.log("ENTRY_OFFER_LIVE");
-    process.exit(0);
-  }
-  const restoredExpiredOpen = restorePriorOpen(state, latest.n, "entry_offer_expired");
-  state = restoredExpiredOpen || {
-    state: "idle",
-    cooldownUntilSweep: Number(latest.n),
-    lastExpiredId: state.id,
-    realizedScoreEst: Number(state.realizedScoreEst || 0),
-    uncertainEntries: uncertainEntries(state)
-  };
-  await setState(state);
-  console.log(restoredExpiredOpen ? "ADD_OFFER_EXPIRED_RESTORE_OPEN" : "ENTRY_EXPIRED_FAST_REPRICE");
-  realNvdaSignal = await fetchRealNvdaSignal(now);
-  if (realNvdaSignal?.fresh) {
-    const trend = multiTimeframeTrend(realNvdaSignal);
-    console.log(`MTF_REPRICE trend=${trend.label} ratio=${trend.ratio.toFixed(2)} score=${trend.score}/${trend.weight}`);
+    state = next;
+    console.log("ENTRY_ACCEPTED_CONTINUE");
+  } else {
+    const effectiveEntryUntil = Math.min(
+      Number(state.until || latest.n),
+      Number(state.entrySweep || latest.n) + 1
+    );
+    if (Number(latest.n) <= effectiveEntryUntil) {
+      console.log("ENTRY_OFFER_LIVE");
+      process.exit(0);
+    }
+    const restoredExpiredOpen = restorePriorOpen(state, latest.n, "entry_offer_expired");
+    state = restoredExpiredOpen || {
+      state: "idle",
+      cooldownUntilSweep: Number(latest.n),
+      lastExpiredId: state.id,
+      realizedScoreEst: Number(state.realizedScoreEst || 0),
+      uncertainEntries: uncertainEntries(state)
+    };
+    await setState(state);
+    console.log(restoredExpiredOpen ? "ADD_OFFER_EXPIRED_RESTORE_OPEN" : "ENTRY_EXPIRED_FAST_REPRICE");
+    realNvdaSignal = await fetchRealNvdaSignal(now);
+    if (realNvdaSignal?.fresh) {
+      const trend = multiTimeframeTrend(realNvdaSignal);
+      console.log(`MTF_REPRICE trend=${trend.label} ratio=${trend.ratio.toFixed(2)} score=${trend.score}/${trend.weight}`);
+    }
   }
 }
 
@@ -3906,36 +3929,38 @@ if (state.state === "exit_offer") {
       ...state,
       state: "exit_accepted",
       acceptedSeq: accepted.seq,
-      acceptedAtSweep: Number(latest.n),
-      taker: accepted.taker
+      acceptedAtSweep: Number(state.acceptedAtSweep || state.requestedAtSweep || latest.n),
+      taker: accepted.taker,
+      counterparty: String(accepted.taker || state.counterparty || "")
     };
     await setState(next);
-    console.log("EXIT_ACCEPTED");
-    process.exit(0);
+    state = next;
+    console.log("EXIT_ACCEPTED_CONTINUE");
+  } else {
+    const effectiveExitUntil = Math.min(
+      Number(state.until || latest.n),
+      Number(state.requestedAtSweep || latest.n) + 1
+    );
+    if (Number(latest.n) <= effectiveExitUntil) {
+      console.log("EXIT_OFFER_LIVE");
+      process.exit(0);
+    }
+    if (state.closingShadowId) {
+      await setState({
+        state: "idle",
+        cooldownUntilSweep: Number(latest.n) + 1,
+        realizedScoreEst: Number(state.realizedScoreEst || 0),
+        uncertainEntries: uncertainEntries(state),
+        lastShadowExitExpiredId: state.id
+      });
+      console.log(`SHADOW_EXIT_EXPIRED_REEVALUATE shadow=${state.closingShadowId}`);
+      process.exit(0);
+    }
+    const open = restoreOpenFromExitState(state, latest.n, "exit_offer_expired");
+    await setState(open);
+    console.log("EXIT_EXPIRED_REEVALUATE");
+    state = open;
   }
-  const effectiveExitUntil = Math.min(
-    Number(state.until || latest.n),
-    Number(state.requestedAtSweep || latest.n) + 1
-  );
-  if (Number(latest.n) <= effectiveExitUntil) {
-    console.log("EXIT_OFFER_LIVE");
-    process.exit(0);
-  }
-  if (state.closingShadowId) {
-    await setState({
-      state: "idle",
-      cooldownUntilSweep: Number(latest.n) + 1,
-      realizedScoreEst: Number(state.realizedScoreEst || 0),
-      uncertainEntries: uncertainEntries(state),
-      lastShadowExitExpiredId: state.id
-    });
-    console.log(`SHADOW_EXIT_EXPIRED_REEVALUATE shadow=${state.closingShadowId}`);
-    process.exit(0);
-  }
-  const open = restoreOpenFromExitState(state, latest.n, "exit_offer_expired");
-  await setState(open);
-  console.log("EXIT_EXPIRED_REEVALUATE");
-  state = open;
 }
 
 if (state.state === "exit_accepted") {
