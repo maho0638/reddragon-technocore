@@ -1886,6 +1886,87 @@ function applyRealNvdaSignal(decision, signal, race, distinct, latest) {
   };
 }
 
+function applyRankObjectiveGate(decision, race, signal, latest) {
+  if (!decision || decision.action !== "enter") return decision;
+
+  const gap = Number(race?.leaderGap);
+  if (!Number.isFinite(gap) || gap <= 0) return decision;
+
+  const px = Number(latest?.px);
+  const side = String(decision.side || "");
+  if (!Number.isFinite(px) || px <= 0 || !["buy", "sell"].includes(side)) return null;
+
+  const confidence = clamp(Number(decision.confidence) || 0.5, 0, 1);
+  const trend = multiTimeframeTrend(signal || {});
+  const alignedStrong =
+    (side === "buy" && trend.strongUp) ||
+    (side === "sell" && trend.strongDown);
+  const alignedVeryStrong =
+    (side === "buy" && trend.veryStrongUp) ||
+    (side === "sell" && trend.veryStrongDown);
+
+  const hours = Number(race?.hoursRemaining);
+  const mustHaveRealConfirmation =
+    gap >= 750 &&
+    Number.isFinite(hours) &&
+    hours <= ALL_IN_RACE_HOURS;
+
+  // When the race gap is large and time is short, a high-confidence internal
+  // strategy score is not enough to justify a full-capital directional bet.
+  // Require a fresh, same-direction real NVDA trend before all-in sizing can run.
+  if (mustHaveRealConfirmation && (!signal?.fresh || !alignedStrong)) {
+    console.log(
+      `RANK_CONFIRM_BLOCK side=${side} gap=${gap.toFixed(2)} hLeft=${hours.toFixed(1)} conf=${confidence.toFixed(2)} fresh=${Boolean(signal?.fresh)} trend=${trend.label}`
+    );
+    return null;
+  }
+
+  // A race entry must have enough plausible price room to do more than merely
+  // pay the 2% round-trip fee. When far behind, require each new position to
+  // have enough room to recover a meaningful fraction of the leader gap.
+  // Exceptional real-NVDA continuation gets the lowest hurdle; weak/fallback
+  // signals must offer materially more upside before they are allowed to go all-in.
+  let captureShare =
+    confidence >= 0.97 && alignedVeryStrong ? 0.07 :
+    confidence >= 0.94 && alignedStrong ? 0.10 :
+    0.16;
+
+  if (Number.isFinite(hours) && hours <= 36) captureShare += 0.04;
+  if (Number.isFinite(hours) && hours <= 18) captureShare += 0.06;
+
+  const capital = Math.max(1000, Number(race?.realizedCapital || 10000));
+  const maxQty = clamp(capital / (px * 1.035), 0.1, 60);
+  const roundTripFeeMove = 0.02 * px;
+  const catchupMove = (gap * captureShare) / maxQty;
+  const requiredRoom = roundTripFeeMove + Math.max(0.55, catchupMove);
+
+  const target = side === "buy"
+    ? (px <= RANGE_BREAK_HIGH ? 234.5 : 242)
+    : (px >= RANGE_BREAK_LOW ? 220.5 : 212.5);
+  const targetRoom = Math.abs(target - px);
+
+  if (targetRoom + 1e-9 < requiredRoom) {
+    console.log(
+      `RANK_UPSIDE_BLOCK side=${side} px=${px.toFixed(2)} target=${target.toFixed(2)} room=${targetRoom.toFixed(2)} need=${requiredRoom.toFixed(2)} fee=${roundTripFeeMove.toFixed(2)} catchup=${catchupMove.toFixed(2)} share=${captureShare.toFixed(2)} gap=${gap.toFixed(2)} maxQty=${maxQty.toFixed(2)} conf=${confidence.toFixed(2)} trend=${trend.label}`
+    );
+    return null;
+  }
+
+  console.log(
+    `RANK_UPSIDE_PASS side=${side} room=${targetRoom.toFixed(2)} need=${requiredRoom.toFixed(2)} share=${captureShare.toFixed(2)} gap=${gap.toFixed(2)} conf=${confidence.toFixed(2)} trend=${trend.label}`
+  );
+  return {
+    ...decision,
+    reason: String(decision.reason || "entry") + "+rank_upside",
+    rankObjective: {
+      captureShare,
+      targetRoom,
+      requiredRoom,
+      catchupMove
+    }
+  };
+}
+
 function applyRaceSizing(decision, race, latestPx) {
   if (!decision || decision.action !== "enter") return decision;
   let qty = Number(decision.qty);
@@ -2007,6 +2088,38 @@ if (raceSelftest) {
     { n:1824, px:228.50 }
   );
   if (!(flipBreakout?.qty === 35)) throw new Error("RACE_SELFTEST_RECENT_FLIP_BREAKOUT");
+  const rankWeakBlocked = applyRankObjectiveGate(
+    { action:"enter", side:"buy", qty:40, confidence:0.90, reason:"weak_fallback" },
+    { leaderGap:1400, hoursRemaining:60, realizedCapital:10000 },
+    { fresh:true, move5:0.02, move15:0.10, move30:0.15, move60:0.20, move240:0.30 },
+    { px:227.30 }
+  );
+  if (rankWeakBlocked !== null) throw new Error("RACE_SELFTEST_RANK_WEAK_NOT_BLOCKED");
+  const rankMixedHighConfidenceBlocked = applyRankObjectiveGate(
+    { action:"enter", side:"sell", qty:40, confidence:0.97, reason:"internal_high_conf" },
+    { leaderGap:1400, hoursRemaining:60, realizedCapital:10000 },
+    { fresh:true, move5:-0.09, move15:-0.15, move30:-0.25, move60:-0.15, move240:0.51 },
+    { px:231.15 }
+  );
+  if (rankMixedHighConfidenceBlocked !== null) throw new Error("RACE_SELFTEST_RANK_MIXED_ALL_IN_NOT_BLOCKED");
+  const rankStrongSellAllowed = applyRankObjectiveGate(
+    { action:"enter", side:"sell", qty:40, confidence:0.97, reason:"confirmed_short" },
+    { leaderGap:1400, hoursRemaining:60, realizedCapital:10000 },
+    { fresh:true, move5:-0.25, move15:-0.55, move30:-0.80, move60:-1.10, move240:-2.80 },
+    { px:231.15 }
+  );
+  if (!(rankStrongSellAllowed?.action === "enter" && String(rankStrongSellAllowed.reason).includes("rank_upside"))) {
+    throw new Error("RACE_SELFTEST_RANK_STRONG_SELL_BLOCKED");
+  }
+  const rankVeryStrongAllowed = applyRankObjectiveGate(
+    { action:"enter", side:"buy", qty:40, confidence:0.98, reason:"strong_breakout" },
+    { leaderGap:1400, hoursRemaining:60, realizedCapital:10000 },
+    { fresh:true, move5:0.35, move15:0.80, move30:1.20, move60:1.60, move240:3.20 },
+    { px:234.60 }
+  );
+  if (!(rankVeryStrongAllowed?.action === "enter" && String(rankVeryStrongAllowed.reason).includes("rank_upside"))) {
+    throw new Error("RACE_SELFTEST_RANK_VERY_STRONG_BLOCKED");
+  }
   const allInRace = { leaderGap: 1700, timeRemainingFrac: 0.25, hoursRemaining: 60, realizedCapital: 10000 };
   if (!allInRaceMode(allInRace) || allInRaceMode({ leaderGap: -1, hoursRemaining: 60 }) || allInRaceMode({ leaderGap: 100, hoursRemaining: 80 })) {
     throw new Error("RACE_SELFTEST_ALL_IN_MODE");
@@ -4574,7 +4687,8 @@ const realConfirmedDecision = applyRealNvdaSignal(
   latest
 );
 const calendarDecision = applyCalendarRiskGate(realConfirmedDecision, realNvdaSignal, race, catalyst);
-const sizedDecision = applyRaceSizing(calendarDecision, race, latest.px);
+const rankDecision = applyRankObjectiveGate(calendarDecision, race, realNvdaSignal, latest);
+const sizedDecision = applyRaceSizing(rankDecision, race, latest.px);
 const riskDecision = applyUncertainRiskCap(sizedDecision, state, latest.px, race);
 const decision = applyRecentUncertainFlipCap(riskDecision, state, latest);
 if (decision?.action === "enter") {
@@ -4587,7 +4701,8 @@ if (decision?.action === "enter") {
   if (!tacticalDecision && !fallbackDecision && !realConfirmedDecision) noTradeReason = "no_signal";
   else if (fallbackDecision && !realConfirmedDecision) noTradeReason = "real_nvda_veto";
   else if (realConfirmedDecision && !calendarDecision) noTradeReason = "calendar_block";
-  else if (calendarDecision && !sizedDecision) noTradeReason = "sizing_block";
+  else if (calendarDecision && !rankDecision) noTradeReason = "rank_upside_block";
+  else if (rankDecision && !sizedDecision) noTradeReason = "sizing_block";
   else if (sizedDecision && !riskDecision) noTradeReason = "uncertain_risk";
   else if (riskDecision && !decision) noTradeReason = "recent_flip_guard";
   else if (decision && decision.action !== "enter") noTradeReason = `strategy_${String(decision.action || decision.reason || "hold")}`;
