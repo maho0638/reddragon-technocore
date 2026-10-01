@@ -1583,6 +1583,10 @@ function finalChaseEntry(signal, latest, race, catalyst, distinct = []) {
     return null;
   }
 
+  const jobsEvent = MAJOR_CATALYSTS.find((event) => event.name === "US_JOBS");
+  const jobsReleasePassed = jobsEvent && Date.now() >= Number(jobsEvent.at);
+  const jobsPostWindowPassed = jobsEvent && Date.now() > Number(jobsEvent.at) + Number(jobsEvent.postMin || 60) * 60000;
+
   if (!side && fresh && Math.abs(bias) >= FINAL_CHASE_STRONG_BIAS) {
     side = bias > 0 ? "buy" : "sell";
     reason = "final_chase_directional_bias";
@@ -1592,6 +1596,32 @@ function finalChaseEntry(signal, latest, race, catalyst, distinct = []) {
     side = bias > 0 ? "buy" : "sell";
     reason = "final_chase_forced_bias";
     confidence = 0.98;
+  }
+
+  // Hard execution deadline: once the payroll reaction window has passed, do
+  // not remain flat while trailing badly. Use the best live directional evidence
+  // available and submit a full-capital target. This guarantees an order attempt,
+  // though actual settlement still depends on venue liquidity/referee rules.
+  if (!side && fresh && jobsReleasePassed && jobsPostWindowPassed && hours <= FINAL_CHASE_FORCE_HOURS) {
+    let forceBias = bias;
+    if (Math.abs(forceBias) <= 0.01) {
+      const sessionMove = Number(signal?.px) - Number(signal?.previousClose);
+      if (Number.isFinite(sessionMove) && Math.abs(sessionMove) > 0.01) {
+        forceBias = Math.sign(sessionMove) * 0.02;
+      }
+    }
+    if (Math.abs(forceBias) <= 0.01 && Array.isArray(distinct) && distinct.length >= 2) {
+      const lastMove = Number(distinct.at(-1)?.px) - Number(distinct.at(-2)?.px);
+      if (Number.isFinite(lastMove) && Math.abs(lastMove) > 0.001) {
+        forceBias = Math.sign(lastMove) * 0.02;
+      }
+    }
+    if (Math.abs(forceBias) > 0.01) {
+      side = forceBias > 0 ? "buy" : "sell";
+      reason = "final_chase_post_jobs_force";
+      confidence = 0.97;
+      console.log(`FINAL_CHASE_FORCE_AFTER_JOBS side=${side} bias=${forceBias.toFixed(2)} gap=${gap.toFixed(2)} hLeft=${hours.toFixed(1)}`);
+    }
   }
 
   if (!side && hours <= 24 && Math.abs(bias) > 0.01) {
@@ -2261,6 +2291,13 @@ if (raceSelftest) {
   if (!(chaseForced?.side === "buy" && String(chaseForced.reason).includes("final_chase"))) {
     throw new Error("RACE_SELFTEST_FINAL_CHASE_FORCED");
   }
+  const chaseRankOverride = applyRankObjectiveGate(
+    { action:"enter", side:"buy", qty:60, confidence:0.98, reason:"final_chase_forced_bias", finalChase:true },
+    { leaderGap:1400, hoursRemaining:40, realizedCapital:10000 },
+    { fresh:true, move5:0.04, move15:0.08, move30:0.18, move60:0.30, move240:0.70 },
+    { px:231 }
+  );
+  if (!(chaseRankOverride?.action === "enter")) throw new Error("RACE_SELFTEST_FINAL_CHASE_RANK_OVERRIDE");
   const pnlRangeLong = feasibleCloseNowPnlRange({
     realizedScoreEst: 0,
     uncertainEntries:[{ kind:"position_shadow", id:"pnl-long", side:"buy", qty:10, entryPx:220, entryFeeEst:22, confirmedOutcome:"settled", fromSweep:1 }]
