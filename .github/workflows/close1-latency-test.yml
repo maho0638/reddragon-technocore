@@ -1,0 +1,57 @@
+name: Close-1 Latency Test
+on:
+  push:
+    branches: [fix/close1-sweep-latency-20261001]
+    paths:
+      - "scripts/close1-trader-runner.mjs"
+      - ".github/workflows/close1-latency-test.yml"
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: "24"
+          package-manager-cache: false
+      - name: Selftest
+        env:
+          TECHNOCORE_PRIVATE_KEY_PKCS8_B64: ${{ secrets.TECHNOCORE_PRIVATE_KEY_PKCS8_B64 }}
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          CLOSE1_EXECUTE: "false"
+          CLOSE1_STATE_SELFTEST: "false"
+          CLOSE1_RACE_SELFTEST: "true"
+        run: node scripts/close1-trader-runner.mjs
+      - name: Timed dry run
+        env:
+          TECHNOCORE_PRIVATE_KEY_PKCS8_B64: ${{ secrets.TECHNOCORE_PRIVATE_KEY_PKCS8_B64 }}
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          CLOSE1_EXECUTE: "false"
+          CLOSE1_STATE_SELFTEST: "false"
+          CLOSE1_RACE_SELFTEST: "false"
+        shell: bash
+        run: |
+          start="$(date +%s)"
+          node scripts/close1-trader-runner.mjs
+          end="$(date +%s)"
+          echo "DRY_RUN_SECONDS=$((end-start))"
+      - name: Verify sweep alignment formula
+        shell: bash
+        run: |
+          for now in 0 4 5 44 45 46 299 300 344 345 346; do
+            base=$(( (now / 300) * 300 + 45 ))
+            if [[ "$base" -le "$now" ]]; then base=$((base + 300)); fi
+            sleep_for=$((base-now))
+            if [[ "$sleep_for" -lt 1 || "$sleep_for" -gt 300 ]]; then
+              echo "bad alignment now=$now target=$base sleep=$sleep_for"
+              exit 1
+            fi
+          done
+          echo "SWEEP_ALIGNMENT_SELFTEST_OK"
