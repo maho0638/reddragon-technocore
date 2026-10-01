@@ -1862,6 +1862,12 @@ function applyRaceSizing(decision, race, latestPx) {
 }
 
 if (raceSelftest) {
+  if (Math.abs(minimumTakerFillQty({ race:{ allIn:true } }, 42, false) - 14.7) > 1e-9) {
+    throw new Error("RACE_SELFTEST_ALL_IN_MIN_MEANINGFUL_TAKER_FILL");
+  }
+  if (Math.abs(minimumTakerFillQty({ race:{ allIn:false } }, 42, false) - 16.8) > 1e-9) {
+    throw new Error("RACE_SELFTEST_NORMAL_TAKER_FILL");
+  }
   const allInRace = { leaderGap: 1700, timeRemainingFrac: 0.25, hoursRemaining: 60, realizedCapital: 10000 };
   if (!allInRaceMode(allInRace) || allInRaceMode({ leaderGap: -1, hoursRemaining: 60 }) || allInRaceMode({ leaderGap: 100, hoursRemaining: 80 })) {
     throw new Error("RACE_SELFTEST_ALL_IN_MODE");
@@ -2640,6 +2646,14 @@ function acceptableTakerExitQuote(side, offerPx, refPx) {
   return edge >= -maxAdverse - 1e-9;
 }
 
+function minimumTakerFillQty(decision, desiredQty, closingExit) {
+  const desired = Number(desiredQty);
+  if (!Number.isFinite(desired) || desired <= 0) return Infinity;
+  if (closingExit) return Math.max(0.1, desired * PARTIAL_EXIT_MIN_FRACTION);
+  if (decision?.race?.allIn) return Math.max(10, desired * 0.35);
+  return Math.max(0.1, desired * 0.40);
+}
+
 async function findReliableOpposingOffer(decision, latest) {
   const desiredSide = String(decision?.side || "");
   const desiredQty = Number(decision?.qty);
@@ -2692,11 +2706,7 @@ async function findReliableOpposingOffer(decision, latest) {
   }
 
   const oppositeMakerSide = desiredSide === "buy" ? "sell" : "buy";
-  const minQty = closingExit
-    ? Math.max(0.1, desiredQty * PARTIAL_EXIT_MIN_FRACTION)
-    : decision?.race?.allIn
-      ? 0.1
-      : Math.max(0.1, desiredQty * 0.40);
+  const minQty = minimumTakerFillQty(decision, desiredQty, closingExit);
   const maxQty = Math.min(60, desiredQty);
   const refPx = Number(latest.px);
   const candidates = [];
