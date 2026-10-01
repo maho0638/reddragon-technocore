@@ -2262,6 +2262,36 @@ if (raceSelftest) {
     close1MissedRanges,
     entries: seqMissedDiag
   }));
+
+  const positionDiagMessages = await readExport("d-close1-positions");
+  const positionDiag = [];
+  const positionTargetSweeps = new Set([1211,1212,1213,1218,1219,1220,1229,1230,1231,1237,1238,1239,1244,1245,1246,1284,1285,1286,1287,1403,1404,1405,1406,1471,1472,1473,1516,1517,1518,1519]);
+  const peerKeys = new Set([
+    did,
+    "did:key:z6MkqK9A8b9qAVtX",
+    "did:key:z6Mkpkk2j7ww3qBU",
+    "did:key:z6MkgxsvfrJneVqP",
+    "did:key:z6MktdNSv7Z1DWFU",
+    "did:key:z6MkkbLdcFRwTVbnfQp7Dp5ov8VsbbuDRURUub6QTBNYRg1X",
+    "did:key:z6MkqnaUpPZRdQuPfthBjMeeW7JRwKB5FbXVVuQyhzQ27uMT"
+  ]);
+  for (const msg of positionDiagMessages) {
+    const body = parseBody(msg);
+    if (body?.t !== "positions" || !positionTargetSweeps.has(Number(body.n))) continue;
+    const hits = (Array.isArray(body.top) ? body.top : []).filter((row) => peerKeys.has(String(row?.[0] || "")));
+    positionDiag.push({ n:Number(body.n), open:body.open, longs:body.longs, shorts:body.shorts, hits, topCount:Array.isArray(body.top)?body.top.length:0 });
+  }
+  console.log("POSITION_TARGET_DIAG " + JSON.stringify(positionDiag));
+
+  const pnlDiagMessages = await readExport("d-close1-pnl");
+  const pnlDiag = [];
+  for (const msg of pnlDiagMessages) {
+    const body = parseBody(msg);
+    if (body?.t !== "pnl" || !positionTargetSweeps.has(Number(body.n))) continue;
+    const hit = (Array.isArray(body.top) ? body.top : []).find((row) => String(row?.[0] || "") === did) || null;
+    pnlDiag.push({ n:Number(body.n), mark:body.mark, hit, topCount:Array.isArray(body.top)?body.top.length:0 });
+  }
+  console.log("PNL_TARGET_DIAG " + JSON.stringify(pnlDiag));
   console.log("RACE_SIZING_SELFTEST_OK");
   process.exit(0);
 }
