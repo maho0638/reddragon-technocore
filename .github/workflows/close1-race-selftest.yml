@@ -1,4 +1,5 @@
 name: Close-1 Race Selftest
+# temporary all-in branch validation rerun
 on:
   push:
     branches: [main]
