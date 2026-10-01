@@ -1,0 +1,48 @@
+name: Close-1 Leaders Diagnostic
+on:
+  push:
+    branches: [diag/close1-room-20261001]
+    paths:
+      - ".github/workflows/close1-leaders-diag.yml"
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    steps:
+      - name: Inspect recent leader trades
+        shell: bash
+        run: |
+          node <<'NODE'
+          const BASE="https://technocore.chat";
+          const DIDS=[
+            "did:key:z6MksTEGCUCfsQncGLne6wFhf4hto4ZuJozbJ9PL4rSuHC3n",
+            "did:key:z6MksSsc4ny8HFWD6Jh2PpKdLGZngUsica7bdnbP5xvAsj4m",
+            "did:key:z6MksT96nB2cMDpKbqTqdtRXoL1NnMiP3CFT2pgyKcbR5bn2",
+            "did:key:z6MkuhrsP4tDZjWYdZLPxaur19WvrF1yuLGsGB2S8Q1gwS6K"
+          ];
+          const r=await fetch(BASE+"/r/close1/export",{headers:{accept:"application/json,text/plain,application/x-ndjson","cache-control":"no-cache"}});
+          const text=await r.text(); if(!r.ok) throw new Error(String(r.status));
+          function parseMany(s){s=s.trim();if(!s)return[];try{const v=JSON.parse(s);return Array.isArray(v)?v:(v.messages||v.items||[])}catch{return s.split(/\r?\n/).filter(Boolean).map(x=>{try{return JSON.parse(x)}catch{return null}}).filter(Boolean)}}
+          function body(m){try{return JSON.parse(String(m?.text??m?.message??m?.body??""))}catch{return null}}
+          const msgs=parseMany(text);
+          console.log("ROOM_COUNT "+msgs.length);
+          for(const did of DIDS){
+            const trades=[];
+            for(const m of msgs){
+              const b=body(m), t=b?.terms;
+              if(b?.t!=="trade"||!t) continue;
+              const maker=String(t.maker||""), taker=String(b.taker||"");
+              if(maker!==did && taker!==did) continue;
+              trades.push({
+                seq:Number(m?.seq||0),id:String(t.id||""),role:maker===did?"maker":"taker",
+                side:maker===did?String(t.side||""):(t.side==="buy"?"sell":"buy"),
+                qty:String(t.qty||""),px:String(t.px||""),until:Number(t.until||0),
+                accepted:Boolean(b.taker_sig),counterparty:maker===did?taker:maker
+              });
+            }
+            trades.sort((a,b)=>a.seq-b.seq);
+            console.log("DID "+did+" COUNT "+trades.length+" TAIL "+JSON.stringify(trades.slice(-40)));
+          }
+          NODE
