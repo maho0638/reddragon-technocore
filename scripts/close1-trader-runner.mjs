@@ -22,6 +22,7 @@ const CONFIRMED_SHADOW_EXIT_MIN_NET = 10;
 const CONFIRMED_SHADOW_HARD_TAKE_NET = 20;
 const FINAL_DEFENSIVE_HOURS = 36;
 const FINAL_NO_NEW_ENTRY_HOURS = 12;
+// Final catch-up mode: maximize ranking upside while the referee still enforces no leverage.
 const ALL_IN_RACE_HOURS = 72;
 const ALL_IN_MIN_CONFIDENCE = 0.84;
 const ALL_IN_FINAL_BLOCK_HOURS = 1;
