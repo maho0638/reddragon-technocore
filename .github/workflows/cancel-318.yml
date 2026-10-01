@@ -1,0 +1,16 @@
+name: Cancel stale trader 318
+on:
+  push:
+    branches: [diag/close1-room-20261001]
+    paths:
+      - ".github/workflows/cancel-318.yml"
+permissions:
+  actions: write
+  contents: read
+jobs:
+  cancel:
+    runs-on: ubuntu-24.04
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run cancel 36915920340 --repo "${{ github.repository }}"
