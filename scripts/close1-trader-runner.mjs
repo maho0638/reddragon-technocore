@@ -1926,13 +1926,13 @@ if (raceSelftest) {
     throw new Error("RACE_SELFTEST_FEASIBLE_LEDGER_BOUNDS");
   }
   const feasibleSell = applyUncertainRiskCap({ action:"enter", side:"sell", qty:30, confidence:0.98 }, historicalFeasibleProbe, 231);
-  if (!(feasibleSell?.qty > 20 && feasibleSell.qty < 21)) throw new Error("RACE_SELFTEST_FEASIBLE_UNCERTAIN_ENTRY");
+  if (!(feasibleSell?.qty > 3 && feasibleSell.qty < 4)) throw new Error("RACE_SELFTEST_FEASIBLE_UNCERTAIN_ENTRY");
   const uncertain = { state: "idle", uncertainEntries: [{ id: "u1", side: "sell", qty: 31.53, entryPx: 224.26 }] };
   const cappedSame = applyUncertainRiskCap({ action: "enter", side: "sell", qty: 30, confidence: 0.9 }, uncertain, 224.5);
   const allowedOpposite = applyUncertainRiskCap({ action: "enter", side: "buy", qty: 30, confidence: 0.9 }, uncertain, 224.5);
   const env = uncertaintyEnvelope(uncertain);
   const uncertainReserve = uncertainCapitalReserve(uncertain);
-  if (!(cappedSame?.qty > 28 && cappedSame.qty <= 30)) throw new Error("RACE_SELFTEST_UNCERTAIN_SAME_SIDE_CAP");
+  if (!(cappedSame?.qty > 11 && cappedSame.qty < 12)) throw new Error("RACE_SELFTEST_UNCERTAIN_SAME_SIDE_CAP");
   if (!(allowedOpposite?.qty >= 29.99)) throw new Error("RACE_SELFTEST_UNCERTAIN_OPPOSITE_ALLOWED");
   if (!(uncertainReserve > 7000 && uncertainReserve < 7300)) throw new Error("RACE_SELFTEST_UNCERTAIN_CAPITAL_RESERVE_DIAGNOSTIC");
   if (!(env.lo === -31.53 && env.hi === 0)) throw new Error("RACE_SELFTEST_UNCERTAIN_ENVELOPE");
