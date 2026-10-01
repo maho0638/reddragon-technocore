@@ -27,6 +27,12 @@ const FINAL_NO_NEW_ENTRY_HOURS = 12;
 const ALL_IN_RACE_HOURS = 72;
 const ALL_IN_MIN_CONFIDENCE = 0.84;
 const ALL_IN_FINAL_BLOCK_HOURS = 1;
+const FINAL_CHASE_HOURS = 60;
+const FINAL_CHASE_FORCE_HOURS = 48;
+const FINAL_CHASE_EVENT_LOOKAHEAD_HOURS = 18;
+const FINAL_CHASE_MIN_BIAS = 0.12;
+const FINAL_CHASE_STRONG_BIAS = 0.35;
+const FINAL_CHASE_JOBS_IMPULSE = 0.35;
 const CORE_RANGE_LOW = 221;
 const CORE_RANGE_HIGH = 233;
 const RANGE_BREAK_LOW = 220.5;
@@ -1500,6 +1506,115 @@ function directionalFeeRoom(side, px) {
   return Math.abs(target - p) >= 0.02 * p + 0.55;
 }
 
+function finalChaseBias(signal, distinct = []) {
+  const frames = [
+    ["move5", 0.12, 1],
+    ["move15", 0.25, 2],
+    ["move30", 0.40, 3],
+    ["move60", 0.65, 4],
+    ["move240", 1.20, 5]
+  ];
+  let weighted = 0;
+  let weight = 0;
+  for (const [key, scale, w] of frames) {
+    const value = Number(signal?.[key]);
+    if (!Number.isFinite(value)) continue;
+    weighted += clamp(value / scale, -2, 2) * w;
+    weight += w;
+  }
+  let bias = weight > 0 ? weighted / weight : 0;
+
+  if (Math.abs(bias) < 0.03 && Array.isArray(distinct) && distinct.length >= 12) {
+    const refs = distinct.slice(-24);
+    const first = Number(refs[0]?.px);
+    const last = Number(refs.at(-1)?.px);
+    if (Number.isFinite(first) && Number.isFinite(last) && first > 0) {
+      const move = last - first;
+      bias = clamp(move / Math.max(0.25, 0.004 * last), -1, 1) * 0.25;
+    }
+  }
+  return clamp(bias, -2, 2);
+}
+
+function finalChaseEntry(signal, latest, race, catalyst, distinct = []) {
+  const gap = Number(race?.leaderGap);
+  const hours = Number(race?.hoursRemaining);
+  const px = Number(latest?.px);
+  if (!Number.isFinite(gap) || gap <= 0 || !Number.isFinite(hours) || hours > FINAL_CHASE_HOURS) return null;
+  if (!Number.isFinite(px) || px <= 0 || hours <= ALL_IN_FINAL_BLOCK_HOURS) return null;
+  if (catalyst?.blockNewEntries) return null;
+
+  const trend = multiTimeframeTrend(signal || {});
+  const bias = finalChaseBias(signal, distinct);
+  const fresh = Boolean(signal?.fresh);
+  const nextJobsHours =
+    catalyst?.next?.name === "US_JOBS"
+      ? (Number(catalyst.next.at) - Date.now()) / 3600000
+      : null;
+  const jobsSoon = Number.isFinite(nextJobsHours) && nextJobsHours >= 0 && nextJobsHours <= FINAL_CHASE_EVENT_LOOKAHEAD_HOURS;
+  const postJobs = catalyst?.active?.name === "US_JOBS" && catalyst?.active?.phase === "post";
+
+  let side = null;
+  let reason = null;
+  let confidence = 0.99;
+
+  if (fresh && (trend.strongUp || trend.strongDown)) {
+    side = trend.strongUp ? "buy" : "sell";
+    reason = postJobs ? "final_chase_jobs_confirmed" : "final_chase_strong_trend";
+  } else if (postJobs && fresh) {
+    const m5 = Number(signal?.move5);
+    const m15 = Number(signal?.move15);
+    const sameFastDirection =
+      Number.isFinite(m5) && Number.isFinite(m15) &&
+      Math.sign(m5) !== 0 && Math.sign(m5) === Math.sign(m15);
+    if (
+      Number.isFinite(m5) &&
+      (Math.abs(m5) >= 0.75 || (Math.abs(m5) >= FINAL_CHASE_JOBS_IMPULSE && sameFastDirection))
+    ) {
+      side = m5 > 0 ? "buy" : "sell";
+      reason = "final_chase_jobs_impulse";
+    }
+  }
+
+  if (!side && jobsSoon && hours > FINAL_CHASE_FORCE_HOURS && Math.abs(bias) < FINAL_CHASE_STRONG_BIAS) {
+    console.log(
+      `FINAL_CHASE_WAIT_JOBS bias=${bias.toFixed(2)} gap=${gap.toFixed(2)} hLeft=${hours.toFixed(1)} jobsH=${nextJobsHours.toFixed(1)}`
+    );
+    return null;
+  }
+
+  if (!side && fresh && Math.abs(bias) >= FINAL_CHASE_STRONG_BIAS) {
+    side = bias > 0 ? "buy" : "sell";
+    reason = "final_chase_directional_bias";
+  }
+
+  if (!side && hours <= FINAL_CHASE_FORCE_HOURS && Math.abs(bias) >= FINAL_CHASE_MIN_BIAS) {
+    side = bias > 0 ? "buy" : "sell";
+    reason = "final_chase_forced_bias";
+    confidence = 0.98;
+  }
+
+  if (!side && hours <= 24 && Math.abs(bias) > 0.01) {
+    side = bias > 0 ? "buy" : "sell";
+    reason = "final_chase_last_day";
+    confidence = 0.97;
+  }
+
+  if (!side) return null;
+
+  console.log(
+    `FINAL_CHASE_ENTRY side=${side} reason=${reason} bias=${bias.toFixed(2)} trend=${trend.label} gap=${gap.toFixed(2)} hLeft=${hours.toFixed(1)} px=${px.toFixed(2)}`
+  );
+  return {
+    action: "enter",
+    side,
+    qty: 60,
+    confidence,
+    reason,
+    finalChase: true
+  };
+}
+
 function activeContestEntry(signal, latest, race, catalyst) {
   if (!signal?.fresh) return null;
   const allIn = allInRaceMode(race);
@@ -1753,7 +1868,11 @@ function applyCalendarRiskGate(decision, signal, race, catalyst) {
     return null;
   }
   const shape = directionalShape(signal);
-  if (catalyst?.requireVeryStrong && !(shape.continuationUp || shape.continuationDown)) {
+  const finalJobsImpulse =
+    String(decision?.reason || "").startsWith("final_chase_jobs_") &&
+    catalyst?.active?.name === "US_JOBS" &&
+    catalyst?.active?.phase === "post";
+  if (catalyst?.requireVeryStrong && !(shape.continuationUp || shape.continuationDown) && !finalJobsImpulse) {
     console.log(`CATALYST_POST_WAIT name=${catalyst.active?.name || "unknown"} trend=${trend.label} ratio=${trend.ratio.toFixed(2)} allIn=${allIn}`);
     return null;
   }
@@ -1943,9 +2062,14 @@ function applyRankObjectiveGate(decision, race, signal, latest) {
   // When the race gap is large and time is short, a high-confidence internal
   // strategy score is not enough to justify a full-capital directional bet.
   // Require a fresh, same-direction real NVDA trend before all-in sizing can run.
-  if (mustHaveRealConfirmation && (!signal?.fresh || !alignedStrong)) {
+  const finalChase = Boolean(decision?.finalChase) || String(decision?.reason || "").startsWith("final_chase_");
+  const chaseBias = finalChaseBias(signal || {}, []);
+  const chaseAligned =
+    (side === "buy" && chaseBias > 0) ||
+    (side === "sell" && chaseBias < 0);
+  if (mustHaveRealConfirmation && (!signal?.fresh || (!alignedStrong && !(finalChase && chaseAligned)))) {
     console.log(
-      `RANK_CONFIRM_BLOCK side=${side} gap=${gap.toFixed(2)} hLeft=${hours.toFixed(1)} conf=${confidence.toFixed(2)} fresh=${Boolean(signal?.fresh)} trend=${trend.label}`
+      `RANK_CONFIRM_BLOCK side=${side} gap=${gap.toFixed(2)} hLeft=${hours.toFixed(1)} conf=${confidence.toFixed(2)} fresh=${Boolean(signal?.fresh)} trend=${trend.label} chase=${finalChase} bias=${chaseBias.toFixed(2)}`
     );
     return null;
   }
@@ -1974,11 +2098,16 @@ function applyRankObjectiveGate(decision, race, signal, latest) {
     : (px >= RANGE_BREAK_LOW ? 220.5 : 212.5);
   const targetRoom = Math.abs(target - px);
 
-  if (targetRoom + 1e-9 < requiredRoom) {
+  if (targetRoom + 1e-9 < requiredRoom && !finalChase) {
     console.log(
       `RANK_UPSIDE_BLOCK side=${side} px=${px.toFixed(2)} target=${target.toFixed(2)} room=${targetRoom.toFixed(2)} need=${requiredRoom.toFixed(2)} fee=${roundTripFeeMove.toFixed(2)} catchup=${catchupMove.toFixed(2)} share=${captureShare.toFixed(2)} gap=${gap.toFixed(2)} maxQty=${maxQty.toFixed(2)} conf=${confidence.toFixed(2)} trend=${trend.label}`
     );
     return null;
+  }
+  if (targetRoom + 1e-9 < requiredRoom && finalChase) {
+    console.log(
+      `RANK_UPSIDE_OVERRIDE side=${side} room=${targetRoom.toFixed(2)} need=${requiredRoom.toFixed(2)} bias=${chaseBias.toFixed(2)} reason=${decision.reason}`
+    );
   }
 
   console.log(
@@ -2094,6 +2223,44 @@ function applyRaceSizing(decision, race, latestPx) {
 }
 
 if (raceSelftest) {
+  const chaseStrong = finalChaseEntry(
+    { fresh:true, move5:-0.25, move15:-0.55, move30:-0.80, move60:-1.00, move240:-2.20 },
+    { px:231, n:2000 },
+    { leaderGap:1400, hoursRemaining:59 },
+    { active:null, next:null, blockNewEntries:false, requireVeryStrong:false },
+    []
+  );
+  if (!(chaseStrong?.side === "sell" && chaseStrong.qty === 60 && chaseStrong.finalChase === true)) {
+    throw new Error("RACE_SELFTEST_FINAL_CHASE_STRONG");
+  }
+  const chaseWaitJobs = finalChaseEntry(
+    { fresh:true, move5:0.02, move15:-0.03, move30:-0.20, move60:-0.02, move240:0.60 },
+    { px:231, n:2000 },
+    { leaderGap:1400, hoursRemaining:59 },
+    { active:null, next:{ name:"US_JOBS", at:Date.now()+12*3600000 }, blockNewEntries:false, requireVeryStrong:false },
+    []
+  );
+  if (chaseWaitJobs !== null) throw new Error("RACE_SELFTEST_FINAL_CHASE_SHOULD_WAIT_JOBS");
+  const chaseJobsImpulse = finalChaseEntry(
+    { fresh:true, move5:0.55, move15:0.60, move30:0.20, move60:-0.10, move240:-0.40 },
+    { px:231, n:2000 },
+    { leaderGap:1400, hoursRemaining:45 },
+    { active:{ name:"US_JOBS", phase:"post" }, next:null, blockNewEntries:false, requireVeryStrong:true },
+    []
+  );
+  if (!(chaseJobsImpulse?.side === "buy" && String(chaseJobsImpulse.reason).startsWith("final_chase_jobs_"))) {
+    throw new Error("RACE_SELFTEST_FINAL_CHASE_JOBS_IMPULSE");
+  }
+  const chaseForced = finalChaseEntry(
+    { fresh:true, move5:0.04, move15:0.08, move30:0.18, move60:0.30, move240:0.70 },
+    { px:231, n:2000 },
+    { leaderGap:1400, hoursRemaining:40 },
+    { active:null, next:null, blockNewEntries:false, requireVeryStrong:false },
+    []
+  );
+  if (!(chaseForced?.side === "buy" && String(chaseForced.reason).includes("final_chase"))) {
+    throw new Error("RACE_SELFTEST_FINAL_CHASE_FORCED");
+  }
   const pnlRangeLong = feasibleCloseNowPnlRange({
     realizedScoreEst: 0,
     uncertainEntries:[{ kind:"position_shadow", id:"pnl-long", side:"buy", qty:10, entryPx:220, entryFeeEst:22, confirmedOutcome:"settled", fromSweep:1 }]
@@ -3185,7 +3352,7 @@ function scaleInDecision(openState, signal, latest, race, catalyst) {
   const directionalSupport = long
     ? Number(signal.move15) >= 0.10 && Number(signal.move30) >= 0.12
     : Number(signal.move15) <= -0.10 && Number(signal.move30) <= -0.12;
-  if (targetQty > qty + 0.09 && favorableMove >= 0.15 && directionalSupport && !fastAdverse) {
+  if (targetQty > qty + 0.09 && (allIn || favorableMove >= 0.15) && directionalSupport && !fastAdverse) {
     const realizedCapital = Math.max(1000, 10000 + Number(openState.realizedScoreEst || 0));
     const totalCap = Math.max(0, Math.min(60, realizedCapital / (px * (allIn ? 1.035 : 1.04))));
     const addQty = Math.floor(Math.min(targetQty - qty, MAKER_ENTRY_CHUNK_QTY, totalCap - qty) * 100) / 100;
@@ -3279,11 +3446,34 @@ async function postScaleIn(decision, latest, openState) {
     return true;
   }
   const match = await findReliableOpposingOffer(decision, latest);
-  if (!match) {
-    console.log(`SCALE_IN_NO_LIQUIDITY side=${decision.side} qty=${Number(decision.qty).toFixed(2)}`);
-    return false;
+  if (match) {
+    return await takeReliableOffer(match, decision, latest, openState, openState);
   }
-  return await takeReliableOffer(match, decision, latest, openState, openState);
+
+  const executionLatest = await latestRefSnapshot() || latest;
+  const makerQty = Math.min(Number(decision.qty), MAKER_ENTRY_CHUNK_QTY);
+  if (!Number.isFinite(makerQty) || makerQty < 0.1) return false;
+  const offer = makeOffer(decision.side, makerQty, executionLatest, "rd4a");
+  const preflight = {
+    state: "entry_preflight",
+    id: offer.id,
+    side: decision.side,
+    qty: makerQty,
+    targetQty: Number(openState.targetQty || Math.max(Number(openState.qty || 0) + makerQty, Number(decision.targetQty || 0))),
+    entryPx: Number(offer.terms.px),
+    until: offer.until,
+    entrySweep: Number(executionLatest.n),
+    realizedScoreEst: Number(openState.realizedScoreEst || 0),
+    uncertainEntries: uncertainEntries(openState),
+    liquidityRole: "maker",
+    priorOpen: { ...openState },
+    entryPurpose: "add"
+  };
+  await setState(preflight);
+  const posted = await signedPost(ROOM, offer.text);
+  await setState({ ...preflight, state: "entry_offer", postedSeq: posted.seq });
+  console.log(`SCALE_IN_OFFER side=${decision.side} qty=${makerQty.toFixed(2)} target=${Number(preflight.targetQty).toFixed(2)} seq=${posted.seq || "?"}`);
+  return true;
 }
 
 async function findOwnTakerAcceptance(id) {
@@ -4713,9 +4903,10 @@ const rawDecision = decide({
   latest,
   race
 });
+const finalChaseDecision = finalChaseEntry(realNvdaSignal, latest, race, catalyst, distinct);
 const activeDecision = activeContestEntry(realNvdaSignal, latest, race, catalyst);
 const aggressiveDecision = aggressiveDirectionalEntry(realNvdaSignal, latest, race, catalyst);
-const tacticalDecision = activeDecision || aggressiveDecision || tacticalRangeEntry(realNvdaSignal, latest, race, catalyst) || rawDecision;
+const tacticalDecision = finalChaseDecision || activeDecision || aggressiveDecision || tacticalRangeEntry(realNvdaSignal, latest, race, catalyst) || rawDecision;
 const fallbackDecision = controlledFallbackEntry(
   tacticalDecision,
   race,
