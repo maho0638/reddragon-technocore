@@ -22,6 +22,10 @@ const CONFIRMED_SHADOW_EXIT_MIN_NET = 10;
 const CONFIRMED_SHADOW_HARD_TAKE_NET = 20;
 const FINAL_DEFENSIVE_HOURS = 36;
 const FINAL_NO_NEW_ENTRY_HOURS = 12;
+// Final catch-up mode: maximize ranking upside while the referee still enforces no leverage.
+const ALL_IN_RACE_HOURS = 72;
+const ALL_IN_MIN_CONFIDENCE = 0.84;
+const ALL_IN_FINAL_BLOCK_HOURS = 1;
 const CORE_RANGE_LOW = 221;
 const CORE_RANGE_HIGH = 233;
 const RANGE_BREAK_LOW = 220.5;
@@ -1125,9 +1129,20 @@ function uncertainDownsideFloor(state, latestMark) {
   return floor;
 }
 
-function applyUncertainRiskCap(decision, state, latestPx) {
+function applyUncertainRiskCap(decision, state, latestPx, race = null) {
   if (!decision || decision.action !== "enter") return decision;
   if (!uncertainEntries(state).length) return decision;
+
+  const requested = Number(decision.qty);
+  const allIn = allInRaceMode(race) && Number(decision.confidence || 0) >= ALL_IN_MIN_CONFIDENCE;
+  if (allIn && Number.isFinite(requested) && requested >= 0.1) {
+    const clipped = Math.floor(Math.min(60, requested) * 100) / 100;
+    const modeled = feasibleUncertainLedger(state);
+    console.log(
+      `ALL_IN_UNCERTAIN_BYPASS requested=${requested.toFixed(2)} allowed=${clipped.toFixed(2)} states=${modeled?.reliable ? modeled.states.length : "na"} minCash=${modeled?.reliable ? modeled.minCash.toFixed(2) : "na"} referee=funds`
+    );
+    return { ...decision, qty: clipped };
+  }
 
   const modeled = feasibleUncertainLedger(state);
   const env = modeled?.reliable && modeled?.bounds
@@ -1138,7 +1153,6 @@ function applyUncertainRiskCap(decision, state, latestPx) {
     side === "buy" ? UNCERTAIN_MAX_ABS_QTY - Number(env.hi) :
     side === "sell" ? UNCERTAIN_MAX_ABS_QTY + Number(env.lo) :
     0;
-  const requested = Number(decision.qty);
   const qty = Math.min(requested, Math.max(0, directionalCapacity));
 
   if (!Number.isFinite(qty) || qty < 0.1) {
@@ -1189,6 +1203,13 @@ function raceContext({ now, pnlSnapshots, state, latest }) {
     elapsedFrac,
     hoursRemaining: remainingMs / 3600000
   };
+}
+
+function allInRaceMode(race) {
+  const gap = Number(race?.leaderGap);
+  const hours = Number(race?.hoursRemaining);
+  return Number.isFinite(gap) && gap > 0 &&
+    Number.isFinite(hours) && hours <= ALL_IN_RACE_HOURS && hours > ALL_IN_FINAL_BLOCK_HOURS;
 }
 
 // The encrypted strategy decides whether a setup is good enough to trade.
@@ -1293,10 +1314,45 @@ function directionalFeeRoom(side, px) {
   return Math.abs(target - p) >= 0.02 * p + 0.55;
 }
 
+function allInDirectionalEntry(signal, latest, race) {
+  if (!signal?.fresh || !allInRaceMode(race)) return null;
+  const px = Number(latest?.px);
+  if (!Number.isFinite(px) || px <= 0) return null;
+
+  const trend = multiTimeframeTrend(signal);
+  const ratio = Number(trend.ratio);
+  const m60 = Number(signal?.move60);
+  const m240 = Number(signal?.move240);
+
+  let side = null;
+  if (Number.isFinite(ratio) && ratio >= 0.20) side = "buy";
+  else if (Number.isFinite(ratio) && ratio <= -0.20) side = "sell";
+  else if (
+    Number.isFinite(m60) && Number.isFinite(m240) &&
+    Math.sign(m60) === Math.sign(m240) && Math.abs(m240) >= 0.80
+  ) {
+    side = m240 > 0 ? "buy" : "sell";
+  }
+  if (!side) return null;
+
+  console.log(
+    `ALL_IN_DIRECTION side=${side} ratio=${Number.isFinite(ratio) ? ratio.toFixed(2) : "na"} m60=${Number.isFinite(m60) ? m60.toFixed(2) : "na"} m240=${Number.isFinite(m240) ? m240.toFixed(2) : "na"} gap=${Number(race?.leaderGap).toFixed(2)} hLeft=${Number(race?.hoursRemaining).toFixed(1)}`
+  );
+  return {
+    action: "enter",
+    side,
+    qty: 60,
+    confidence: Math.abs(ratio) >= 0.35 ? 0.94 : 0.90,
+    reason: "all_in_rank_chase_momentum"
+  };
+}
+
 function activeContestEntry(signal, latest, race, catalyst) {
-  if (!signal?.fresh || catalyst?.blockNewEntries) return null;
+  if (!signal?.fresh) return null;
+  const allIn = allInRaceMode(race);
+  if (catalyst?.blockNewEntries && !allIn) return null;
   const hours = Number(race?.hoursRemaining);
-  if (!Number.isFinite(hours) || hours <= FINAL_NO_NEW_ENTRY_HOURS) return null;
+  if (!Number.isFinite(hours) || (hours <= FINAL_NO_NEW_ENTRY_HOURS && !allIn) || hours <= ALL_IN_FINAL_BLOCK_HOURS) return null;
   const px = Number(latest?.px);
   const gap = Number(race?.leaderGap);
   if (!Number.isFinite(px) || px <= 0) return null;
@@ -1321,7 +1377,10 @@ function activeContestEntry(signal, latest, race, catalyst) {
     : m5 <= -0.03 && (!Number.isFinite(m60) || m60 <= 0.10);
 
   const side = up ? "buy" : "sell";
-  if (!directionalFeeRoom(side, px)) return null;
+  if (!directionalFeeRoom(side, px) && !allIn) return null;
+  if (!directionalFeeRoom(side, px) && allIn) {
+    console.log(`ALL_IN_FEE_ROOM_OVERRIDE side=${side} px=${px.toFixed(2)} source=active`);
+  }
 
   const highPressure = Number.isFinite(gap) && gap >= 750;
   const qty = highPressure ? (supported ? 40 : 34) : (supported ? 30 : 24);
@@ -1337,16 +1396,17 @@ function activeContestEntry(signal, latest, race, catalyst) {
 
 function aggressiveDirectionalEntry(signal, latest, race, catalyst) {
   if (!signal?.fresh) return null;
-  if (catalyst?.blockNewEntries) return null;
+  const allIn = allInRaceMode(race);
+  if (catalyst?.blockNewEntries && !allIn) return null;
   const hours = Number(race?.hoursRemaining);
-  if (!Number.isFinite(hours) || hours <= FINAL_NO_NEW_ENTRY_HOURS) return null;
+  if (!Number.isFinite(hours) || (hours <= FINAL_NO_NEW_ENTRY_HOURS && !allIn) || hours <= ALL_IN_FINAL_BLOCK_HOURS) return null;
   const px = Number(latest?.px);
   const gap = Number(race?.leaderGap);
   if (!Number.isFinite(px) || px <= 0) return null;
 
   const s = directionalShape(signal);
   const roundTripFeeMove = 0.02 * px;
-  const viable = (target) => Math.abs(Number(target) - px) >= roundTripFeeMove + 0.55;
+  const viable = (target) => allIn || Math.abs(Number(target) - px) >= roundTripFeeMove + 0.55;
   const highPressure = Number.isFinite(gap) && gap >= 750;
   const qtyStrong = highPressure ? 38 : Number.isFinite(gap) && gap >= 350 ? 30 : 22;
   const qtyTurn = highPressure ? 30 : 20;
@@ -1433,22 +1493,26 @@ function tacticalExitDecision(openState, signal, latest, race, catalyst) {
   const favorableContinuation = short ? shape.continuationDown : shape.continuationUp;
 
   const profit = profitThresholds(openState.qty, openState.entryPx, px);
-  // Bank only meaningful fee-adjusted profit. If momentum fades after reaching
-  // a smaller but still worthwhile cushion, protect it instead of gambling it back.
-  if (net >= profit.bank) return { exit: true, reason: "bank_meaningful_profit", net, trend, profit };
+  const allIn = allInRaceMode(race);
+  // In all-in catch-up mode, let a correctly trending winner run; bank it when
+  // momentum fades or reverses. Outside catch-up mode, preserve the normal bank.
+  if (net >= profit.bank && (!allIn || fastAdverse || !favorableContinuation)) {
+    return { exit: true, reason: allIn ? "all_in_bank_on_fade" : "bank_meaningful_profit", net, trend, profit };
+  }
   if (
     net >= profit.protect &&
-    (fastAdverse || !favorableContinuation || catalyst?.active?.phase === "pre")
+    (fastAdverse || !favorableContinuation || (!allIn && catalyst?.active?.phase === "pre"))
   ) {
     return { exit: true, reason: "protect_meaningful_profit", net, trend, profit };
   }
 
-  // Cut a wrong directional thesis by price movement, not by fee-distorted net PnL.
-  if (favorableMove <= -0.80 && fastAdverse && continuationAdverse) {
-    return { exit: true, reason: "fast_directional_stop", net, trend };
+  const fastStop = allIn ? -1.80 : -0.80;
+  const slowStop = allIn ? -3.00 : -1.50;
+  if (favorableMove <= fastStop && fastAdverse && continuationAdverse) {
+    return { exit: true, reason: allIn ? "all_in_fast_reversal_stop" : "fast_directional_stop", net, trend };
   }
-  if (favorableMove <= -1.50 && continuationAdverse) {
-    return { exit: true, reason: "directional_stop", net, trend };
+  if (favorableMove <= slowStop && continuationAdverse) {
+    return { exit: true, reason: allIn ? "all_in_directional_stop" : "directional_stop", net, trend };
   }
   if (short && px >= RANGE_BREAK_HIGH && fastAdverse) return { exit: true, reason: "short_breakout_stop", net, trend };
   if (!short && px <= RANGE_BREAK_LOW && fastAdverse) return { exit: true, reason: "long_breakdown_stop", net, trend };
@@ -1469,25 +1533,28 @@ function confirmedShadowExitDecision(entry, signal, latest, race, catalyst) {
   const fastAdverse = short ? shape.fastUp : shape.fastDown;
   const continuationAdverse = short ? shape.continuationUp : shape.continuationDown;
   const profit = profitThresholds(entry.qty, entry.entryPx, px);
-  if (favorableMove <= -0.80 && fastAdverse && continuationAdverse) {
+  const allIn = allInRaceMode(race);
+  const fastStop = allIn ? -1.80 : -0.80;
+  const slowStop = allIn ? -3.00 : -1.50;
+  if (favorableMove <= fastStop && fastAdverse && continuationAdverse) {
     return { exit: true, reason: "shadow_fast_directional_stop", net, trend };
   }
-  if (favorableMove <= -1.50 && continuationAdverse) {
+  if (favorableMove <= slowStop && continuationAdverse) {
     return { exit: true, reason: "shadow_directional_stop", net, trend };
   }
-  if (net <= -120 && !favorableStrong) {
-    return { exit: true, reason: "shadow_capital_release_stop", net, trend };
+  if (net <= -120 && (!allIn || adverseStrong)) {
+    return { exit: true, reason: allIn ? "shadow_all_in_adverse_release" : "shadow_capital_release_stop", net, trend };
   }
-  if (net >= profit.bank) {
-    return { exit: true, reason: "shadow_bank_meaningful_profit", net, trend, profit };
+  if (net >= profit.bank && (!allIn || adverseStrong || !favorableStrong)) {
+    return { exit: true, reason: allIn ? "shadow_all_in_bank_on_fade" : "shadow_bank_meaningful_profit", net, trend, profit };
   }
   if (net >= profit.protect && !favorableStrong) {
     return { exit: true, reason: "shadow_protect_meaningful_profit", net, trend, profit };
   }
-  if (catalyst?.active?.phase === "pre" && net >= 0) {
+  if (!allIn && catalyst?.active?.phase === "pre" && net >= 0) {
     return { exit: true, reason: "shadow_event_protect", net, trend };
   }
-  if (Number(race?.hoursRemaining) <= FINAL_NO_NEW_ENTRY_HOURS && net >= 0) {
+  if (!allIn && Number(race?.hoursRemaining) <= FINAL_NO_NEW_ENTRY_HOURS && net >= 0) {
     return { exit: true, reason: "shadow_final_protect", net, trend };
   }
   if (short && px <= 223 && adverseStrong) return { exit: true, reason: "shadow_lower_band_reversal", net, trend };
@@ -1499,17 +1566,18 @@ function confirmedShadowExitDecision(entry, signal, latest, race, catalyst) {
 
 function tacticalRangeEntry(signal, latest, race, catalyst) {
   if (!signal?.fresh) return null;
-  if (catalyst?.blockNewEntries) return null;
+  const allIn = allInRaceMode(race);
+  if (catalyst?.blockNewEntries && !allIn) return null;
   const hours = Number(race?.hoursRemaining);
-  if (Number.isFinite(hours) && hours <= FINAL_NO_NEW_ENTRY_HOURS) return null;
+  if (Number.isFinite(hours) && ((hours <= FINAL_NO_NEW_ENTRY_HOURS && !allIn) || hours <= ALL_IN_FINAL_BLOCK_HOURS)) return null;
   const trend = multiTimeframeTrend(signal);
   if (catalyst?.requireVeryStrong && !(trend.veryStrongUp || trend.veryStrongDown)) return null;
-  if (Number.isFinite(hours) && hours <= FINAL_DEFENSIVE_HOURS && !(trend.veryStrongUp || trend.veryStrongDown)) return null;
+  if (Number.isFinite(hours) && hours <= FINAL_DEFENSIVE_HOURS && !allIn && !(trend.veryStrongUp || trend.veryStrongDown)) return null;
 
   const px = Number(latest?.px);
   if (!Number.isFinite(px) || px <= 0) return null;
   const roundTripFeeMove = 0.02 * px;
-  const viable = (target) => Math.abs(Number(target) - px) >= roundTripFeeMove + 0.75;
+  const viable = (target) => allIn || Math.abs(Number(target) - px) >= roundTripFeeMove + 0.75;
 
   if (px >= 231.5 && px <= 234.5 && trend.strongDown && viable(223)) {
     return { action: "enter", side: "sell", qty: trend.veryStrongDown ? 20 : 12, confidence: trend.veryStrongDown ? 0.97 : 0.94, reason: "upper_band_reversal" };
@@ -1529,20 +1597,28 @@ function tacticalRangeEntry(signal, latest, race, catalyst) {
 function applyCalendarRiskGate(decision, signal, race, catalyst) {
   if (!decision || decision.action !== "enter") return decision;
   const trend = multiTimeframeTrend(signal);
-  if (catalyst?.blockNewEntries) {
+  const allIn = allInRaceMode(race);
+  if (catalyst?.blockNewEntries && !allIn) {
     console.log(`CATALYST_ENTRY_BLOCK name=${catalyst.active?.name || "unknown"} phase=pre`);
     return null;
   }
+  if (catalyst?.blockNewEntries && allIn) {
+    console.log(`ALL_IN_CATALYST_OVERRIDE name=${catalyst.active?.name || "unknown"} phase=pre`);
+  }
   const shape = directionalShape(signal);
-  if (catalyst?.requireVeryStrong && !(shape.continuationUp || shape.continuationDown)) {
+  if (catalyst?.requireVeryStrong && !allIn && !(shape.continuationUp || shape.continuationDown)) {
     console.log(`CATALYST_POST_WAIT name=${catalyst.active?.name || "unknown"} trend=${trend.label} ratio=${trend.ratio.toFixed(2)}`);
     return null;
   }
-  if (Number(race?.hoursRemaining) <= FINAL_NO_NEW_ENTRY_HOURS) {
+  if (Number(race?.hoursRemaining) <= ALL_IN_FINAL_BLOCK_HOURS) {
     console.log(`FINAL_ENTRY_BLOCK hLeft=${Number(race.hoursRemaining).toFixed(1)}`);
     return null;
   }
-  if (Number(race?.hoursRemaining) <= FINAL_DEFENSIVE_HOURS && !(shape.continuationUp || shape.continuationDown)) {
+  if (Number(race?.hoursRemaining) <= FINAL_NO_NEW_ENTRY_HOURS && !allIn) {
+    console.log(`FINAL_ENTRY_BLOCK hLeft=${Number(race.hoursRemaining).toFixed(1)}`);
+    return null;
+  }
+  if (Number(race?.hoursRemaining) <= FINAL_DEFENSIVE_HOURS && !allIn && !(shape.continuationUp || shape.continuationDown)) {
     console.log(`FINAL_STRONG_ONLY hLeft=${Number(race.hoursRemaining).toFixed(1)} trend=${trend.label}`);
     return null;
   }
@@ -1672,9 +1748,13 @@ function applyRealNvdaSignal(decision, signal, race, distinct, latest) {
   }
 
   if (!Number.isFinite(gap) || gap < 175 || !alignedOrLagging) return decision;
-  if (!directionalFeeRoom(side, Number(latest?.px))) {
+  const allIn = allInRaceMode(race);
+  if (!directionalFeeRoom(side, Number(latest?.px)) && !allIn) {
     console.log(`REAL_NVDA_FEE_ROOM_BLOCK side=${side} px=${Number(latest?.px).toFixed(2)}`);
     return decision;
+  }
+  if (!directionalFeeRoom(side, Number(latest?.px)) && allIn) {
+    console.log(`ALL_IN_FEE_ROOM_OVERRIDE side=${side} px=${Number(latest?.px).toFixed(2)} source=real_nvda`);
   }
 
   const veryStrong = trend.veryStrongUp || trend.veryStrongDown;
@@ -1761,11 +1841,18 @@ function applyRaceSizing(decision, race, latestPx) {
     Number.isFinite(px) && px > 0
       ? Math.max(0.1, maxEntryFee / (0.01 * px))
       : cashAffordable;
-  const maxAffordable = Math.min(cashAffordable, feeQtyCap);
+  const allIn = allInRaceMode(race) && confidence >= ALL_IN_MIN_CONFIDENCE;
+  const maxAffordable = allIn ? cashAffordable : Math.min(cashAffordable, feeQtyCap);
 
-  const requestedAfterRace = qty * multiplier;
+  let requestedAfterRace = qty * multiplier;
+  if (allIn) {
+    requestedAfterRace = Math.max(requestedAfterRace, cashAffordable);
+    console.log(
+      `ALL_IN_SIZE requested=${requestedAfterRace.toFixed(2)} cashAffordable=${cashAffordable.toFixed(2)} confidence=${confidence.toFixed(2)} gap=${Number.isFinite(gap) ? gap.toFixed(2) : "na"} hLeft=${Number(race?.hoursRemaining).toFixed(1)}`
+    );
+  }
   qty = clamp(requestedAfterRace, 0.1, maxAffordable);
-  if (qty + 0.005 < requestedAfterRace) {
+  if (!allIn && qty + 0.005 < requestedAfterRace) {
     console.log(
       `FEE_SIZE_CAP requested=${requestedAfterRace.toFixed(2)} allowed=${qty.toFixed(2)} maxEntryFee=${maxEntryFee.toFixed(2)} px=${Number.isFinite(px) ? px.toFixed(2) : "na"}`
     );
@@ -1776,12 +1863,66 @@ function applyRaceSizing(decision, race, latestPx) {
     race: {
       leaderGap: Number.isFinite(gap) ? Number(gap.toFixed(2)) : null,
       hoursRemaining: Number(race.hoursRemaining.toFixed(2)),
-      multiplier: Number(multiplier.toFixed(3))
+      multiplier: Number(multiplier.toFixed(3)),
+      allIn
     }
   };
 }
 
 if (raceSelftest) {
+  const allInRace = { leaderGap: 1700, timeRemainingFrac: 0.25, hoursRemaining: 60, realizedCapital: 10000 };
+  if (!allInRaceMode(allInRace) || allInRaceMode({ leaderGap: -1, hoursRemaining: 60 }) || allInRaceMode({ leaderGap: 100, hoursRemaining: 80 })) {
+    throw new Error("RACE_SELFTEST_ALL_IN_MODE");
+  }
+  const allInSized = applyRaceSizing(
+    { action:"enter", side:"sell", qty:10, confidence:0.90, reason:"probe" },
+    allInRace,
+    230
+  );
+  if (!(allInSized?.race?.allIn === true && allInSized.qty > 41 && allInSized.qty < 43)) {
+    throw new Error("RACE_SELFTEST_ALL_IN_FULL_CAPITAL");
+  }
+  const allInUncertain = applyUncertainRiskCap(
+    allInSized,
+    { uncertainEntries:[{ id:"u", side:"sell", qty:31.53, entryPx:224.26, confirmedOutcome:"settled" }] },
+    230,
+    allInRace
+  );
+  if (!(allInUncertain?.qty > 41 && allInUncertain?.qty < 43)) {
+    throw new Error("RACE_SELFTEST_ALL_IN_UNCERTAIN_BYPASS");
+  }
+  const allInCalendar = applyCalendarRiskGate(
+    { action:"enter", side:"sell", qty:10, confidence:0.9 },
+    { fresh:true, move5:-0.2, move15:-0.4, move30:-0.6, move60:-0.7, move240:-1.3 },
+    allInRace,
+    { blockNewEntries:true, requireVeryStrong:false, active:{ name:"TEST", phase:"pre" } }
+  );
+  if (!allInCalendar) throw new Error("RACE_SELFTEST_ALL_IN_CATALYST_OVERRIDE");
+  const allInSoftMomentum = allInDirectionalEntry(
+    { fresh:true, move5:0.00, move15:0.04, move30:0.17, move60:0.49, move240:1.46 },
+    { px:231.01 },
+    allInRace
+  );
+  if (!(allInSoftMomentum?.action === "enter" && allInSoftMomentum.side === "buy" && allInSoftMomentum.qty === 60)) {
+    throw new Error("RACE_SELFTEST_ALL_IN_SOFT_MOMENTUM");
+  }
+  const allInModerateEntry = activeContestEntry(
+    { fresh:true, move5:0.00, move15:0.26, move30:0.29, move60:0.32, move240:1.45 },
+    { px:231.01 },
+    allInRace,
+    { blockNewEntries:false, requireVeryStrong:false, active:null }
+  );
+  if (!(allInModerateEntry?.action === "enter" && allInModerateEntry.side === "buy" && allInModerateEntry.confidence >= 0.97)) {
+    throw new Error("RACE_SELFTEST_ALL_IN_MODERATE_ENTRY");
+  }
+  const allInWinner = tacticalExitDecision(
+    { state:"open", side:"sell", qty:30, entryPx:230, entryFeeEst:69 },
+    { fresh:true, move5:-0.2, move15:-0.5, move30:-0.7, move60:-0.8, move240:-1.5 },
+    { px:220 },
+    allInRace,
+    { active:null }
+  );
+  if (allInWinner?.exit !== false) throw new Error("RACE_SELFTEST_ALL_IN_LET_WINNER_RUN");
   const feeProbe = archiveFeeForUs({
     input: { maker: did, countersigner: "did:key:z6MkOther" },
     output: { outcome: "settled", maker_fee: "2.50", taker_fee: "3.50" }
@@ -2560,7 +2701,11 @@ async function findReliableOpposingOffer(decision, latest) {
   }
 
   const oppositeMakerSide = desiredSide === "buy" ? "sell" : "buy";
-  const minQty = closingExit ? Math.max(0.1, desiredQty * PARTIAL_EXIT_MIN_FRACTION) : Math.max(0.1, desiredQty * 0.40);
+  const minQty = closingExit
+    ? Math.max(0.1, desiredQty * PARTIAL_EXIT_MIN_FRACTION)
+    : decision?.race?.allIn
+      ? 0.1
+      : Math.max(0.1, desiredQty * 0.40);
   const maxQty = Math.min(60, desiredQty);
   const refPx = Number(latest.px);
   const candidates = [];
@@ -2667,8 +2812,9 @@ function scaleInDecision(openState, signal, latest, race, catalyst) {
   const px = Number(latest?.px), entryPx = Number(openState?.entryPx), qty = Number(openState?.qty);
   if (![px, entryPx, qty].every(Number.isFinite) || qty <= 0) return null;
   if (Number(openState.addRetryAfterSweep || 0) > Number(latest?.n || 0)) return null;
-  if (Number(openState.addCount || 0) >= 2) return null;
-  if (uncertainEntries(openState).length) return null;
+  const allIn = allInRaceMode(race);
+  if (Number(openState.addCount || 0) >= (allIn ? 4 : 2)) return null;
+  if (uncertainEntries(openState).length && !allIn) return null;
 
   const shape = directionalShape(signal);
   const long = openState.side === "buy";
@@ -2681,7 +2827,7 @@ function scaleInDecision(openState, signal, latest, race, catalyst) {
     : Number(signal.move15) <= -0.10 && Number(signal.move30) <= -0.12;
   if (targetQty > qty + 0.09 && favorableMove >= 0.15 && directionalSupport && !fastAdverse) {
     const realizedCapital = Math.max(1000, 10000 + Number(openState.realizedScoreEst || 0));
-    const totalCap = Math.max(0, Math.min(60, realizedCapital / (px * 1.04)));
+    const totalCap = Math.max(0, Math.min(60, realizedCapital / (px * (allIn ? 1.035 : 1.04))));
     const addQty = Math.floor(Math.min(targetQty - qty, MAKER_ENTRY_CHUNK_QTY, totalCap - qty) * 100) / 100;
     if (addQty >= 3) return { action: "enter", side: openState.side, qty: addQty, targetQty, confidence: 0.97, reason: "build_target_position" };
   }
@@ -2691,14 +2837,16 @@ function scaleInDecision(openState, signal, latest, race, catalyst) {
   if (favorableMove < trigger) return null;
 
   const realizedCapital = Math.max(1000, 10000 + Number(openState.realizedScoreEst || 0));
-  const totalCap = Math.max(0, Math.min(60, realizedCapital / (px * 1.04)));
+  const totalCap = Math.max(0, Math.min(60, realizedCapital / (px * (allIn ? 1.035 : 1.04))));
   const remainingCap = Math.max(0, totalCap - qty);
   if (remainingCap < 3) return null;
 
   const gap = Number(race?.leaderGap);
-  const desired = Number(openState.addCount || 0) === 0
-    ? (Number.isFinite(gap) && gap >= 750 ? 10 : 7)
-    : (Number.isFinite(gap) && gap >= 750 ? 7 : 5);
+  const desired = allIn
+    ? Math.min(MAKER_ENTRY_CHUNK_QTY, remainingCap)
+    : Number(openState.addCount || 0) === 0
+      ? (Number.isFinite(gap) && gap >= 750 ? 10 : 7)
+      : (Number.isFinite(gap) && gap >= 750 ? 7 : 5);
   const addQty = Math.floor(Math.min(desired, remainingCap) * 100) / 100;
   if (addQty < 3) return null;
   return { action: "enter", side: openState.side, qty: addQty, confidence: 0.98, reason: Number(openState.addCount || 0) === 0 ? "scale_in_winner_1" : "scale_in_winner_2" };
@@ -4204,9 +4352,10 @@ const rawDecision = decide({
   latest,
   race
 });
+const allInDecision = allInDirectionalEntry(realNvdaSignal, latest, race);
 const activeDecision = activeContestEntry(realNvdaSignal, latest, race, catalyst);
 const aggressiveDecision = aggressiveDirectionalEntry(realNvdaSignal, latest, race, catalyst);
-const tacticalDecision = activeDecision || aggressiveDecision || tacticalRangeEntry(realNvdaSignal, latest, race, catalyst) || rawDecision;
+const tacticalDecision = allInDecision || activeDecision || aggressiveDecision || tacticalRangeEntry(realNvdaSignal, latest, race, catalyst) || rawDecision;
 const fallbackDecision = controlledFallbackEntry(
   tacticalDecision,
   race,
@@ -4223,7 +4372,7 @@ const realConfirmedDecision = applyRealNvdaSignal(
 );
 const calendarDecision = applyCalendarRiskGate(realConfirmedDecision, realNvdaSignal, race, catalyst);
 const sizedDecision = applyRaceSizing(calendarDecision, race, latest.px);
-const decision = applyUncertainRiskCap(sizedDecision, state, latest.px);
+const decision = applyUncertainRiskCap(sizedDecision, state, latest.px, race);
 if (decision?.action === "enter") {
   console.log(
     `RACE_SIZE leaderGap=${decision.race?.leaderGap ?? "na"} hLeft=${decision.race?.hoursRemaining ?? "na"} mult=${decision.race?.multiplier ?? "na"} qty=${Number(decision.qty).toFixed(2)}`
