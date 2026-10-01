@@ -47,7 +47,14 @@ jobs:
             echo "CLOSE1_LOOP=$i/$count"
             node scripts/close1-trader-runner.mjs
             if [[ "$i" -lt "$count" ]]; then
-              sleep 300
+              now="$(date -u +%s)"
+              next=$(( (now / 300) * 300 + 45 ))
+              if [[ "$next" -le "$now" ]]; then
+                next=$((next + 300))
+              fi
+              sleep_for=$((next - now))
+              echo "NEXT_SWEEP_ALIGN sleep_s=$sleep_for target_epoch=$next"
+              sleep "$sleep_for"
             fi
           done
 

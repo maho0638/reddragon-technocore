@@ -7,6 +7,7 @@ import { readFile } from "node:fs/promises";
 const BASE = "https://technocore.chat";
 const ARCHIVE_BASE = "https://challenges.technocore.chat/close-1";
 const ARCHIVE_SCAN_SWEEPS = 12;
+const ARCHIVE_DIRECT_PROBE_MAX_INDEX_LAG = 96;
 const MAKER_ENTRY_CHUNK_QTY = 20;
 const MAKER_EXIT_CHUNK_QTY = 20;
 const PARTIAL_EXIT_MIN_FRACTION = 0.20;
@@ -244,6 +245,15 @@ let archiveIndexCache = null;
 let archiveIndexFetchedAt = 0;
 const archiveRecordCache = new Map();
 const archiveMissingCache = new Set();
+let archiveLagSkipLogged = false;
+
+function shouldProbeDirectArchive(sweep, indexMaxN) {
+  const n = Number(sweep);
+  const maxN = Number(indexMaxN);
+  if (!Number.isInteger(n) || n < 1) return false;
+  if (!Number.isInteger(maxN) || maxN < 1) return true;
+  return n - maxN <= ARCHIVE_DIRECT_PROBE_MAX_INDEX_LAG;
+}
 
 async function close1ArchiveIndex() {
   const nowMs = Date.now();
@@ -350,6 +360,16 @@ async function close1ArchiveRecordByHash(n, fileHash) {
   if (meta && (String(meta.file || "") === hash || String(meta.sha256 || "") === hash)) {
     const indexed = await close1ArchiveRecord(meta);
     if (indexed) { archiveRecordCache.set(cacheKey, indexed); return indexed; }
+  }
+  if (!meta && !shouldProbeDirectArchive(sweep, index?.maxN)) {
+    archiveMissingCache.add(cacheKey);
+    if (!archiveLagSkipLogged) {
+      archiveLagSkipLogged = true;
+      console.log(
+        `ARCHIVE_DIRECT_PROBE_SKIPPED current=${sweep} indexedThrough=${Number(index?.maxN || 0)} maxLag=${ARCHIVE_DIRECT_PROBE_MAX_INDEX_LAG}`
+      );
+    }
+    return null;
   }
   const { r, text } = await request(
     `${ARCHIVE_BASE}/sweeps/${hash}.json`,
@@ -2590,6 +2610,9 @@ if (raceSelftest) {
   if (archivedVoid?.outcome !== "void" || archivedVoid?.reason !== "not_owner/funds") {
     throw new Error("RACE_SELFTEST_ARCHIVE_VOID");
   }
+  if (shouldProbeDirectArchive(1830, 1119)) throw new Error("RACE_SELFTEST_ARCHIVE_LAG_SKIP");
+  if (!shouldProbeDirectArchive(1200, 1119)) throw new Error("RACE_SELFTEST_ARCHIVE_NEAR_PROBE");
+  if (!shouldProbeDirectArchive(1200, 0)) throw new Error("RACE_SELFTEST_ARCHIVE_UNKNOWN_PROBE");
   console.log("RACE_SIZING_SELFTEST_OK");
   process.exit(0);
 }
