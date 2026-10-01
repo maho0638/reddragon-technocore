@@ -1418,10 +1418,13 @@ function profitThresholds(qty, entryPx, markPx) {
     return { bank: 25, protect: 12 };
   }
   const avgNotional = q * ((entry + mark) / 2);
-  // Net PnL already subtracts the estimated 1% entry + 1% exit fees.
-  // Keep extra room for clawback / execution mismatch instead of banking dust.
-  const bank = Math.max(20, 0.0030 * avgNotional);
-  const protect = Math.max(10, 0.0015 * avgNotional);
+  // Net PnL already subtracts estimated entry + exit fees. Scale the absolute
+  // floor with position size so small risk-capped positions are not forced to
+  // wait for an unrealistic per-contract move before banking real net profit.
+  const bankFloor = clamp(0.75 * q, 0.75, 20);
+  const protectFloor = clamp(0.35 * q, 0.35, 10);
+  const bank = Math.max(bankFloor, 0.0030 * avgNotional);
+  const protect = Math.max(protectFloor, 0.0015 * avgNotional);
   return { bank, protect };
 }
 
@@ -2066,6 +2069,21 @@ if (raceSelftest) {
   const earlyShort = aggressiveDirectionalEntry(earlyDownSignal, { px: 230.8 }, { leaderGap: 1200, hoursRemaining: 100 }, { blockNewEntries: false, requireVeryStrong: false });
   if (!(earlyLong?.side === "buy" && earlyLong.qty >= 38)) throw new Error("RACE_SELFTEST_EARLY_LONG");
   if (!(earlyShort?.side === "sell" && earlyShort.qty >= 30)) throw new Error("RACE_SELFTEST_EARLY_SHORT");
+  const smallProfitThreshold = profitThresholds(3, 230.69, 225.00);
+  if (!(smallProfitThreshold.bank > 2 && smallProfitThreshold.bank < 3 &&
+        smallProfitThreshold.protect > 1 && smallProfitThreshold.protect < 1.2)) {
+    throw new Error("RACE_SELFTEST_SMALL_POSITION_PROFIT_THRESHOLD");
+  }
+  const smallShortBank = tacticalExitDecision(
+    { state: "open", side: "sell", qty: 3, entryPx: 230.69, entryFeeEst: 6.9207 },
+    { fresh: true, move5: -0.20, move15: -0.50, move30: -0.70, move60: -0.60, move240: -0.80 },
+    { px: 225.0 },
+    { hoursRemaining: 60 },
+    { active: null }
+  );
+  if (!(smallShortBank?.exit === true && smallShortBank.reason === "bank_meaningful_profit")) {
+    throw new Error("RACE_SELFTEST_SMALL_POSITION_BANK");
+  }
   const profitLock = tacticalExitDecision(
     { state: "open", side: "buy", qty: 30, entryPx: 220, entryFeeEst: 66 },
     { fresh: true, move5: -0.25, move15: -0.45, move30: 0.10, move60: 0.40, move240: 1.20 },
