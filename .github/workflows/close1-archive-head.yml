@@ -1,0 +1,27 @@
+name: Close-1 Archive Head
+on:
+  push:
+    branches: [diag/close1-room-20261001]
+    paths:
+      - ".github/workflows/close1-archive-head.yml"
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - name: Inspect archive index
+        shell: bash
+        run: |
+          node <<'NODE'
+          const BASE="https://challenges.technocore.chat/close-1";
+          const r=await fetch(BASE+"/index.json",{headers:{"cache-control":"no-cache"}});
+          console.log("INDEX_HTTP "+r.status);
+          const t=await r.text();
+          if(!r.ok){console.log(t.slice(0,500));process.exit(0)}
+          const j=JSON.parse(t);
+          const arr=Array.isArray(j)?j:(Array.isArray(j?.sweeps)?j.sweeps:Array.isArray(j?.records)?j.records:[]);
+          const rows=arr.map(x=>({n:Number(x?.n??x?.sweep),file:x?.file||x?.hash||x?.sha256||null,path:x?.path||null,status:x?.status||null})).filter(x=>Number.isFinite(x.n)).sort((a,b)=>a.n-b.n);
+          console.log("INDEX_TAIL "+JSON.stringify(rows.slice(-12)));
+          NODE
