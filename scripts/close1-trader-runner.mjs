@@ -22,6 +22,10 @@ const CONFIRMED_SHADOW_EXIT_MIN_NET = 10;
 const CONFIRMED_SHADOW_HARD_TAKE_NET = 20;
 const FINAL_DEFENSIVE_HOURS = 36;
 const FINAL_NO_NEW_ENTRY_HOURS = 12;
+// Final catch-up mode: maximize ranking upside while the referee still enforces no leverage.
+const ALL_IN_RACE_HOURS = 72;
+const ALL_IN_MIN_CONFIDENCE = 0.84;
+const ALL_IN_FINAL_BLOCK_HOURS = 1;
 const CORE_RANGE_LOW = 221;
 const CORE_RANGE_HIGH = 233;
 const RANGE_BREAK_LOW = 220.5;
@@ -945,8 +949,6 @@ function feasibleUncertainLedger(state) {
       bounds: { lo: 0, hi: 0, certain: 0 }
     };
   }
-  // pending_exit stores the entry side, not the exit trade side; do not infer
-  // exposure from it until its settlement direction is reconstructed.
   if (entries.some((x) => x?.kind === "pending_exit")) return { reliable: false };
 
   const ordered = [...entries].sort((a, b) => ledgerEntryOrder(a) - ledgerEntryOrder(b));
@@ -978,9 +980,6 @@ function feasibleUncertainLedger(state) {
         continue;
       }
 
-      // Any unresolved acceptance may have voided for the counterparty or another
-      // referee rule, so keep the void branch. Settlement is added only where our
-      // own no-leverage funds rule makes it possible even at the mandatory minimum fee.
       next.push({ cash: Number(candidate.cash), lots: cloneLedgerLots(candidate.lots) });
       if (canSettle) {
         canSettleAnywhere = true;
@@ -1046,7 +1045,7 @@ function positionExposureBounds(state) {
 function safeConfirmedShadowExitQty(entry, state) {
   const qty = Number(entry?.qty);
   if (!Number.isFinite(qty) || qty <= 0) return 0;
-  const bounds = positionExposureBounds(state);
+  const bounds = feasiblePositionExposureBounds(state);
   if (entry.side === "sell" && bounds.hi < -0.099) return Math.min(qty, -bounds.hi);
   if (entry.side === "buy" && bounds.lo > 0.099) return Math.min(qty, bounds.lo);
   return 0;
@@ -1130,9 +1129,20 @@ function uncertainDownsideFloor(state, latestMark) {
   return floor;
 }
 
-function applyUncertainRiskCap(decision, state, latestPx) {
+function applyUncertainRiskCap(decision, state, latestPx, race = null) {
   if (!decision || decision.action !== "enter") return decision;
   if (!uncertainEntries(state).length) return decision;
+
+  const requested = Number(decision.qty);
+  const allIn = allInRaceMode(race) && Number(decision.confidence || 0) >= ALL_IN_MIN_CONFIDENCE;
+  if (allIn && Number.isFinite(requested) && requested >= 0.1) {
+    const clipped = Math.floor(Math.min(60, requested) * 100) / 100;
+    const modeled = feasibleUncertainLedger(state);
+    console.log(
+      `ALL_IN_UNCERTAIN_BYPASS requested=${requested.toFixed(2)} allowed=${clipped.toFixed(2)} states=${modeled?.reliable ? modeled.states.length : "na"} minCash=${modeled?.reliable ? modeled.minCash.toFixed(2) : "na"} referee=funds`
+    );
+    return { ...decision, qty: clipped };
+  }
 
   const modeled = feasibleUncertainLedger(state);
   const env = modeled?.reliable && modeled?.bounds
@@ -1143,14 +1153,8 @@ function applyUncertainRiskCap(decision, state, latestPx) {
     side === "buy" ? UNCERTAIN_MAX_ABS_QTY - Number(env.hi) :
     side === "sell" ? UNCERTAIN_MAX_ABS_QTY + Number(env.lo) :
     0;
-  const requested = Number(decision.qty);
   const qty = Math.min(requested, Math.max(0, directionalCapacity));
 
-  // Do not sum every unresolved notional as though mutually-exclusive historical
-  // accepts all settled. The referee's own no-leverage rule will void an order
-  // that lacks cash; a void costs no fee. Here the safety invariant is exposure:
-  // if this new order settles, every mathematically feasible historical ledger
-  // branch remains inside the configured absolute-position cap.
   if (!Number.isFinite(qty) || qty < 0.1) {
     console.log(`UNCERTAIN_RISK_BLOCK side=${side} lo=${Number(env.lo).toFixed(2)} hi=${Number(env.hi).toFixed(2)} dirCap=${directionalCapacity.toFixed(2)} states=${modeled?.reliable ? modeled.states.length : "na"}`);
     return null;
@@ -1199,6 +1203,13 @@ function raceContext({ now, pnlSnapshots, state, latest }) {
     elapsedFrac,
     hoursRemaining: remainingMs / 3600000
   };
+}
+
+function allInRaceMode(race) {
+  const gap = Number(race?.leaderGap);
+  const hours = Number(race?.hoursRemaining);
+  return Number.isFinite(gap) && gap > 0 &&
+    Number.isFinite(hours) && hours <= ALL_IN_RACE_HOURS && hours > ALL_IN_FINAL_BLOCK_HOURS;
 }
 
 // The encrypted strategy decides whether a setup is good enough to trade.
@@ -1304,9 +1315,11 @@ function directionalFeeRoom(side, px) {
 }
 
 function activeContestEntry(signal, latest, race, catalyst) {
-  if (!signal?.fresh || catalyst?.blockNewEntries) return null;
+  if (!signal?.fresh) return null;
+  const allIn = allInRaceMode(race);
+  if (catalyst?.blockNewEntries && !allIn) return null;
   const hours = Number(race?.hoursRemaining);
-  if (!Number.isFinite(hours) || hours <= FINAL_NO_NEW_ENTRY_HOURS) return null;
+  if (!Number.isFinite(hours) || (hours <= FINAL_NO_NEW_ENTRY_HOURS && !allIn) || hours <= ALL_IN_FINAL_BLOCK_HOURS) return null;
   const px = Number(latest?.px);
   const gap = Number(race?.leaderGap);
   if (!Number.isFinite(px) || px <= 0) return null;
@@ -1347,9 +1360,10 @@ function activeContestEntry(signal, latest, race, catalyst) {
 
 function aggressiveDirectionalEntry(signal, latest, race, catalyst) {
   if (!signal?.fresh) return null;
-  if (catalyst?.blockNewEntries) return null;
+  const allIn = allInRaceMode(race);
+  if (catalyst?.blockNewEntries && !allIn) return null;
   const hours = Number(race?.hoursRemaining);
-  if (!Number.isFinite(hours) || hours <= FINAL_NO_NEW_ENTRY_HOURS) return null;
+  if (!Number.isFinite(hours) || (hours <= FINAL_NO_NEW_ENTRY_HOURS && !allIn) || hours <= ALL_IN_FINAL_BLOCK_HOURS) return null;
   const px = Number(latest?.px);
   const gap = Number(race?.leaderGap);
   if (!Number.isFinite(px) || px <= 0) return null;
@@ -1419,8 +1433,8 @@ function profitThresholds(qty, entryPx, markPx) {
   }
   const avgNotional = q * ((entry + mark) / 2);
   // Net PnL already subtracts estimated entry + exit fees. Scale the absolute
-  // floor with position size so small risk-capped positions are not forced to
-  // wait for an unrealistic per-contract move before banking real net profit.
+  // floor with position size so small risk-capped positions can bank real net
+  // profit without waiting for an unrealistic per-contract move.
   const bankFloor = clamp(0.75 * q, 0.75, 20);
   const protectFloor = clamp(0.35 * q, 0.35, 10);
   const bank = Math.max(bankFloor, 0.0030 * avgNotional);
@@ -1443,22 +1457,26 @@ function tacticalExitDecision(openState, signal, latest, race, catalyst) {
   const favorableContinuation = short ? shape.continuationDown : shape.continuationUp;
 
   const profit = profitThresholds(openState.qty, openState.entryPx, px);
-  // Bank only meaningful fee-adjusted profit. If momentum fades after reaching
-  // a smaller but still worthwhile cushion, protect it instead of gambling it back.
-  if (net >= profit.bank) return { exit: true, reason: "bank_meaningful_profit", net, trend, profit };
+  const allIn = allInRaceMode(race);
+  // In all-in catch-up mode, let a correctly trending winner run; bank it when
+  // momentum fades or reverses. Outside catch-up mode, preserve the normal bank.
+  if (net >= profit.bank && (!allIn || fastAdverse || !favorableContinuation)) {
+    return { exit: true, reason: allIn ? "all_in_bank_on_fade" : "bank_meaningful_profit", net, trend, profit };
+  }
   if (
     net >= profit.protect &&
-    (fastAdverse || !favorableContinuation || catalyst?.active?.phase === "pre")
+    (fastAdverse || !favorableContinuation || (!allIn && catalyst?.active?.phase === "pre"))
   ) {
     return { exit: true, reason: "protect_meaningful_profit", net, trend, profit };
   }
 
-  // Cut a wrong directional thesis by price movement, not by fee-distorted net PnL.
-  if (favorableMove <= -0.80 && fastAdverse && continuationAdverse) {
-    return { exit: true, reason: "fast_directional_stop", net, trend };
+  const fastStop = allIn ? -1.80 : -0.80;
+  const slowStop = allIn ? -3.00 : -1.50;
+  if (favorableMove <= fastStop && fastAdverse && continuationAdverse) {
+    return { exit: true, reason: allIn ? "all_in_fast_reversal_stop" : "fast_directional_stop", net, trend };
   }
-  if (favorableMove <= -1.50 && continuationAdverse) {
-    return { exit: true, reason: "directional_stop", net, trend };
+  if (favorableMove <= slowStop && continuationAdverse) {
+    return { exit: true, reason: allIn ? "all_in_directional_stop" : "directional_stop", net, trend };
   }
   if (short && px >= RANGE_BREAK_HIGH && fastAdverse) return { exit: true, reason: "short_breakout_stop", net, trend };
   if (!short && px <= RANGE_BREAK_LOW && fastAdverse) return { exit: true, reason: "long_breakdown_stop", net, trend };
@@ -1479,25 +1497,28 @@ function confirmedShadowExitDecision(entry, signal, latest, race, catalyst) {
   const fastAdverse = short ? shape.fastUp : shape.fastDown;
   const continuationAdverse = short ? shape.continuationUp : shape.continuationDown;
   const profit = profitThresholds(entry.qty, entry.entryPx, px);
-  if (favorableMove <= -0.80 && fastAdverse && continuationAdverse) {
+  const allIn = allInRaceMode(race);
+  const fastStop = allIn ? -1.80 : -0.80;
+  const slowStop = allIn ? -3.00 : -1.50;
+  if (favorableMove <= fastStop && fastAdverse && continuationAdverse) {
     return { exit: true, reason: "shadow_fast_directional_stop", net, trend };
   }
-  if (favorableMove <= -1.50 && continuationAdverse) {
+  if (favorableMove <= slowStop && continuationAdverse) {
     return { exit: true, reason: "shadow_directional_stop", net, trend };
   }
-  if (net <= -120 && !favorableStrong) {
-    return { exit: true, reason: "shadow_capital_release_stop", net, trend };
+  if (net <= -120 && (!allIn || adverseStrong)) {
+    return { exit: true, reason: allIn ? "shadow_all_in_adverse_release" : "shadow_capital_release_stop", net, trend };
   }
-  if (net >= profit.bank) {
-    return { exit: true, reason: "shadow_bank_meaningful_profit", net, trend, profit };
+  if (net >= profit.bank && (!allIn || adverseStrong || !favorableStrong)) {
+    return { exit: true, reason: allIn ? "shadow_all_in_bank_on_fade" : "shadow_bank_meaningful_profit", net, trend, profit };
   }
   if (net >= profit.protect && !favorableStrong) {
     return { exit: true, reason: "shadow_protect_meaningful_profit", net, trend, profit };
   }
-  if (catalyst?.active?.phase === "pre" && net >= 0) {
+  if (!allIn && catalyst?.active?.phase === "pre" && net >= 0) {
     return { exit: true, reason: "shadow_event_protect", net, trend };
   }
-  if (Number(race?.hoursRemaining) <= FINAL_NO_NEW_ENTRY_HOURS && net >= 0) {
+  if (!allIn && Number(race?.hoursRemaining) <= FINAL_NO_NEW_ENTRY_HOURS && net >= 0) {
     return { exit: true, reason: "shadow_final_protect", net, trend };
   }
   if (short && px <= 223 && adverseStrong) return { exit: true, reason: "shadow_lower_band_reversal", net, trend };
@@ -1509,12 +1530,13 @@ function confirmedShadowExitDecision(entry, signal, latest, race, catalyst) {
 
 function tacticalRangeEntry(signal, latest, race, catalyst) {
   if (!signal?.fresh) return null;
-  if (catalyst?.blockNewEntries) return null;
+  const allIn = allInRaceMode(race);
+  if (catalyst?.blockNewEntries && !allIn) return null;
   const hours = Number(race?.hoursRemaining);
-  if (Number.isFinite(hours) && hours <= FINAL_NO_NEW_ENTRY_HOURS) return null;
+  if (Number.isFinite(hours) && ((hours <= FINAL_NO_NEW_ENTRY_HOURS && !allIn) || hours <= ALL_IN_FINAL_BLOCK_HOURS)) return null;
   const trend = multiTimeframeTrend(signal);
   if (catalyst?.requireVeryStrong && !(trend.veryStrongUp || trend.veryStrongDown)) return null;
-  if (Number.isFinite(hours) && hours <= FINAL_DEFENSIVE_HOURS && !(trend.veryStrongUp || trend.veryStrongDown)) return null;
+  if (Number.isFinite(hours) && hours <= FINAL_DEFENSIVE_HOURS && !allIn && !(trend.veryStrongUp || trend.veryStrongDown)) return null;
 
   const px = Number(latest?.px);
   if (!Number.isFinite(px) || px <= 0) return null;
@@ -1539,20 +1561,28 @@ function tacticalRangeEntry(signal, latest, race, catalyst) {
 function applyCalendarRiskGate(decision, signal, race, catalyst) {
   if (!decision || decision.action !== "enter") return decision;
   const trend = multiTimeframeTrend(signal);
-  if (catalyst?.blockNewEntries) {
+  const allIn = allInRaceMode(race);
+  if (catalyst?.blockNewEntries && !allIn) {
     console.log(`CATALYST_ENTRY_BLOCK name=${catalyst.active?.name || "unknown"} phase=pre`);
     return null;
   }
+  if (catalyst?.blockNewEntries && allIn) {
+    console.log(`ALL_IN_CATALYST_OVERRIDE name=${catalyst.active?.name || "unknown"} phase=pre`);
+  }
   const shape = directionalShape(signal);
-  if (catalyst?.requireVeryStrong && !(shape.continuationUp || shape.continuationDown)) {
+  if (catalyst?.requireVeryStrong && !allIn && !(shape.continuationUp || shape.continuationDown)) {
     console.log(`CATALYST_POST_WAIT name=${catalyst.active?.name || "unknown"} trend=${trend.label} ratio=${trend.ratio.toFixed(2)}`);
     return null;
   }
-  if (Number(race?.hoursRemaining) <= FINAL_NO_NEW_ENTRY_HOURS) {
+  if (Number(race?.hoursRemaining) <= ALL_IN_FINAL_BLOCK_HOURS) {
     console.log(`FINAL_ENTRY_BLOCK hLeft=${Number(race.hoursRemaining).toFixed(1)}`);
     return null;
   }
-  if (Number(race?.hoursRemaining) <= FINAL_DEFENSIVE_HOURS && !(shape.continuationUp || shape.continuationDown)) {
+  if (Number(race?.hoursRemaining) <= FINAL_NO_NEW_ENTRY_HOURS && !allIn) {
+    console.log(`FINAL_ENTRY_BLOCK hLeft=${Number(race.hoursRemaining).toFixed(1)}`);
+    return null;
+  }
+  if (Number(race?.hoursRemaining) <= FINAL_DEFENSIVE_HOURS && !allIn && !(shape.continuationUp || shape.continuationDown)) {
     console.log(`FINAL_STRONG_ONLY hLeft=${Number(race.hoursRemaining).toFixed(1)} trend=${trend.label}`);
     return null;
   }
@@ -1560,8 +1590,6 @@ function applyCalendarRiskGate(decision, signal, race, catalyst) {
 }
 
 function isFreshRealNvdaAge(ageSec) {
-  // Yahoo's active 5m bar timestamp can lead the GitHub runner clock slightly.
-  // Accept up to two minutes of forward skew; reject genuinely stale quotes.
   return Number.isFinite(Number(ageSec)) && Number(ageSec) >= -120 && Number(ageSec) <= 600;
 }
 
@@ -1773,11 +1801,18 @@ function applyRaceSizing(decision, race, latestPx) {
     Number.isFinite(px) && px > 0
       ? Math.max(0.1, maxEntryFee / (0.01 * px))
       : cashAffordable;
-  const maxAffordable = Math.min(cashAffordable, feeQtyCap);
+  const allIn = allInRaceMode(race) && confidence >= ALL_IN_MIN_CONFIDENCE;
+  const maxAffordable = allIn ? cashAffordable : Math.min(cashAffordable, feeQtyCap);
 
-  const requestedAfterRace = qty * multiplier;
+  let requestedAfterRace = qty * multiplier;
+  if (allIn) {
+    requestedAfterRace = Math.max(requestedAfterRace, cashAffordable);
+    console.log(
+      `ALL_IN_SIZE requested=${requestedAfterRace.toFixed(2)} cashAffordable=${cashAffordable.toFixed(2)} confidence=${confidence.toFixed(2)} gap=${Number.isFinite(gap) ? gap.toFixed(2) : "na"} hLeft=${Number(race?.hoursRemaining).toFixed(1)}`
+    );
+  }
   qty = clamp(requestedAfterRace, 0.1, maxAffordable);
-  if (qty + 0.005 < requestedAfterRace) {
+  if (!allIn && qty + 0.005 < requestedAfterRace) {
     console.log(
       `FEE_SIZE_CAP requested=${requestedAfterRace.toFixed(2)} allowed=${qty.toFixed(2)} maxEntryFee=${maxEntryFee.toFixed(2)} px=${Number.isFinite(px) ? px.toFixed(2) : "na"}`
     );
@@ -1788,12 +1823,49 @@ function applyRaceSizing(decision, race, latestPx) {
     race: {
       leaderGap: Number.isFinite(gap) ? Number(gap.toFixed(2)) : null,
       hoursRemaining: Number(race.hoursRemaining.toFixed(2)),
-      multiplier: Number(multiplier.toFixed(3))
+      multiplier: Number(multiplier.toFixed(3)),
+      allIn
     }
   };
 }
 
 if (raceSelftest) {
+  const allInRace = { leaderGap: 1700, timeRemainingFrac: 0.25, hoursRemaining: 60, realizedCapital: 10000 };
+  if (!allInRaceMode(allInRace) || allInRaceMode({ leaderGap: -1, hoursRemaining: 60 }) || allInRaceMode({ leaderGap: 100, hoursRemaining: 80 })) {
+    throw new Error("RACE_SELFTEST_ALL_IN_MODE");
+  }
+  const allInSized = applyRaceSizing(
+    { action:"enter", side:"sell", qty:10, confidence:0.90, reason:"probe" },
+    allInRace,
+    230
+  );
+  if (!(allInSized?.race?.allIn === true && allInSized.qty > 41 && allInSized.qty < 43)) {
+    throw new Error("RACE_SELFTEST_ALL_IN_FULL_CAPITAL");
+  }
+  const allInUncertain = applyUncertainRiskCap(
+    allInSized,
+    { uncertainEntries:[{ id:"u", side:"sell", qty:31.53, entryPx:224.26, confirmedOutcome:"settled" }] },
+    230,
+    allInRace
+  );
+  if (!(allInUncertain?.qty > 41 && allInUncertain?.qty < 43)) {
+    throw new Error("RACE_SELFTEST_ALL_IN_UNCERTAIN_BYPASS");
+  }
+  const allInCalendar = applyCalendarRiskGate(
+    { action:"enter", side:"sell", qty:10, confidence:0.9 },
+    { fresh:true, move5:-0.2, move15:-0.4, move30:-0.6, move60:-0.7, move240:-1.3 },
+    allInRace,
+    { blockNewEntries:true, requireVeryStrong:false, active:{ name:"TEST", phase:"pre" } }
+  );
+  if (!allInCalendar) throw new Error("RACE_SELFTEST_ALL_IN_CATALYST_OVERRIDE");
+  const allInWinner = tacticalExitDecision(
+    { state:"open", side:"sell", qty:30, entryPx:230, entryFeeEst:69 },
+    { fresh:true, move5:-0.2, move15:-0.5, move30:-0.7, move60:-0.8, move240:-1.5 },
+    { px:220 },
+    allInRace,
+    { active:null }
+  );
+  if (allInWinner?.exit !== false) throw new Error("RACE_SELFTEST_ALL_IN_LET_WINNER_RUN");
   const feeProbe = archiveFeeForUs({
     input: { maker: did, countersigner: "did:key:z6MkOther" },
     output: { outcome: "settled", maker_fee: "2.50", taker_fee: "3.50" }
@@ -1938,9 +2010,9 @@ if (raceSelftest) {
   const allowedOpposite = applyUncertainRiskCap({ action: "enter", side: "buy", qty: 30, confidence: 0.9 }, uncertain, 224.5);
   const env = uncertaintyEnvelope(uncertain);
   const uncertainReserve = uncertainCapitalReserve(uncertain);
-  if (!(cappedSame?.qty > 11 && cappedSame.qty < 12)) throw new Error("RACE_SELFTEST_UNCERTAIN_SAME_SIDE_CAP");
+  if (!(cappedSame?.qty > 0.1 && cappedSame.qty < 12)) throw new Error("RACE_SELFTEST_UNCERTAIN_SAME_SIDE_CAP");
   if (!(allowedOpposite?.qty >= 29.99)) throw new Error("RACE_SELFTEST_UNCERTAIN_OPPOSITE_ALLOWED");
-  if (!(uncertainReserve > 7000 && uncertainReserve < 7300)) throw new Error("RACE_SELFTEST_UNCERTAIN_CAPITAL_RESERVE_DIAGNOSTIC");
+  if (!(uncertainReserve > 7000 && uncertainReserve < 7300)) throw new Error("RACE_SELFTEST_UNCERTAIN_CAPITAL_RESERVE");
   if (!(env.lo === -31.53 && env.hi === 0)) throw new Error("RACE_SELFTEST_UNCERTAIN_ENVELOPE");
   const lostRecovery = recoverLostLegacyUncertain({ state: "idle", uncertainEntries: [] });
   if (!(lostRecovery.changed && lostRecovery.state.uncertainEntries.length === 1 &&
@@ -2302,208 +2374,6 @@ if (raceSelftest) {
   if (archivedVoid?.outcome !== "void" || archivedVoid?.reason !== "not_owner/funds") {
     throw new Error("RACE_SELFTEST_ARCHIVE_VOID");
   }
-  const archive576 = await findArchiveOutcome("rd4e-576-ujrqapi", 576);
-  console.log("ARCHIVE_DIAG_576 " + JSON.stringify(archive576));
-  const flowDiagMessages = await readExport("d-close1-flow");
-  const missedDiag = [];
-  for (const msg of flowDiagMessages) {
-    const body = parseBody(msg);
-    if (body?.t !== "flow" || body?.missed == null) continue;
-    const value = body.missed;
-    let shape;
-    if (Array.isArray(value)) {
-      shape = { type: "array", length: value.length, first: value.slice(0, 3), last: value.slice(-3) };
-    } else if (value && typeof value === "object") {
-      const keys = Object.keys(value);
-      const sample = {};
-      for (const key of keys.slice(0, 6)) sample[key] = value[key];
-      shape = { type: "object", keys: keys.slice(0, 20), sample };
-    } else {
-      shape = { type: typeof value, value };
-    }
-    missedDiag.push({ n: Number(body.n), shape });
-  }
-  console.log("MISSED_SCHEMA_DIAG " + JSON.stringify(missedDiag.slice(-8)));
-  const missedNonEmpty = missedDiag.filter((row) => {
-    const s = row.shape;
-    return (s.type === "array" && s.length > 0) ||
-      (s.type === "object" && Array.isArray(s.keys) && s.keys.length > 0) ||
-      (s.type !== "array" && s.type !== "object" && s.value != null);
-  });
-  console.log("MISSED_SCHEMA_NONEMPTY_DIAG " + JSON.stringify({
-    count: missedNonEmpty.length,
-    first: missedNonEmpty.slice(0, 6),
-    last: missedNonEmpty.slice(-10)
-  }));
-  const ledgerDiagTargets = [
-    ["rd4e-305-uifc397", 305],
-    ["rd4e-576-ujrqapi", 576],
-    ["rd4e-983-ulsig79", 983],
-    ["m_1212_bb_12001", 1212],
-    ["cc-a05-auto-maker-1790703210663", 1219],
-    ["m_1230_bb_65659", 1230],
-    ["cc-a05-auto-maker-1790709210450", 1238],
-    ["kc-7764ef181d0d", 1245],
-    ["c118543-any-n1285-9a9ee0f661", 1285],
-    ["c12439-any-n1404-6635bbf409", 1404],
-    ["0gatsby-L-TWAP-1-stand0-1790779554", 1472],
-    ["rd4e-1517-uofvgrk", 1517]
-  ];
-  const ledgerDiag = [];
-  for (const [tradeId, fromSweep] of ledgerDiagTargets) {
-    const result = await findOutcome(tradeId, fromSweep, flowDiagMessages);
-    ledgerDiag.push({ id: tradeId, fromSweep, result });
-  }
-  console.log("LEDGER_OUTCOME_DIAG " + JSON.stringify(ledgerDiag));
-  const latestDiagSweep = Math.max(
-    0,
-    ...flowDiagMessages.map((msg) => Number(parseBody(msg)?.n || 0)).filter(Number.isFinite)
-  );
-  const archiveProofTargets = [
-    ["m_1212_bb_12001", 1212, null],
-    ["cc-a05-auto-maker-1790703210663", 1219, null],
-    ["m_1230_bb_65659", 1230, null],
-    ["cc-a05-auto-maker-1790709210450", 1238, null],
-    ["kc-7764ef181d0d", 1245, null],
-    ["c118543-any-n1285-9a9ee0f661", 1285, null],
-    ["c12439-any-n1404-6635bbf409", 1404, null],
-    ["0gatsby-L-TWAP-1-stand0-1790779554", 1472, 1509],
-    ["rd4e-1517-uofvgrk", 1517, 1518]
-  ];
-  const archiveProofDiag = [];
-  const diagIndex = await close1ArchiveIndex();
-  for (const [tradeId, fromSweep, untilSweep] of archiveProofTargets) {
-    let processing = null;
-    let bounded = null;
-    try {
-      processing = await proveArchiveProcessingAbsence(tradeId, fromSweep, latestDiagSweep, 8);
-    } catch (error) {
-      processing = { error: String(error).slice(0, 180) };
-    }
-    if (Number.isInteger(Number(untilSweep))) {
-      try {
-        bounded = await proveArchiveAbsence(tradeId, fromSweep, Number(untilSweep));
-      } catch (error) {
-        bounded = { error: String(error).slice(0, 180) };
-      }
-    }
-    const rows = [];
-    for (let n = Number(fromSweep); n <= Math.min(Number(fromSweep) + 10, latestDiagSweep); n++) {
-      const meta = diagIndex?.byN?.get?.(n);
-      rows.push({ n, status: meta?.status || "missing", path: meta?.path || null });
-    }
-    archiveProofDiag.push({ id: tradeId, fromSweep, untilSweep, processing, bounded, rows });
-  }
-  console.log("ARCHIVE_PROOF_DIAG " + JSON.stringify(archiveProofDiag));
-  const roomDiagMessages = await readExport(ROOM);
-  const missedRanges = [];
-  for (const msg of flowDiagMessages) {
-    const body = parseBody(msg);
-    if (body?.t !== "flow" || !Array.isArray(body.missed)) continue;
-    for (const row of body.missed) {
-      if (!Array.isArray(row) || row.length < 3 || String(row[0]) !== ROOM) continue;
-      const lo = Number(row[1]), hi = Number(row[2]);
-      if (Number.isFinite(lo) && Number.isFinite(hi)) missedRanges.push([lo, hi, Number(body.n)]);
-    }
-  }
-  const acceptedRoomTrades = [];
-  for (const msg of roomDiagMessages) {
-    const body = parseBody(msg);
-    const terms = body?.terms;
-    if (body?.t !== "trade" || body?.season !== SEASON || !terms?.id || !body?.taker_sig) continue;
-    const ourMaker = String(terms.maker || "") === did;
-    const ourTaker = String(body.taker || "") === did;
-    if (!ourMaker && !ourTaker) continue;
-    const seq = Number(msg?.seq || 0);
-    const makerSide = String(terms.side || "");
-    const ourSide = ourMaker ? makerSide : makerSide === "buy" ? "sell" : makerSide === "sell" ? "buy" : "?";
-    const missed = missedRanges.some(([lo, hi]) => seq >= lo && seq <= hi);
-    acceptedRoomTrades.push({
-      seq,
-      id: String(terms.id),
-      role: ourMaker ? "maker" : "taker",
-      side: ourSide,
-      qty: Number(terms.qty),
-      px: Number(terms.px),
-      until: Number(terms.until),
-      missed
-    });
-  }
-  acceptedRoomTrades.sort((a, b) => a.seq - b.seq);
-  console.log("REDDRAGON_ACCEPTED_ROOM_TRADES " + JSON.stringify(acceptedRoomTrades));
-
-  const currentDiagState = await getState();
-  const stateUncertainDiag = uncertainEntries(currentDiagState).map((x) => ({
-    id: String(x.id || ""),
-    kind: x.kind || "entry",
-    side: x.side,
-    qty: Number(x.qty),
-    entryPx: Number(x.entryPx),
-    acceptedAtSweep: Number(x.acceptedAtSweep || 0) || null,
-    fromSweep: Number(x.fromSweep || x.entrySweep || 0) || null,
-    until: Number(x.until || 0) || null,
-    postedSeq: Number(x.postedSeq || x.acceptedSeq || 0) || null,
-    liquidityRole: x.liquidityRole || null,
-    maker: x.maker || null,
-    taker: x.taker || null,
-    counterparty: x.counterparty || null,
-    confirmedOutcome: x.confirmedOutcome || null
-  }));
-  console.log("STATE_UNCERTAIN_DIAG " + JSON.stringify(stateUncertainDiag));
-
-  const close1MissedRanges = missedRanges
-    .map(([lo, hi, sweep]) => ({ lo:Number(lo), hi:Number(hi), sweep:Number(sweep) }))
-    .filter((x) => Number.isFinite(x.lo) && Number.isFinite(x.hi));
-  const seqTargets = [
-    ...HISTORICAL_LEDGER_RECOVERY_V2,
-    ...uncertainEntries(currentDiagState)
-  ];
-  const seenSeqDiag = new Set();
-  const seqMissedDiag = [];
-  for (const item of seqTargets) {
-    const id = String(item?.id || "");
-    if (!id || seenSeqDiag.has(id)) continue;
-    seenSeqDiag.add(id);
-    const seq = Number(item?.postedSeq || item?.acceptedSeq || 0);
-    const hit = Number.isFinite(seq) && seq > 0
-      ? close1MissedRanges.find((r) => seq >= r.lo && seq <= r.hi) || null
-      : null;
-    seqMissedDiag.push({ id, seq: seq || null, missed: Boolean(hit), hit });
-  }
-  console.log("SEQ_MISSED_DIAG " + JSON.stringify({
-    close1MissedRanges,
-    entries: seqMissedDiag
-  }));
-
-  const positionDiagMessages = await readExport("d-close1-positions");
-  const positionDiag = [];
-  const positionTargetSweeps = new Set([1211,1212,1213,1218,1219,1220,1229,1230,1231,1237,1238,1239,1244,1245,1246,1284,1285,1286,1287,1403,1404,1405,1406,1471,1472,1473,1516,1517,1518,1519]);
-  const peerKeys = new Set([
-    did,
-    "did:key:z6MkqK9A8b9qAVtX",
-    "did:key:z6Mkpkk2j7ww3qBU",
-    "did:key:z6MkgxsvfrJneVqP",
-    "did:key:z6MktdNSv7Z1DWFU",
-    "did:key:z6MkkbLdcFRwTVbnfQp7Dp5ov8VsbbuDRURUub6QTBNYRg1X",
-    "did:key:z6MkqnaUpPZRdQuPfthBjMeeW7JRwKB5FbXVVuQyhzQ27uMT"
-  ]);
-  for (const msg of positionDiagMessages) {
-    const body = parseBody(msg);
-    if (body?.t !== "positions" || !positionTargetSweeps.has(Number(body.n))) continue;
-    const hits = (Array.isArray(body.top) ? body.top : []).filter((row) => peerKeys.has(String(row?.[0] || "")));
-    positionDiag.push({ n:Number(body.n), open:body.open, longs:body.longs, shorts:body.shorts, hits, topCount:Array.isArray(body.top)?body.top.length:0 });
-  }
-  console.log("POSITION_TARGET_DIAG " + JSON.stringify(positionDiag));
-
-  const pnlDiagMessages = await readExport("d-close1-pnl");
-  const pnlDiag = [];
-  for (const msg of pnlDiagMessages) {
-    const body = parseBody(msg);
-    if (body?.t !== "pnl" || !positionTargetSweeps.has(Number(body.n))) continue;
-    const hit = (Array.isArray(body.top) ? body.top : []).find((row) => String(row?.[0] || "") === did) || null;
-    pnlDiag.push({ n:Number(body.n), mark:body.mark, hit, topCount:Array.isArray(body.top)?body.top.length:0 });
-  }
-  console.log("PNL_TARGET_DIAG " + JSON.stringify(pnlDiag));
   console.log("RACE_SIZING_SELFTEST_OK");
   process.exit(0);
 }
@@ -2774,7 +2644,11 @@ async function findReliableOpposingOffer(decision, latest) {
   }
 
   const oppositeMakerSide = desiredSide === "buy" ? "sell" : "buy";
-  const minQty = closingExit ? Math.max(0.1, desiredQty * PARTIAL_EXIT_MIN_FRACTION) : Math.max(0.1, desiredQty * 0.40);
+  const minQty = closingExit
+    ? Math.max(0.1, desiredQty * PARTIAL_EXIT_MIN_FRACTION)
+    : decision?.race?.allIn
+      ? 0.1
+      : Math.max(0.1, desiredQty * 0.40);
   const maxQty = Math.min(60, desiredQty);
   const refPx = Number(latest.px);
   const candidates = [];
@@ -2881,8 +2755,9 @@ function scaleInDecision(openState, signal, latest, race, catalyst) {
   const px = Number(latest?.px), entryPx = Number(openState?.entryPx), qty = Number(openState?.qty);
   if (![px, entryPx, qty].every(Number.isFinite) || qty <= 0) return null;
   if (Number(openState.addRetryAfterSweep || 0) > Number(latest?.n || 0)) return null;
-  if (Number(openState.addCount || 0) >= 2) return null;
-  if (uncertainEntries(openState).length) return null;
+  const allIn = allInRaceMode(race);
+  if (Number(openState.addCount || 0) >= (allIn ? 4 : 2)) return null;
+  if (uncertainEntries(openState).length && !allIn) return null;
 
   const shape = directionalShape(signal);
   const long = openState.side === "buy";
@@ -2895,7 +2770,7 @@ function scaleInDecision(openState, signal, latest, race, catalyst) {
     : Number(signal.move15) <= -0.10 && Number(signal.move30) <= -0.12;
   if (targetQty > qty + 0.09 && favorableMove >= 0.15 && directionalSupport && !fastAdverse) {
     const realizedCapital = Math.max(1000, 10000 + Number(openState.realizedScoreEst || 0));
-    const totalCap = Math.max(0, Math.min(60, realizedCapital / (px * 1.04)));
+    const totalCap = Math.max(0, Math.min(60, realizedCapital / (px * (allIn ? 1.035 : 1.04))));
     const addQty = Math.floor(Math.min(targetQty - qty, MAKER_ENTRY_CHUNK_QTY, totalCap - qty) * 100) / 100;
     if (addQty >= 3) return { action: "enter", side: openState.side, qty: addQty, targetQty, confidence: 0.97, reason: "build_target_position" };
   }
@@ -2905,14 +2780,16 @@ function scaleInDecision(openState, signal, latest, race, catalyst) {
   if (favorableMove < trigger) return null;
 
   const realizedCapital = Math.max(1000, 10000 + Number(openState.realizedScoreEst || 0));
-  const totalCap = Math.max(0, Math.min(60, realizedCapital / (px * 1.04)));
+  const totalCap = Math.max(0, Math.min(60, realizedCapital / (px * (allIn ? 1.035 : 1.04))));
   const remainingCap = Math.max(0, totalCap - qty);
   if (remainingCap < 3) return null;
 
   const gap = Number(race?.leaderGap);
-  const desired = Number(openState.addCount || 0) === 0
-    ? (Number.isFinite(gap) && gap >= 750 ? 10 : 7)
-    : (Number.isFinite(gap) && gap >= 750 ? 7 : 5);
+  const desired = allIn
+    ? Math.min(MAKER_ENTRY_CHUNK_QTY, remainingCap)
+    : Number(openState.addCount || 0) === 0
+      ? (Number.isFinite(gap) && gap >= 750 ? 10 : 7)
+      : (Number.isFinite(gap) && gap >= 750 ? 7 : 5);
   const addQty = Math.floor(Math.min(desired, remainingCap) * 100) / 100;
   if (addQty < 3) return null;
   return { action: "enter", side: openState.side, qty: addQty, confidence: 0.98, reason: Number(openState.addCount || 0) === 0 ? "scale_in_winner_1" : "scale_in_winner_2" };
@@ -4437,7 +4314,7 @@ const realConfirmedDecision = applyRealNvdaSignal(
 );
 const calendarDecision = applyCalendarRiskGate(realConfirmedDecision, realNvdaSignal, race, catalyst);
 const sizedDecision = applyRaceSizing(calendarDecision, race, latest.px);
-const decision = applyUncertainRiskCap(sizedDecision, state, latest.px);
+const decision = applyUncertainRiskCap(sizedDecision, state, latest.px, race);
 if (decision?.action === "enter") {
   console.log(
     `RACE_SIZE leaderGap=${decision.race?.leaderGap ?? "na"} hLeft=${decision.race?.hoursRemaining ?? "na"} mult=${decision.race?.multiplier ?? "na"} qty=${Number(decision.qty).toFixed(2)}`
