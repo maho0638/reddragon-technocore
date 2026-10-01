@@ -2143,6 +2143,46 @@ if (raceSelftest) {
     ledgerDiag.push({ id: tradeId, fromSweep, result });
   }
   console.log("LEDGER_OUTCOME_DIAG " + JSON.stringify(ledgerDiag));
+  const latestDiagSweep = Math.max(
+    0,
+    ...flowDiagMessages.map((msg) => Number(parseBody(msg)?.n || 0)).filter(Number.isFinite)
+  );
+  const archiveProofTargets = [
+    ["m_1212_bb_12001", 1212, null],
+    ["cc-a05-auto-maker-1790703210663", 1219, null],
+    ["m_1230_bb_65659", 1230, null],
+    ["cc-a05-auto-maker-1790709210450", 1238, null],
+    ["kc-7764ef181d0d", 1245, null],
+    ["c118543-any-n1285-9a9ee0f661", 1285, null],
+    ["c12439-any-n1404-6635bbf409", 1404, null],
+    ["0gatsby-L-TWAP-1-stand0-1790779554", 1472, 1509],
+    ["rd4e-1517-uofvgrk", 1517, 1518]
+  ];
+  const archiveProofDiag = [];
+  const diagIndex = await close1ArchiveIndex();
+  for (const [tradeId, fromSweep, untilSweep] of archiveProofTargets) {
+    let processing = null;
+    let bounded = null;
+    try {
+      processing = await proveArchiveProcessingAbsence(tradeId, fromSweep, latestDiagSweep, 8);
+    } catch (error) {
+      processing = { error: String(error).slice(0, 180) };
+    }
+    if (Number.isInteger(Number(untilSweep))) {
+      try {
+        bounded = await proveArchiveAbsence(tradeId, fromSweep, Number(untilSweep));
+      } catch (error) {
+        bounded = { error: String(error).slice(0, 180) };
+      }
+    }
+    const rows = [];
+    for (let n = Number(fromSweep); n <= Math.min(Number(fromSweep) + 10, latestDiagSweep); n++) {
+      const meta = diagIndex?.byN?.get?.(n);
+      rows.push({ n, status: meta?.status || "missing", path: meta?.path || null });
+    }
+    archiveProofDiag.push({ id: tradeId, fromSweep, untilSweep, processing, bounded, rows });
+  }
+  console.log("ARCHIVE_PROOF_DIAG " + JSON.stringify(archiveProofDiag));
   const roomDiagMessages = await readExport(ROOM);
   const missedRanges = [];
   for (const msg of flowDiagMessages) {
