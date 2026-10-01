@@ -1344,7 +1344,10 @@ function activeContestEntry(signal, latest, race, catalyst) {
     : m5 <= -0.03 && (!Number.isFinite(m60) || m60 <= 0.10);
 
   const side = up ? "buy" : "sell";
-  if (!directionalFeeRoom(side, px)) return null;
+  if (!directionalFeeRoom(side, px) && !allIn) return null;
+  if (!directionalFeeRoom(side, px) && allIn) {
+    console.log(`ALL_IN_FEE_ROOM_OVERRIDE side=${side} px=${px.toFixed(2)} source=active`);
+  }
 
   const highPressure = Number.isFinite(gap) && gap >= 750;
   const qty = highPressure ? (supported ? 40 : 34) : (supported ? 30 : 24);
@@ -1370,7 +1373,7 @@ function aggressiveDirectionalEntry(signal, latest, race, catalyst) {
 
   const s = directionalShape(signal);
   const roundTripFeeMove = 0.02 * px;
-  const viable = (target) => Math.abs(Number(target) - px) >= roundTripFeeMove + 0.55;
+  const viable = (target) => allIn || Math.abs(Number(target) - px) >= roundTripFeeMove + 0.55;
   const highPressure = Number.isFinite(gap) && gap >= 750;
   const qtyStrong = highPressure ? 38 : Number.isFinite(gap) && gap >= 350 ? 30 : 22;
   const qtyTurn = highPressure ? 30 : 20;
@@ -1541,7 +1544,7 @@ function tacticalRangeEntry(signal, latest, race, catalyst) {
   const px = Number(latest?.px);
   if (!Number.isFinite(px) || px <= 0) return null;
   const roundTripFeeMove = 0.02 * px;
-  const viable = (target) => Math.abs(Number(target) - px) >= roundTripFeeMove + 0.75;
+  const viable = (target) => allIn || Math.abs(Number(target) - px) >= roundTripFeeMove + 0.75;
 
   if (px >= 231.5 && px <= 234.5 && trend.strongDown && viable(223)) {
     return { action: "enter", side: "sell", qty: trend.veryStrongDown ? 20 : 12, confidence: trend.veryStrongDown ? 0.97 : 0.94, reason: "upper_band_reversal" };
@@ -1712,9 +1715,13 @@ function applyRealNvdaSignal(decision, signal, race, distinct, latest) {
   }
 
   if (!Number.isFinite(gap) || gap < 175 || !alignedOrLagging) return decision;
-  if (!directionalFeeRoom(side, Number(latest?.px))) {
+  const allIn = allInRaceMode(race);
+  if (!directionalFeeRoom(side, Number(latest?.px)) && !allIn) {
     console.log(`REAL_NVDA_FEE_ROOM_BLOCK side=${side} px=${Number(latest?.px).toFixed(2)}`);
     return decision;
+  }
+  if (!directionalFeeRoom(side, Number(latest?.px)) && allIn) {
+    console.log(`ALL_IN_FEE_ROOM_OVERRIDE side=${side} px=${Number(latest?.px).toFixed(2)} source=real_nvda`);
   }
 
   const veryStrong = trend.veryStrongUp || trend.veryStrongDown;
@@ -1858,6 +1865,15 @@ if (raceSelftest) {
     { blockNewEntries:true, requireVeryStrong:false, active:{ name:"TEST", phase:"pre" } }
   );
   if (!allInCalendar) throw new Error("RACE_SELFTEST_ALL_IN_CATALYST_OVERRIDE");
+  const allInModerateEntry = activeContestEntry(
+    { fresh:true, move5:0.00, move15:0.26, move30:0.29, move60:0.32, move240:1.45 },
+    { px:231.01 },
+    allInRace,
+    { blockNewEntries:false, requireVeryStrong:false, active:null }
+  );
+  if (!(allInModerateEntry?.action === "enter" && allInModerateEntry.side === "buy" && allInModerateEntry.confidence >= 0.97)) {
+    throw new Error("RACE_SELFTEST_ALL_IN_MODERATE_ENTRY");
+  }
   const allInWinner = tacticalExitDecision(
     { state:"open", side:"sell", qty:30, entryPx:230, entryFeeEst:69 },
     { fresh:true, move5:-0.2, move15:-0.5, move30:-0.7, move60:-0.8, move240:-1.5 },
