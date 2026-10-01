@@ -19,5 +19,5 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          gh run cancel 36926663626 --repo "$REPO" || true
-          echo "STALE_RUN_CANCEL_REQUESTED=36926663626"
+          gh run cancel 36928566748 --repo "$REPO" || true
+          echo "STALE_RUN_CANCEL_REQUESTED=36928566748"
