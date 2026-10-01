@@ -865,24 +865,56 @@ function recoverLostLegacyUncertain(state) {
   };
 }
 
+function uncertainPositionDelta(entry) {
+  const qty = Number(entry?.qty);
+  if (!Number.isFinite(qty) || qty <= 0) return null;
+  if (entry?.kind === "pending_exit") {
+    // pending_exit stores the original entry side. The actual close trade is opposite.
+    return (entry.side === "buy" ? -1 : 1) * qty;
+  }
+  if (entry?.side === "buy") return qty;
+  if (entry?.side === "sell") return -qty;
+  return null;
+}
+
 function uncertaintyEnvelope(state) {
   let lo = 0;
   let hi = 0;
   for (const x of uncertainEntries(state)) {
-    const delta = (x.side === "buy" ? 1 : -1) * Number(x.qty);
-    lo += Math.min(0, delta);
-    hi += Math.max(0, delta);
+    const delta = uncertainPositionDelta(x);
+    if (!Number.isFinite(delta)) continue;
+    if (x.confirmedOutcome === "settled" && x.kind !== "pending_exit") {
+      lo += delta;
+      hi += delta;
+    } else {
+      lo += Math.min(0, delta);
+      hi += Math.max(0, delta);
+    }
   }
   return { lo, hi, worst: Math.max(Math.abs(lo), Math.abs(hi)) };
 }
 
 function ledgerEntryOrder(entry) {
+  if (entry?.kind === "pending_exit") {
+    return Number(entry?.requestedAtSweep || entry?.acceptedAtSweep || Number.MAX_SAFE_INTEGER);
+  }
   return Number(entry?.fromSweep || entry?.entrySweep || entry?.acceptedAtSweep || Number.MAX_SAFE_INTEGER);
+}
+
+function ledgerTradePx(entry) {
+  return Number(entry?.kind === "pending_exit" ? entry?.exitPx : entry?.entryPx);
+}
+
+function ledgerTradeSide(entry) {
+  if (entry?.kind === "pending_exit") {
+    return entry?.side === "buy" ? -1 : entry?.side === "sell" ? 1 : 0;
+  }
+  return entry?.side === "buy" ? 1 : entry?.side === "sell" ? -1 : 0;
 }
 
 function minimumLedgerFee(entry) {
   const qty = Number(entry?.qty);
-  const px = Number(entry?.entryPx);
+  const px = ledgerTradePx(entry);
   return Number.isFinite(qty) && qty > 0 && Number.isFinite(px) && px > 0
     ? 0.01 * qty * px
     : null;
@@ -903,8 +935,8 @@ function ledgerOpeningQty(lots, side, qty) {
 
 function applyLedgerTradeState(candidate, entry, fee) {
   const qty = Number(entry.qty);
-  const px = Number(entry.entryPx);
-  const side = entry.side === "buy" ? 1 : -1;
+  const px = ledgerTradePx(entry);
+  const side = ledgerTradeSide(entry);
   let cash = Number(candidate.cash) - Number(fee);
   const lots = cloneLedgerLots(candidate.lots);
   let left = qty;
@@ -930,11 +962,11 @@ function applyLedgerTradeState(candidate, entry, fee) {
 function dedupeLedgerStates(states) {
   const out = new Map();
   for (const candidate of states) {
-    const key = [
-      Number(candidate.cash).toFixed(6),
-      ...cloneLedgerLots(candidate.lots).map(([qty, px]) => `${qty.toFixed(6)}@${px.toFixed(6)}`)
-    ].join("|");
-    if (!out.has(key)) out.set(key, candidate);
+    const key = cloneLedgerLots(candidate.lots)
+      .map(([qty, px]) => `${qty.toFixed(6)}@${px.toFixed(6)}`)
+      .join("|");
+    const prior = out.get(key);
+    if (!prior || Number(candidate.cash) > Number(prior.cash)) out.set(key, candidate);
   }
   return [...out.values()];
 }
@@ -949,17 +981,15 @@ function feasibleUncertainLedger(state) {
       bounds: { lo: 0, hi: 0, certain: 0 }
     };
   }
-  if (entries.some((x) => x?.kind === "pending_exit")) return { reliable: false };
-
   const ordered = [...entries].sort((a, b) => ledgerEntryOrder(a) - ledgerEntryOrder(b));
   let states = [{ cash: Math.max(0, 10000 + Number(state?.realizedScoreEst || 0)), lots: [] }];
   const forcedVoidIds = [];
 
   for (const entry of ordered) {
     const qty = Number(entry.qty);
-    const px = Number(entry.entryPx);
-    const side = entry.side === "buy" ? 1 : entry.side === "sell" ? -1 : 0;
-    const fee = entry.confirmedOutcome === "settled"
+    const px = ledgerTradePx(entry);
+    const side = ledgerTradeSide(entry);
+    const fee = entry.confirmedOutcome === "settled" && entry.kind !== "pending_exit"
       ? (finiteNonnegativeSettlementFee(entry.entryFeeEst) ?? minimumLedgerFee(entry))
       : minimumLedgerFee(entry);
     if (!side || !Number.isFinite(qty) || qty <= 0 || !Number.isFinite(px) || px <= 0 || !Number.isFinite(fee)) {
@@ -988,7 +1018,7 @@ function feasibleUncertainLedger(state) {
     }
     states = dedupeLedgerStates(next);
     if (!states.length) return { reliable: false };
-    if (entry.confirmedOutcome !== "settled" && !canSettleAnywhere) {
+    if (entry.kind !== "pending_exit" && entry.confirmedOutcome !== "settled" && !canSettleAnywhere) {
       forcedVoidIds.push(String(entry.id || ""));
     }
   }
@@ -1055,8 +1085,9 @@ function positionExposureBounds(state) {
   let uncertainLo = 0;
   let uncertainHi = 0;
   for (const x of uncertainEntries(state)) {
-    const delta = (x.side === "buy" ? 1 : -1) * Number(x.qty);
-    if (x.confirmedOutcome === "settled") {
+    const delta = uncertainPositionDelta(x);
+    if (!Number.isFinite(delta)) continue;
+    if (x.confirmedOutcome === "settled" && x.kind !== "pending_exit") {
       certain += delta;
     } else {
       uncertainLo += Math.min(0, delta);
@@ -2127,6 +2158,25 @@ if (raceSelftest) {
   const explicitLedgerClear = mergePersistentStateMeta({ state: "idle", uncertainEntries: [] }, ledgerRecovery.state);
   if (explicitLedgerClear.uncertainEntries.length !== 0) {
     throw new Error("RACE_SELFTEST_LEDGER_EXPLICIT_CLEAR");
+  }
+  const pendingExitBounds = positionExposureBounds({
+    uncertainEntries: [
+      { kind:"pending_exit", id:"px-short-close", side:"sell", qty:20, entryPx:224, exitPx:230, requestedAtSweep:100 },
+      { kind:"pending_exit", id:"px-long-close", side:"buy", qty:7, entryPx:225, exitPx:231, requestedAtSweep:101 }
+    ]
+  });
+  if (!(pendingExitBounds.lo === -7 && pendingExitBounds.hi === 20)) {
+    throw new Error("RACE_SELFTEST_PENDING_EXIT_DIRECTION");
+  }
+  const pendingExitModel = feasibleUncertainLedger({
+    realizedScoreEst:0,
+    uncertainEntries:[
+      { kind:"position_shadow", id:"s", side:"sell", qty:31.53, entryPx:224.26, entryFeeEst:70.709178, confirmedOutcome:"settled", fromSweep:1 },
+      { kind:"pending_exit", id:"pe", exitId:"x", side:"sell", qty:20, entryPx:224.26, exitPx:230.50, entryFeeEst:44.852, requestedAtSweep:2, acceptedAtSweep:2 }
+    ]
+  });
+  if (!(pendingExitModel?.reliable && pendingExitModel.bounds.lo < -31 && pendingExitModel.bounds.hi > -12 && pendingExitModel.bounds.hi < -11)) {
+    throw new Error("RACE_SELFTEST_PENDING_EXIT_FEASIBLE_MODEL");
   }
   const crossingBounds = positionExposureBounds({
     uncertainEntries: [
