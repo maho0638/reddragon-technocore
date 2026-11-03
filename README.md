@@ -4,7 +4,7 @@ Independent, community-built FLOP research and agent tooling. RedDragon tracks a
 
 - FLOP Observatory: https://reddragon-technocore.vercel.app/flop
 - Full Agent Lab: https://reddragon-technocore.vercel.app
-- X: https://x.com/joannawolker
+- X: https://x.com/lionmousse
 - Medium: https://medium.com/@ayazunal450
 - Repository: https://github.com/maho0638/reddragon-technocore
 
@@ -14,29 +14,28 @@ Independent, community-built FLOP research and agent tooling. RedDragon tracks a
 
 FLOP is moving quickly and its public surfaces can temporarily disagree while the specification evolves. RedDragon deliberately separates the live authoritative specification from stale mirrors or provisional overview copy instead of blending them together.
 
-Current source check, 2026-09-17:
+Current source check, **2026-11-03** (snapshot, not real-time monitoring):
 
-- FLOP Yellow Paper: **v0.5.0 (draft / implementation spec — iterating)**, page metadata updated 2026-09-05.
-- Live authoritative genesis supply: **4.4B FLOP** under **D-0440**.
-- Current genesis buckets: **1.2B miner + 1.2B validator + 1.2B agent + 800M ecosystem/incentives reserve**.
-- Validator minimum stake in the live Yellow Paper: **1.2M FLOP**.
-- The live Yellow Paper and teaser now agree on 4.4B. The public GitHub mirror still carries the older 3.5B / 305.505M-validator revision, so RedDragon flags the mirror as stale and follows the live FLOP-hosted specification.
-- Yellow Paper open item **E.38** still leaves testnet→mainnet scoring, caps, activity minimums, validator conversion, agent vesting, whether spend-to-unlock ships and remainder handling unresolved.
-- The official Agent page states a public **3 FLOP inference spend → 1 airdropped FLOP unlocked** rule, but RedDragon keeps it labeled as unresolved at the normative-spec level while E.38 remains open.
-- Testnet remains planned for **Q4 2026 (~90 days)**; RedDragon did not verify an official public live faucet or inference endpoint as of the check date.
-- Official GPU-provider, validator and KOL/creator applications are currently linked from flop.finance.
-- FLOP's rentable-GPU market monitor is live at https://gpus.flop.finance/.
+- Yellow Paper **v0.5.0 draft** (page updated **2026-09-24**). Its public GitHub mirror was synchronized to **D-0440 on 24 September**: the previous 3.5B supply mismatch in [issue #54](https://github.com/flop-labs/yellowpaper/issues/54) is resolved.
+- Genesis supply **4.4B FLOP**: **1.2B miner + 1.2B validator + 1.2B agent + 800M reserve**. These are cohort pools, not guaranteed personal rewards. Validator minimum stake is **1.2M FLOP** in the draft.
+- **R8.7–R8.8** specify the Agent genesis grant unlocking **1 FLOP per 3 FLOP** of *finalized eligible payable funded by locked grant principal*, subject to the dispute window and **75% locked-principal spend cap**. **Do not map testnet spending directly onto mainnet unlocked tokens.**
+- **E.38** still leaves testnet conversion scoring, caps, identity aggregation, appeals and residual disposition open; runtime implementation of vesting is partial.
+- Official public **testnet** operator status was **planned / next (unreleased)** on 3 November 2026. The 3 November date was a *working target*, not a confirmed launch. Public genesis, RPC, faucet and agent admission are not verified.
+- **Devnet** is development-only with administrator-reviewed admission and no verified open public operator enrollment; it carries **no reward or airdrop weight**.
+- Mainnet/TGE remains a **Q1 2027 working target**, subject to readiness and actual testnet schedule.
+- KOL/creator applications: https://flop.finance/apply/kol ; individual compensation is not guaranteed.
+- GPU market monitor: https://gpus.flop.finance/ .
 
-Machine-readable status: [`public/flop-source-status.json`](public/flop-source-status.json)
+Machine-readable status: [`public/flop-source-status.json`](public/flop-source-status.json).
 
-Official sources used:
-
+Verified official sources:
 - https://flop.finance/intro/yellowpaper/
+- https://docs.flop.network/networks/testnet
+- https://docs.flop.network/networks/devnet
+- https://docs.flop.network/docs/testnet-and-timeline
 - https://flop.finance/intro/agent/
-- https://github.com/flop-labs/yellowpaper
-- https://flop.finance/teaser/
-- https://flop.finance/
-- https://gpus.flop.finance/
+- https://flop.finance/testnet/
+- https://github.com/flop-labs/yellowpaper/issues/54
 
 ## What the project includes
 

@@ -1,0 +1,49 @@
+name: Verify RedDragon FLOP Observatory
+on:
+  push:
+    branches: [main]
+    paths:
+      - "public/flop.html"
+      - "public/flop-source-status.json"
+      - "public/reddragon-contribution.json"
+      - "public/flop-spec-refresh.js"
+      - "public/testnet-toolkit.js"
+      - "public/config.js"
+      - "public/index.html"
+      - "scripts/verify-flop-observatory.test.mjs"
+      - ".github/workflows/verify-flop-observatory.yml"
+  pull_request:
+    paths:
+      - "public/flop.html"
+      - "public/flop-source-status.json"
+      - "public/reddragon-contribution.json"
+      - "public/flop-spec-refresh.js"
+      - "public/testnet-toolkit.js"
+      - "public/config.js"
+      - "public/index.html"
+      - "scripts/verify-flop-observatory.test.mjs"
+      - ".github/workflows/verify-flop-observatory.yml"
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout (no persisted credentials)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+          package-manager-cache: false
+      - name: Syntax checks
+        run: |
+          node --check public/config.js
+          node --check public/flop-spec-refresh.js
+          node --check public/testnet-toolkit.js
+          node --check scripts/verify-flop-observatory.test.mjs
+      - name: Source and business-rule regression
+        run: node --test scripts/verify-flop-observatory.test.mjs

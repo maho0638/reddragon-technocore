@@ -1,6 +1,6 @@
 const cfg = window.APP_CONFIG || {};
 const SITE_URL = cfg.siteUrl || location.origin;
-const X_HANDLE = cfg.xHandle || "@joannawalker";
+const X_HANDLE = cfg.xHandle || "@lionmousse";
 const X_USER = X_HANDLE.replace(/^@/, "");
 const REPO_URL = cfg.githubRepoUrl || "https://github.com/maho0638/reddragon-technocore";
 const MEDIUM_URL = cfg.mediumUrl || "https://medium.com/@ayazunal450";

@@ -205,8 +205,8 @@ function bindSimpleChecklist(isEn) {
 
 function applyFinalFixes() {
   const isEn = currentLang() === "en";
-  const handle = cfg.xHandle || "@joannawolker";
-  const url = cfg.xUrl || "https://x.com/joannawolker";
+  const handle = cfg.xHandle || "@lionmousse";
+  const url = cfg.xUrl || "https://x.com/lionmousse";
 
   const ownerX = document.querySelector("#ownerX");
   if (ownerX) {
@@ -215,14 +215,14 @@ function applyFinalFixes() {
   }
 
   const xInput = document.querySelector("#xhandle");
-  if (xInput && (!xInput.value.trim() || xInput.value.trim() === "@joannawalker")) {
+  if (xInput && (!xInput.value.trim() || xInput.value.trim() === "@lionmousse")) {
     xInput.value = handle;
     xInput.setAttribute("value", handle);
   }
 
-  document.querySelectorAll('a[href="https://x.com/joannawalker"]').forEach((a) => {
+  document.querySelectorAll('a[href="https://x.com/lionmousse"]').forEach((a) => {
     a.href = url;
-    a.textContent = (a.textContent || "").replaceAll("@joannawalker", handle);
+    a.textContent = (a.textContent || "").replaceAll("@lionmousse", handle);
   });
 
   const didSecret = document.querySelector("#copyDidSecret")?.closest(".secret-row");

@@ -30,7 +30,7 @@
       <a href="https://flop.finance/intro/agent/" target="_blank" rel="noopener noreferrer">Agent</a>
       <a href="https://gpus.flop.finance/" target="_blank" rel="noopener noreferrer">GPU Market</a>
       <a href="/">Agent Lab</a>
-      <a href="https://x.com/joannawolker" target="_blank" rel="noopener noreferrer">@joannawolker</a>
+      <a href="https://x.com/lionmousse" target="_blank" rel="noopener noreferrer">@lionmousse</a>
     </nav>
   </header>
 
@@ -64,32 +64,32 @@
         <a href="https://flop.finance/intro/yellowpaper/" target="_blank" rel="noopener noreferrer">§9 / Appendix A →</a>
       </article>
 
-      <article class="status-card warn">
-        <span>OFFICIAL-SOURCE DRIFT</span>
-        <h2>Live spec ≠ stale GitHub mirror</h2>
-        <p>The live Yellow Paper and teaser now agree on 4.4B genesis supply under D-0440. The public GitHub mirror still shows the older 3.5B / 305.505M-validator revision, so RedDragon follows the live authoritative spec and labels the mirror as stale.</p>
+      <article class="status-card good">
+        <span>SPEC MIRROR · SYNCED</span>
+        <h2>GitHub mirror caught up</h2>
+        <p>The public Yellow Paper mirror was synchronized to D-0440 on 24 September 2026. Both the live specification and the GitHub mirror now reflect 4.4B FLOP genesis supply. The former 3.5B mismatch is resolved.</p>
         <a href="https://github.com/flop-labs/yellowpaper/issues/54" target="_blank" rel="noopener noreferrer">Tracked upstream →</a>
       </article>
 
       <article class="status-card warn">
-        <span>OPEN SPEC ITEM · E.38</span>
-        <h2>Airdrop mechanics are not final</h2>
-        <p>The official agent page states a 3:1 inference-spend unlock rule, while Yellow Paper E.38 still leaves testnet→mainnet scoring, caps, activity minimums, agent vesting and whether spend-to-unlock ships as unresolved.</p>
+        <span>AIRDROP CONVERSION · E.38 OPEN</span>
+        <h2>Scoring and conversion remain open</h2>
+        <p>Yellow Paper R8.7–R8.8 now specify the 3:1 Agent unlock rule: one FLOP of locked grant principal unlocks per three FLOP of eligible, finalized locked-grant compute payables, with locked spending capped at 75% of the grant. This is a <em>mainnet grant rule</em>, not an airdrop estimate from testnet spending. E.38 still leaves conversion scoring, caps and identity rules unresolved; implementation is partial.</p>
         <a href="https://flop.finance/intro/yellowpaper/" target="_blank" rel="noopener noreferrer">Verify E.38 →</a>
       </article>
 
       <article class="status-card">
         <span>AGENT GENESIS ALLOCATION</span>
         <h2>1.2B FLOP</h2>
-        <p>The live Yellow Paper allocates 1.2B FLOP to the genesis agent cohort. Final conversion and vesting mechanics remain subject to E.38.</p>
+        <p>The current draft allocates 1.2B FLOP to the agent genesis cohort, not to any individual agent. Conversion scoring, snapshot and anti-fraud rules are separate from the locked-grant unlock mechanism and remain subject to E.38.</p>
         <a href="https://flop.finance/intro/agent/" target="_blank" rel="noopener noreferrer">Official agent page →</a>
       </article>
 
       <article class="status-card">
-        <span>TESTNET READINESS</span>
-        <h2>Q4 2026 planned</h2>
-        <p>As checked on 2026-09-17, RedDragon has not verified an official public FLOP faucet or inference endpoint. Unverified endpoints are never presented as official.</p>
-        <a href="https://flop.finance/teaser/" target="_blank" rel="noopener noreferrer">Roadmap source →</a>
+        <span>PUBLIC TESTNET · NOT RELEASED</span>
+        <h2>Planned / unreleased</h2>
+        <p>Checked 3 November 2026: FLOP's official operator hub still marks public testnet as planned and its release as unreleased. No verified public genesis, RPC, faucet admission or agent onboarding is published. The 3 November target was not a guaranteed launch date.</p>
+        <a href="https://docs.flop.network/networks/testnet" target="_blank" rel="noopener noreferrer">Live official testnet status →</a>
       </article>
 
       <article class="status-card good">
@@ -104,6 +104,12 @@
         <h2>Live</h2>
         <p>FLOP publishes a live rentable-GPU market monitor covering multiple GPU classes and future settlement tenors. This is market data, not a testnet faucet or miner-reward guarantee.</p>
         <a href="https://gpus.flop.finance/" target="_blank" rel="noopener noreferrer">Open GPU market →</a>
+      </article>
+      <article class="status-card warn">
+        <span>DEVNET · DEVELOPMENT ONLY</span>
+        <h2>No airdrop weight</h2>
+        <p>FLOP operates development infrastructure, but the operator hub still lists an unreleased build with administrator-reviewed admission and no verified open operator enrollment. Devnet activity earns no rewards or testnet airdrop weight.</p>
+        <a href="https://docs.flop.network/networks/devnet" target="_blank" rel="noopener noreferrer">Official devnet status →</a>
       </article>
     </section>
 
@@ -161,13 +167,16 @@
         <a href="https://flop.finance/teaser/" target="_blank" rel="noopener noreferrer"><b>FLOP Teaser</b><span>Public overview and testnet roadmap</span></a>
         <a href="https://flop.finance/" target="_blank" rel="noopener noreferrer"><b>flop.finance</b><span>Official project entry point and applications</span></a>
         <a href="https://gpus.flop.finance/" target="_blank" rel="noopener noreferrer"><b>FLOP GPU market</b><span>Official rentable-GPU market monitor</span></a>
-        <a href="https://github.com/flop-labs/yellowpaper" target="_blank" rel="noopener noreferrer"><b>flop-labs/yellowpaper</b><span>Public mirror; currently stale versus live D-0440 spec</span></a>
+        <a href="https://github.com/flop-labs/yellowpaper" target="_blank" rel="noopener noreferrer"><b>flop-labs/yellowpaper</b><span>Public mirror synced to D-0440 on 24 September</span></a>
+        <a href="https://docs.flop.network/networks/testnet" target="_blank" rel="noopener noreferrer"><b>Official testnet network</b><span>Current launch, release and public admission status</span></a>
+        <a href="https://docs.flop.network/networks/devnet" target="_blank" rel="noopener noreferrer"><b>Official devnet network</b><span>Development-only admission status</span></a>
+        <a href="https://docs.flop.network/docs/testnet-and-timeline" target="_blank" rel="noopener noreferrer"><b>Testnet timeline FAQ</b><span>Working dates and Devnet reward distinction</span></a>
       </div>
     </section>
   </main>
 
   <footer>
-    <span>RedDragon FLOP Community Observatory · checked 2026-09-19</span>
+    <span>RedDragon FLOP Community Observatory · checked 2026-11-03</span>
     <span>Community-built · source-first · no affiliation claim</span>
   </footer>
   <script src="/technocore-capacity.js" defer></script>

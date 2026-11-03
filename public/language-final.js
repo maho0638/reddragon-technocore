@@ -65,7 +65,7 @@ function translateCoreEN() {
   txt('.hero-actions [data-jump="1"]', "Create my identity");
   txt(".hero-actions .ghost-link", "View onboarding steps");
   const owner=$(".ownerline small");
-  if(owner) owner.innerHTML=`Maintained by <a href="${cfg.xUrl||"https://x.com/joannawolker"}" target="_blank" rel="noreferrer">${cfg.xHandle||"@joannawolker"}</a>`;
+  if(owner) owner.innerHTML=`Maintained by <a href="${cfg.xUrl||"https://x.com/lionmousse"}" target="_blank" rel="noreferrer">${cfg.xHandle||"@lionmousse"}</a>`;
   txt(".art-overlay small", "The private key stays local unless you explicitly copy it for GitHub Secrets");
   const signal=$$(".signalbar > div span");
   const signalText=["Unique DID + useful Technocore contribution.","Do not use a wallet seed. This identity uses a separate Ed25519 key.","Only FLOP Labs can confirm any airdrop amount or claim criteria."];
@@ -92,9 +92,9 @@ function translateCoreEN() {
 
 function translateEnhancementsEN() {
   txt("#rdShareSiteX","𝕏 Share this site");
-  const strip=$("#rdSocialStrip"); if(strip){const links=strip.querySelectorAll('a'); const follow=[...links].find(a=>a.href.includes('x.com/')); if(follow) follow.textContent=`Follow ${cfg.xHandle||"@joannawolker"}`;}
+  const strip=$("#rdSocialStrip"); if(strip){const links=strip.querySelectorAll('a'); const follow=[...links].find(a=>a.href.includes('x.com/')); if(follow) follow.textContent=`Follow ${cfg.xHandle||"@lionmousse"}`;}
   txt("#rdSharePanel h3","Share · everyone uses their own account");
-  txt("#rdSharePanel p",`The X button opens the composer for the X account currently signed in to this browser. The project account is mentioned as ${cfg.xHandle||"@joannawolker"}. For Medium, copy the draft and publish it from your own account.`);
+  txt("#rdSharePanel p",`The X button opens the composer for the X account currently signed in to this browser. The project account is mentioned as ${cfg.xHandle||"@lionmousse"}. For Medium, copy the draft and publish it from your own account.`);
   txt("#rdProofX","𝕏 Share DID + proof"); txt("#rdThreadCopy","Copy 3-post thread"); txt("#rdMediumCopy","Copy Medium draft");
   const mediumNew=$("#rdSharePanel a"); if(mediumNew) mediumNew.textContent="Open a new Medium story";
 

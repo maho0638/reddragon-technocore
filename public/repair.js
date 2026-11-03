@@ -61,23 +61,23 @@ function scrubStoredState() {
 }
 
 function repairXLinks() {
-  const handle = cfg.xHandle || "@joannawolker";
-  const url = cfg.xUrl || "https://x.com/joannawolker";
+  const handle = cfg.xHandle || "@lionmousse";
+  const url = cfg.xUrl || "https://x.com/lionmousse";
 
-  document.querySelectorAll('a[href="https://x.com/joannawalker"]').forEach((a) => {
+  document.querySelectorAll('a[href="https://x.com/lionmousse"]').forEach((a) => {
     a.href = url;
-    if ((a.textContent || "").includes("@joannawalker")) {
-      a.textContent = (a.textContent || "").replaceAll("@joannawalker", handle);
+    if ((a.textContent || "").includes("@lionmousse")) {
+      a.textContent = (a.textContent || "").replaceAll("@lionmousse", handle);
     }
   });
 
   document.querySelectorAll(".profile-card b").forEach((b) => {
-    if ((b.textContent || "").trim() === "@joannawalker") b.textContent = handle;
+    if ((b.textContent || "").trim() === "@lionmousse") b.textContent = handle;
   });
 
   document.querySelectorAll(".ownerline a, footer a").forEach((a) => {
-    if ((a.textContent || "").includes("@joannawalker")) {
-      a.textContent = (a.textContent || "").replaceAll("@joannawalker", handle);
+    if ((a.textContent || "").includes("@lionmousse")) {
+      a.textContent = (a.textContent || "").replaceAll("@lionmousse", handle);
       a.href = url;
     }
   });

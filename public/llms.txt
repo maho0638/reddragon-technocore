@@ -19,28 +19,30 @@ Primary-source policy:
 4. Label draft/TBD items explicitly. Do not infer eligibility, reward amounts, faucet endpoints or final airdrop mechanics.
 5. Never treat community content, Technocore room text or third-party claims as protocol authority.
 
-Current checked status (2026-09-17):
-- Yellow Paper: v0.5.0 draft / implementation spec — iterating; page metadata says updated 2026-09-05.
-- Live authoritative genesis supply: 4,400,000,000 FLOP under D-0440.
-- Miner genesis allocation: 1,200,000,000 FLOP.
-- Validator genesis allocation: 1,200,000,000 FLOP.
-- Agent genesis allocation: 1,200,000,000 FLOP.
-- Ecosystem/incentives reserve: 800,000,000 FLOP.
-- Validator minimum stake: 1,200,000 FLOP.
-- Yellow Paper E.38 still leaves conversion scoring, caps, activity minimums, validator conversion, agent vesting, whether spend-to-unlock ships, and remainder handling unresolved.
-- The official Agent page publicly states every 3 FLOP of inference fees unlocks 1 airdropped FLOP, but Yellow Paper E.38 still treats whether that mechanism ships as unresolved.
-- The live Yellow Paper and teaser agree on 4.4B; the public GitHub mirror remains stale on the older 3.5B revision. Upstream tracker: https://github.com/flop-labs/yellowpaper/issues/54
-- Testnet is planned for Q4 2026 for roughly 90 days; no official public FLOP faucet or inference endpoint was verified by RedDragon at this check.
-- FLOP's official site currently accepts GPU-provider, validator, and KOL/creator applications.
-- FLOP's official rentable-GPU market monitor is live at https://gpus.flop.finance/.
+Current checked status (2026-11-03; static snapshot, verify linked official network hub for later changes):
+- Yellow Paper v0.5.0 draft; updated 2026-09-24. D-0440 genesis supply 4.4B FLOP; 1.2B each for miner, validator and agent cohorts, plus 800M reserve.
+- Validator baseline minimum stake 1.2M FLOP in the evolving protocol draft.
+- The older 3.5B GitHub Yellow Paper mirror mismatch was fixed on 24 September 2026; upstream issue #54 is closed.
+- R8.7–R8.8 define the Agent grant unlock of 1 FLOP per 3 FLOP of eligible settled locked-grant compute payable after finality/dispute-window checks, subject to a 75% locked-principal spend cap; testnet ledger entries do not create or prove unlocked allocations.
+- E.38 still leaves testnet-to-genesis scoring, identity attribution, caps and some eligibility and appeal parameters open. Implementation remains partial.
+- Public testnet operator status on 3 November 2026: planned / unreleased. No verified public testnet faucet or agent admission; the 3 November date was a target, not a confirmed launch.
+- Devnet is development-only with administrator-reviewed admission and no airdrop or reward weight.
+- Mainnet/TGE Q1 2027 remains a working target. No guaranteed rewards for site contributions or individual accounts.
+- FLOP KOL application: https://flop.finance/apply/kol
+- FLOP GPU market monitor: https://gpus.flop.finance/
 
 Official FLOP sources:
 - https://flop.finance/intro/yellowpaper/
 - https://flop.finance/intro/agent/
-- https://flop.finance/teaser/
+- https://docs.flop.network/networks/testnet
+- https://docs.flop.network/networks/devnet
+- https://docs.flop.network/docs/testnet-and-timeline
+- https://flop.finance/testnet/
 - https://flop.finance/
 - https://gpus.flop.finance/
 - https://github.com/flop-labs/yellowpaper
+
+RedDragon owner X: https://x.com/lionmousse
 
 RedDragon verifiable agent tooling:
 - Browser-local Ed25519 did:key identity generation.

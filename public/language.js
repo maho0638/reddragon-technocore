@@ -126,7 +126,7 @@ function applyStatic() {
   setText('.hero-actions [data-jump="1"]', "Kimliğimi oluştur", "Create my identity");
   setText(".hero-actions .ghost-link", "Tur adımlarını gör", "View onboarding steps");
   const ownerSmall = $(".ownerline small");
-  if (ownerSmall) ownerSmall.innerHTML = `${pick("Yürüten", "Maintained by")} <a href="${cfg.xUrl || "https://x.com/joannawolker"}" target="_blank" rel="noreferrer">${cfg.xHandle || "@joannawolker"}</a>`;
+  if (ownerSmall) ownerSmall.innerHTML = `${pick("Yürüten", "Maintained by")} <a href="${cfg.xUrl || "https://x.com/lionmousse"}" target="_blank" rel="noreferrer">${cfg.xHandle || "@lionmousse"}</a>`;
   setText(".art-overlay small", "Private key, GitHub Secret için açıkça kopyalamadığın sürece yerel kalır", "The private key stays local unless you explicitly copy it for GitHub Secrets");
 
   const signal = $$(".signalbar > div span");
@@ -213,10 +213,10 @@ function applyEnhancementTranslations() {
   if (share) {
     const items = share.querySelectorAll("button,a");
     if (items[0]) items[0].textContent = pick("𝕏 Siteden paylaş", "𝕏 Share this site");
-    if (items[4]) items[4].textContent = pick(`Takip et ${cfg.xHandle || "@joannawolker"}`, `Follow ${cfg.xHandle || "@joannawolker"}`);
+    if (items[4]) items[4].textContent = pick(`Takip et ${cfg.xHandle || "@lionmousse"}`, `Follow ${cfg.xHandle || "@lionmousse"}`);
   }
   setText("#rdSharePanel h3", "Paylaş · herkes kendi hesabından", "Share · everyone uses their own account");
-  setText("#rdSharePanel p", `X butonu, o tarayıcıda giriş yapılmış X hesabının paylaşım ekranını açar. Metinde ${cfg.xHandle || "@joannawolker"} geçtiği için proje hesabı mention alır. Medium için yazıyı kopyalayıp kendi hesabında yayınlayabilirsin.`, `The X button opens the composer for the X account currently signed in to this browser. The project account is mentioned as ${cfg.xHandle || "@joannawolker"}. For Medium, copy the draft and publish it from your own account.`);
+  setText("#rdSharePanel p", `X butonu, o tarayıcıda giriş yapılmış X hesabının paylaşım ekranını açar. Metinde ${cfg.xHandle || "@lionmousse"} geçtiği için proje hesabı mention alır. Medium için yazıyı kopyalayıp kendi hesabında yayınlayabilirsin.`, `The X button opens the composer for the X account currently signed in to this browser. The project account is mentioned as ${cfg.xHandle || "@lionmousse"}. For Medium, copy the draft and publish it from your own account.`);
   setText("#rdProofX", "𝕏 DID + proof paylaş", "𝕏 Share DID + proof");
   setText("#rdThreadCopy", "3 tweetlik diziyi kopyala", "Copy 3-post thread");
   setText("#rdMediumCopy", "Medium yazısını kopyala", "Copy Medium draft");

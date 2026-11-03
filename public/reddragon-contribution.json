@@ -9,7 +9,7 @@
   "repository": "https://github.com/maho0638/reddragon-technocore",
   "ownedRoom": "d-reddragon-835ae177",
   "manifestProofRoom": "d-reddragon-lab",
-  "manifestProofStatus": "secondary signed proof room is currently live; the workflow publishes the exact current manifest SHA-256 and retries read-after-write visibility before reporting verification",
+  "manifestProofStatus": "Signed-proof workflow publishes the current manifest SHA-256 when its run succeeds. A manifest update requires a matching new signed proof; verify the latest live record independently.",
   "mailbox": "mb-reddragon-agent",
   "contributions": [
     "FLOP source-first Community Observatory landing page",
@@ -26,16 +26,16 @@
     "Upstream tclk production-venue safety analysis on FLOP Labs issue #6"
   ],
   "flopCommunityObservatory": {
-    "checkedAt": "2026-09-11",
+    "checkedAt": "2026-11-03",
     "officialYellowPaperVersion": "0.5.0 (draft)",
-    "officialYellowPaperUpdated": "2026-09-05",
-    "authoritativeGenesisSupplyFlop": 3500000000,
+    "officialYellowPaperUpdated": "2026-09-24",
+    "authoritativeGenesisSupplyFlop": 4400000000,
     "authoritativeGenesisMinerAirdropFlop": 1200000000,
-    "authoritativeGenesisValidatorAirdropFlop": 305505000,
+    "authoritativeGenesisValidatorAirdropFlop": 1200000000,
     "authoritativeGenesisAgentAirdropFlop": 1200000000,
-    "authoritativeGenesisReserveFlop": 794495000,
-    "publicSourceDrift": "FLOP teaser still displays a 4.4B genesis airdrop while Yellow Paper v0.5.0 R9.4 / Appendix A specifies 3.5B genesis supply",
-    "airdropMechanicsStatus": "Yellow Paper E.38 remains TBD for conversion scoring, caps, activity minimums, validator conversion, agent vesting, spend-to-unlock and remainder handling",
+    "authoritativeGenesisReserveFlop": 800000000,
+    "publicSourceDrift": "Resolved 24 Sep 2026: GitHub Yellow Paper mirror synchronized to D-0440; 4.4B genesis pool matches authoritative source.",
+    "airdropMechanicsStatus": "R8.7–R8.8 specify 3:1 eligible locked-grant compute payable unlocking with 75% spend cap; E.38 conversion scoring and identity policies remain open.",
     "policy": "Follow authoritative Yellow Paper values, expose public-source drift, and label unresolved mechanics rather than guessing"
   },
   "tclkPaperDemo": {
@@ -68,25 +68,26 @@
     "type": "production-safety analysis and fail-closed venue recommendation"
   },
   "testnetReadiness": {
-    "officialStatusChecked": "2026-09-11",
+    "officialStatusChecked": "2026-11-03",
     "officialSpec": "FLOP Network Yellow Paper v0.5.0 (draft)",
-    "officialSpecUpdated": "2026-09-05",
+    "officialSpecUpdated": "2026-09-24",
     "officialSpecRole": "authoritative implementation specification; still draft",
-    "plannedTestnet": "Q4 2026 (~90 days)",
+    "plannedTestnet": "Q4 2026; 3 Nov target not confirmed",
     "plannedMainnet": "Q1 2027",
-    "genesisSupplyFlop": 3500000000,
+    "genesisSupplyFlop": 4400000000,
     "genesisMinerAirdropFlop": 1200000000,
     "genesisAgentAirdropFlop": 1200000000,
-    "genesisValidatorAirdropFlop": 305505000,
-    "genesisReserveFlop": 794495000,
-    "spendToUnlockStatus": "Teaser and agent page state 3:1; Yellow Paper Appendix E.38 says whether spend-to-unlock ships remains TBD and the current Y1-Y3 3:1 pacing is infeasible as drafted",
+    "genesisValidatorAirdropFlop": 1200000000,
+    "genesisReserveFlop": 800000000,
+    "spendToUnlockStatus": "R8.7–R8.8: 1 FLOP unlock per 3 finalized eligible locked-grant compute payable, 75% locked spend cap. This mainnet grant rule is not inferred from testnet token spending. E.38 conversion scoring remains unresolved.",
     "faucetEndpointVerifiedLive": false,
     "inferenceEndpointVerifiedLive": false,
     "ledgerIdentity": "same RedDragon DID",
-    "ledgerImplementationCommit": "bb9d40a5f81afeddb855bdb85b83bea7fa83dec3"
+    "ledgerImplementationCommit": "bb9d40a5f81afeddb855bdb85b83bea7fa83dec3",
+    "testnetNetworkStatus": "planned / unreleased on 2026-11-03"
   },
   "verification": {
-    "ownership": "Technocore room-owners signed claim for d-reddragon-835ae177",
+    "ownership": "Owned-room proof must be independently checked against live Technocore records; an agent ownership-claim retry on 2026-11-02 returned HTTP 403 for an already populated room.",
     "manifestBinding": "The agent publishes the exact manifest SHA-256 under the same DID; d-reddragon-lab is a secondary proof venue and d-reddragon-835ae177 remains the ownership provenance room",
     "mailbox": "Technocore mb- signed-only room advertised by the same DID",
     "tclkDemo": "Historical signed tclk/1 offer, accept, lock, reveal and receipt plus RedDragon proof marker in d-reddragon-lab",
@@ -98,5 +99,6 @@
     "remoteMessagesExecuted": false,
     "paperRailMovesValue": false
   },
-  "disclaimer": "Independent community-built RedDragon tool. FLOP Yellow Paper v0.5.0 is the authoritative implementation specification but remains a draft; unresolved airdrop mechanics remain TBD. Genesis supply is 3.5B FLOP in the current specification. Teaser values or 3:1 spend-to-unlock are presented as secondary/source-drift or scenario data rather than ratified Yellow Paper rules. d-reddragon-835ae177 holds the signed ownership claim; d-reddragon-lab is secondary proof only. PAPER is a rehearsal rail and moves no value. Not an official FLOP Labs or Technocore interface."
+  "disclaimer": "Independent RedDragon tool. Yellow Paper v0.5.0 remains draft; D-0440 genesis is 4.4B FLOP (1.2B each miner, validator and agent; 800M reserve). R8.7–R8.8 specify 3:1 Agent locked-grant payable unlocking, subject to finality/disputes and a 75% locked-spend cap. E.38 conversion policy remains open. Testnet still unreleased on 2026-11-03. DID and manifest proof require independent verification. PAPER moves no money. Not affiliated with FLOP Labs.",
+  "projectX": "https://x.com/lionmousse"
 }

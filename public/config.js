@@ -18,9 +18,9 @@ try {
 window.APP_CONFIG = {
   brandName: "RedDragon",
   productName: "FLOP Community Observatory · Agent Lab",
-  byline: "by @joannawolker",
-  xHandle: "@joannawolker",
-  xUrl: "https://x.com/joannawolker",
+  byline: "by @lionmousse",
+  xHandle: "@lionmousse",
+  xUrl: "https://x.com/lionmousse",
   githubRepoUrl: "https://github.com/maho0638/reddragon-technocore",
   githubOwnerUrl: "https://github.com/maho0638",
   mediumUrl: "https://medium.com/@ayazunal450",

@@ -1,18 +1,20 @@
 {
   "schema": "reddragon-flop-source-status/v1",
-  "checkedAt": "2026-09-17",
+  "checkedAt": "2026-11-03",
   "project": {
     "name": "RedDragon FLOP Community Observatory",
     "site": "https://reddragon-technocore.vercel.app/flop",
     "repository": "https://github.com/maho0638/reddragon-technocore",
     "llms": "https://reddragon-technocore.vercel.app/llms.txt",
     "independentCommunityTool": true,
-    "affiliatedWithFlopLabs": false
+    "affiliatedWithFlopLabs": false,
+    "xHandle": "@lionmousse",
+    "xUrl": "https://x.com/lionmousse"
   },
   "authoritative": {
     "source": "FLOP Network Yellow Paper",
     "version": "0.5.0 (draft / implementation spec — iterating)",
-    "updated": "2026-09-05",
+    "updated": "2026-09-24",
     "url": "https://flop.finance/intro/yellowpaper/",
     "githubMirror": "https://github.com/flop-labs/yellowpaper",
     "decision": "D-0440",
@@ -28,18 +30,19 @@
     },
     "airdropMechanics": {
       "openItem": "E.38",
-      "status": "TBD",
+      "status": "R8.7–R8.8 grant unlock defined; E.38 conversion policy remains open",
       "unresolved": [
-        "testnet-to-mainnet conversion scoring",
-        "caps and sublinear scoring form",
-        "activity minimums",
-        "validator cohort conversion basis",
-        "agent vesting horizon",
-        "whether spend-to-unlock ships",
-        "unallocated remainder disposition"
+        "testnet-to-genesis conversion score caps and sublinear aggregation",
+        "accounting identity and owner-signed spending rules",
+        "verifiable demand and activity/maintenance gates",
+        "validator activity basis and release order",
+        "appeals, fraud reversals and unallocated remainder disposition"
       ],
       "publicAgentPageStatesSpendToUnlock3to1": true,
-      "spendToUnlockRatifiedInYellowPaper": false
+      "spendToUnlockRatifiedInYellowPaper": true,
+      "agentGrantUnlock": "R8.7: 1 FLOP unlocked per 3 FLOP of finalized eligible payable from locked Agent genesis grant principal (after dispute window)",
+      "agentGrantLockedSpendCap": "3/4 of grant principal",
+      "notATestnetRewardEstimate": true
     }
   },
   "secondaryPublicSource": {
@@ -50,22 +53,17 @@
     "spendToUnlockScenario": "3 FLOP inference spend -> 1 airdropped FLOP unlocked",
     "alignedWithLiveYellowPaperOnGenesisSupply": true
   },
-  "sourceDrift": [
-    {
-      "id": "github-mirror-stale-d0440-2026-09-17",
-      "severity": "material",
-      "status": "reported-upstream",
-      "authoritativeValue": "Live FLOP Yellow Paper: D-0440, 4.4B FLOP genesis supply; 1.2B validator cohort; 800M reserve",
-      "staleMirrorValue": "GitHub mirror at the previously checked v0.5.0 revision: 3.5B FLOP; 305.505M validator cohort; 794.495M reserve",
-      "upstreamIssue": "https://github.com/flop-labs/yellowpaper/issues/54",
-      "resolutionPolicy": "RedDragon follows the live FLOP-hosted Yellow Paper and treats the public GitHub mirror as stale until it is synchronized."
-    }
-  ],
+  "sourceDrift": [],
   "roadmap": {
-    "testnet": "Q4 2026 (~90 days planned)",
+    "testnet": "Q4 2026; 3 November was a working target, not confirmed launch",
     "mainnet": "Q1 2027 target",
     "officialFaucetEndpointVerifiedLive": false,
-    "officialInferenceEndpointVerifiedLive": false
+    "officialInferenceEndpointVerifiedLive": false,
+    "testnetNetworkStatus": "planned / next (unreleased) as of 2026-11-03",
+    "devnetNetworkStatus": "development / next (unreleased), administrator-reviewed admission",
+    "devnetEarnsAirdropWeight": false,
+    "testnetOperatorUrl": "https://docs.flop.network/networks/testnet",
+    "devnetOperatorUrl": "https://docs.flop.network/networks/devnet"
   },
   "currentOpportunities": {
     "kolCreatorApplicationsOpen": true,
@@ -82,7 +80,18 @@
     "https://flop.finance/teaser/",
     "https://flop.finance/",
     "https://gpus.flop.finance/",
-    "https://github.com/flop-labs/yellowpaper"
+    "https://github.com/flop-labs/yellowpaper",
+    "https://docs.flop.network/networks/testnet",
+    "https://docs.flop.network/networks/devnet",
+    "https://docs.flop.network/docs/testnet-and-timeline"
   ],
-  "disclaimer": "This is an independent community status file. FLOP Labs and its official sources control the network specification, launch rules and eligibility. Draft material can change; applications and activity do not guarantee rewards."
+  "disclaimer": "Independent community status snapshot checked 2026-11-03, not live monitoring. Check linked official network pages for subsequent launches. FLOP Labs controls the actual release, rewards, conversion and eligibility. A DID, faucet token or token balance by itself does not guarantee allocation.",
+  "resolvedSourceDrift": [
+    {
+      "id": "github-mirror-d0440-2026-09-24",
+      "status": "resolved",
+      "description": "GitHub Yellow Paper mirror synchronized to D-0440 on 24 September 2026; public mirror and live spec now both state 4.4B genesis.",
+      "upstreamIssue": "https://github.com/flop-labs/yellowpaper/issues/54"
+    }
+  ]
 }

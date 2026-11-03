@@ -1,5 +1,5 @@
 const RD_FLOP_SPEC_DID = "did:key:z6MkuhrsP4tDZjWYdZLPxaur19WvrF1yuLGsGB2S8Q1gwS6K";
-const RD_FLOP_SPEC_CHECKED = "2026-09-17";
+const RD_FLOP_SPEC_CHECKED = "2026-11-03";
 const RD_FLOP_YELLOW_PAPER = "https://flop.finance/intro/yellowpaper/";
 const RD_FLOP_AGENT = "https://flop.finance/intro/agent/";
 const RD_FLOP_TEASER = "https://flop.finance/teaser/";
@@ -14,35 +14,35 @@ function rdFlopSpecLang() {
 }
 
 const RD_FLOP_SPEC_COPY = {
-  tr: {
-    intro: "FLOP'un canlı Yellow Paper v0.5.0 / D-0440 parametreleriyle doğrulanan güncel testnet hazırlığını gösterir. Airdrop tahmini yapmaz; kesinleşmemiş kuralları açıkça senaryo/TBD olarak etiketler.",
-    badge: "Yellow Paper v0.5.0 · D-0440 · taslak",
-    endpoint: "17 Eylül 2026 kontrolünde resmî FLOP kaynaklarında halka açık canlı bir faucet veya inference endpoint'i doğrulanmadı. Testnet Q4 2026 için yaklaşık 90 gün olarak planlı; mainnet Q1 2027 hedefleniyor. RedDragon doğrulanmamış endpoint kullanmaz.",
-    unlockLabel: "3:1 public-agent senaryosu karşılığı",
-    spendTitle: "Agent 3:1 kullanım senaryosu hesaplayıcı",
-    spendIntro: "Resmî Agent sayfası her 3 FLOP inference harcamasının 1 airdrop FLOP kilidi açacağını söylüyor. Ancak authoritative Yellow Paper Appendix E.38, spend-to-unlock'ın nihai olarak ship edilip edilmeyeceğini hâlâ TBD bırakıyor. Bu hesap bu nedenle senaryo olarak gösterilir, garanti değildir.",
-    plan3: "3 · Doğrulanabilir inference kullanımı",
-    plan3d: "Testnet açıldığında gerçek inference kullanımını aynı DID altında kaydet. Agent dönüşüm skoru, cap'ler ve nihai vesting ayrıntıları Yellow Paper E.38'de henüz kesinleşmiş değil.",
-    source: "Kaynak durumu: canlı FLOP Yellow Paper v0.5.0 authoritative implementation spec ve D-0440. Genesis arzı 4.4B FLOP: 1.2B miner + 1.2B validator + 1.2B agent + 800M reserve/incentives. Resmî Agent sayfası 3:1 unlock anlatıyor; Yellow Paper E.38 nihai mekanizmayı hâlâ açık madde olarak tutuyor.",
-    yp: "Yellow Paper",
-    agent: "Agent",
-    teaser: "Teaser",
-    exportFail: "Ledger dışa aktarılamadı."
+  "tr": {
+    "intro": "FLOP Yellow Paper v0.5.0 / D-0440 ve resmî ağ durumu üzerinden 3 Kasım 2026 testnet hazırlığını gösterir. Bu statik kontroldür; airdrop miktarı veya uygunluk garantisi değildir.",
+    "badge": "Yellow Paper v0.5.0 · D-0440 · taslak",
+    "endpoint": "3 Kasım 2026'da resmî operatör sayfası public Testnet'i planned/unreleased gösteriyor; doğrulanmış public faucet, RPC veya ajan kabulü yok. Devnet geliştirme ağıdır ve airdrop puanı kazandırmaz. Mainnet/TGE Q1 2027 hedefi kesin değildir.",
+    "unlockLabel": "Yerel testnet kaydı mainnet kilidi kanıtlamaz",
+    "spendTitle": "Mainnet kilitli Agent grant örneği",
+    "spendIntro": "Yellow Paper R8.7–R8.8 uyarınca yalnızca mainnet Agent grant'inin kilitli kısmından ödenen, kesinleşmiş ve itiraz penceresi tamamlanmış inference payable'ının her 3 FLOP'u 1 FLOP kilidi açar. Kilitli grant harcaması anaparanın en fazla %75'idir. Testnet işlem kayıtları bu kilidi açmaz.",
+    "plan3": "3 · Resmî inference settlement'ını doğrula",
+    "plan3d": "Ödül için testnet'te hangi kesinleşmiş harcamanın sayılacağını resmî kurallardan doğrula. Dönüşüm skoru ve kimlik/limit kuralları E.38'de açık; tarayıcı kaydı kanıt değildir.",
+    "source": "3 Kasım 2026 kaynak kontrolü: Yellow Paper v0.5.0 (24 Eylül güncellemesi), D-0440 4.4B FLOP: 1.2B miner, 1.2B validator, 1.2B agent, 800M reserve. GitHub mirror 24 Eylül'de senkronlandı. R8.7–R8.8 grant kilit açma kuralını belirliyor, E.38 dönüşüm puanlaması açık. Public testnet henüz planned/unreleased.",
+    "yp": "Yellow Paper",
+    "agent": "Agent",
+    "teaser": "Teaser",
+    "exportFail": "Ledger dışa aktarılamadı."
   },
-  en: {
-    intro: "Shows current testnet readiness verified against the live FLOP Yellow Paper v0.5.0 / D-0440 parameters. It does not estimate an airdrop; unresolved mechanics are explicitly labeled scenario/TBD.",
-    badge: "Yellow Paper v0.5.0 · D-0440 · draft",
-    endpoint: "As checked on 17 Sep 2026, no live public official FLOP faucet or inference endpoint was verified in official sources. Testnet is planned for Q4 2026 for roughly 90 days; mainnet is targeted for Q1 2027. RedDragon does not use unverified endpoints.",
-    unlockLabel: "3:1 public-agent scenario equivalent",
-    spendTitle: "Agent 3:1 usage scenario calculator",
-    spendIntro: "The official Agent page says every 3 FLOP spent on inference unlocks 1 airdropped FLOP. However, the authoritative Yellow Paper Appendix E.38 still leaves whether spend-to-unlock ultimately ships as TBD. This calculator therefore shows a scenario, not a guarantee.",
-    plan3: "3 · Verifiable inference usage",
-    plan3d: "When testnet opens, record real inference usage under the same DID. Agent conversion scoring, caps and final vesting details remain unresolved in Yellow Paper E.38.",
-    source: "Source status: live FLOP Yellow Paper v0.5.0 authoritative implementation spec with D-0440. Genesis supply is 4.4B FLOP: 1.2B miner + 1.2B validator + 1.2B agent + 800M reserve/incentives. The official Agent page states 3:1 unlock; Yellow Paper E.38 still keeps the final mechanism open.",
-    yp: "Yellow Paper",
-    agent: "Agent",
-    teaser: "Teaser",
-    exportFail: "Could not export ledger."
+  "en": {
+    "intro": "FLOP testnet readiness as checked on 3 Nov 2026 against Yellow Paper v0.5.0 / D-0440 and the official network status. This is a static snapshot, not a guaranteed airdrop or eligibility estimate.",
+    "badge": "Yellow Paper v0.5.0 · D-0440 · draft",
+    "endpoint": "On 3 Nov 2026 the official public Testnet operator page still read planned/unreleased, with no verified public faucet, RPC or agent enrollment. Devnet is development-only and earns no airdrop weight. Mainnet/TGE Q1 2027 is a working target, not a guarantee.",
+    "unlockLabel": "Testnet local records prove no mainnet unlock",
+    "spendTitle": "Mainnet locked Agent grant illustration",
+    "spendIntro": "Under Yellow Paper R8.7–R8.8, only eligible finalized inference payable sourced from locked principal of a mainnet Agent grant accrues unlock credit: 3 FLOP payable per 1 FLOP unlocked, after the dispute window, with locked spending capped at 75% of principal. Testnet ledger entries do not unlock grants.",
+    "plan3": "3 · Verify real inference settlement",
+    "plan3d": "Follow officially settled-compute scoring and evidence rules on testnet. E.38 still leaves conversion score, identity and caps open; a browser entry is not proof.",
+    "source": "Source snapshot 3 Nov 2026: Yellow Paper v0.5.0 (updated 24 Sep), D-0440 supply 4.4B FLOP: 1.2B miner, 1.2B validator, 1.2B agent, 800M reserve. GitHub mirror synced 24 Sep. R8.7–R8.8 define grant unlocking; E.38 conversion scoring remains open. Public Testnet still planned/unreleased.",
+    "yp": "Yellow Paper",
+    "agent": "Agent",
+    "teaser": "Teaser",
+    "exportFail": "Could not export ledger."
   }
 };
 
@@ -58,7 +58,7 @@ function rdFlopSpecTotals(entries) {
     if (entry?.type === "faucet") claimed += amount;
     if (entry?.type === "inference") spent += amount;
   }
-  return { claimed, spent, publicAgentScenarioUnlocked: spent / 3 };
+  return { claimed, spent, publicAgentScenarioUnlocked: null, mainnetUnlockProof: "not established by local testnet records" };
 }
 
 function rdFlopSpecExportLedger() {
@@ -75,10 +75,10 @@ function rdFlopSpecExportLedger() {
       officialStatus: {
         checkedAt: RD_FLOP_SPEC_CHECKED,
         yellowPaperVersion: "0.5.0 (draft / implementation spec — iterating)",
-        yellowPaperUpdated: "2026-09-05",
+        yellowPaperUpdated: "2026-09-24",
         authoritativeReference: "Live FLOP Network Yellow Paper implementation specification",
         decision: "D-0440",
-        plannedTestnet: "Q4 2026 (~90 days)",
+        plannedTestnet: "Q4 2026; 3 Nov target unconfirmed, public network planned/unreleased on check date",
         plannedMainnet: "Q1 2027",
         genesisSupplyFlop: 4400000000,
         genesisMinerAirdropFlop: 1200000000,
@@ -88,15 +88,15 @@ function rdFlopSpecExportLedger() {
         validatorMinimumStakeFlop: 1200000,
         faucetEndpointVerifiedLive: false,
         inferenceEndpointVerifiedLive: false,
-        spendToUnlockRatifiedInYellowPaper: false,
+        spendToUnlockRatifiedInYellowPaper: true,
         publicAgentPageStatesSpendToUnlock3to1: true,
-        spendToUnlockStatus: "Official Agent page states 3:1; Yellow Paper Appendix E.38 still leaves whether spend-to-unlock ships and final pacing/vesting mechanics unresolved",
+        spendToUnlockStatus: "Yellow Paper R8.7-R8.8 specify 3:1 finalized locked-grant payable unlock after dispute window, with a 75% locked-spend cap. E.38 conversion scoring, identity and caps remain open; runtime implementation is partial.",
         sources: [RD_FLOP_YELLOW_PAPER, RD_FLOP_AGENT, RD_FLOP_TEASER]
       },
       scenario: {
-        name: "Official Agent page 3:1 spend-to-unlock",
-        ratio: "3 FLOP inference spend -> 1 airdropped FLOP unlocked",
-        status: "publicly stated by official Agent page; final normative mechanics remain open in Yellow Paper E.38"
+        name: "Mainnet locked Agent grant R8.7 3:1 illustration",
+        ratio: "3 FLOP eligible finalized locked-grant payable -> 1 FLOP principal unlocked",
+        status: "normative R8.7–R8.8 rule for mainnet grant, not a testnet-spend credit; E.38 conversion scoring and eligibility remain open"
       },
       totals: rdFlopSpecTotals(ledger.entries),
       entries: ledger.entries,
@@ -176,7 +176,7 @@ function rdFlopSpecPatch() {
     const small = cols[1].querySelector("small");
     const strong = cols[1].querySelector("strong");
     if (small) small.textContent = tr ? "Testnet planı" : "Testnet plan";
-    if (strong) strong.textContent = "Q4 2026 · ~90 gün";
+    if (strong) strong.textContent = "planned / unreleased";
   }
   if (cols[2]) {
     const small = cols[2].querySelector("small");
