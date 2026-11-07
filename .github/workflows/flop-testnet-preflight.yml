@@ -1,0 +1,46 @@
+name: RedDragon FLOP Testnet Preflight
+
+# Only safe public reads; no agent private key, no faucet or inference signing.
+# Push validation on the dedicated preparation branch; scheduled runs work
+# when this file is present on the default branch.
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - prep/flop-testnet-did-20261107
+    paths:
+      - scripts/flop-agent-preflight.mjs
+      - scripts/flop-agent-preflight.test.mjs
+      - .github/workflows/flop-testnet-preflight.yml
+  schedule:
+    - cron: "29 */6 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: reddragon-flop-testnet-preflight
+  cancel-in-progress: true
+
+jobs:
+  safe-preflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node 24
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+          package-manager-cache: false
+      - name: Verify script syntax
+        run: |
+          node --check scripts/flop-agent-preflight.mjs
+          node --check scripts/flop-agent-preflight.test.mjs
+      - name: Run offline DID and safety tests
+        run: node --test scripts/flop-agent-preflight.test.mjs
+      - name: Check current official FLOP testnet page (read-only)
+        run: node scripts/flop-agent-preflight.mjs --json
