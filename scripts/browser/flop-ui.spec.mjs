@@ -63,4 +63,255 @@ async function newPage(viewport) {
   await context.route("**/api/relay", (route) => {
     const payload = JSON.parse(route.request().postData() || "{}");
     const action = payload.action;
-    if (action === ß­·¶‰žËkºwµç]”¹É•±½… ¤ì(€€€€€…ÍÍ•ÉÐ¹•ÅÕ…°¡…Ý…¥Ð±…¹Õ…”¹¥¹ÁÕÑY…±Õ” ¤°€‰ÑÈˆ°€‰QÕÉ­¥Í ¡½¥”Í¡½Õ±ÍÕÉÙ¥Ù”É•±½…ˆ¤ì(€€€€€…Ý…¥Ð±…¹Õ…”¹Í•±•Ñ=ÁÑ¥½¸ ‰•¸ˆ¤ì(€€€€€…ÍÍ•ÉÐ¹•ÅÕ…°¡…Ý…¥ÐÁ…”¹±½…Ñ½È ‰¡Ñµ°ˆ¤¹•ÑÑÑÉ¥‰ÕÑ” ‰±…¹œˆ¤°€‰•¸ˆ¤ì(€€€€€…ÍÍ•ÉÐ¹•ÅÕ…°¡…Ý…¥ÐÁ…”¹±½…Ñ½È ˆ±¥Ù”µÑ¥Ñ±”ˆ¤¹Ñ•áÑ½¹Ñ•¹Ð ¤°€‰1¥Ù”1=@ÍÑ…ÑÕÌˆ¤ì(€€€€€…Ý…¥ÐÁ…”¹É•±½… ¤ì(€€€€€…ÍÍ•ÉÐ¹•ÅÕ…°¡…Ý…¥Ð±…¹Õ…”¹¥¹ÁÕÑY…±Õ” ¤°€‰•¸ˆ°€‰¹±¥Í ¡½¥”Í¡½Õ±ÍÕÉÙ¥Ù”É•±½…ˆ¤ì(€€€€€…ÍÍ•ÉÐ¹µ…Ñ ¡…Ý…¥ÐÁ…”¹±½…Ñ½È ˆÉ‘1¥Ù•Q•ÍÑ¹•Ðm‘…Ñ„µÍÑ…ÑÕÍtˆ¤¹Ñ•áÑ½¹Ñ•¹Ð ¤°€½Á±…¹¹•‘ñÕ¹É•±•…Í•½¤¤ì(€€€€€…ÍÍ•ÉÐ¹µ…Ñ ¡…Ý…¥ÐÁ…”¹±½…Ñ½È ˆÉ‘1¥Ù••Ù¹•Ðm‘…Ñ„µ‘•Ñ…¥±tˆ¤¹Ñ•áÑ½¹Ñ•¹Ð ¤°€½…‘µ¥¹¥ÍÑÉ…Ñ½Èµ…ÍÍ¥ÍÑ•‘ñ…‘µ¥¹¥ÍÑÉ…Ñ½È…ÍÍ¥ÍÑ…¹”½¤¤ì(€€€€€…ÍÍ•ÉÐ¹‘½•Í9½Ñ5…Ñ ¡…Ý…¥ÐÁ…”¹±½…Ñ½È ˆÉ‘1¥Ù••Ù¹•Ðm‘…Ñ„µ‘•Ñ…¥±tˆ¤¹Ñ•áÑ½¹Ñ•¹Ð ¤°€½ÁÕ‰±¥ŒÍ•±˜µÍ•ÉÙ¥”Õ¹…Ù…¥±…‰±”¼¤ì(€€€€€…Ý…¥Ð…ÍÍ•ÉÑY¥Í¥‰±•½Áå1½…±”¡Á…”°€‰•¸ˆ°€‘íÙ¥•ÝÁ½ÉÐ¹¹…µ•ô½™±½Á€¤ì(€€€€€…Ý…¥Ð…ÍÍ•ÉÑ9½!½É¥é½¹Ñ…±=Ù•É™±½Ü¡Á…”¤ì(€€€ô™¥¹…±±äì…Ý…¥Ð½¹Ñ•áÐ¹±½Í” ¤ìô(€ô)ô¤ì(()Ñ•ÍÐ ˆ½™±½À­••ÁÌÍ½ÕÉ”™…¥±ÕÉ•ÌÕ¹Ù•É¥™¥•…¹±½…±¥é•ˆ°…Íå¹Œ€ ¤€ôøì(€½¹ÍÐì½¹Ñ•áÐ°Á…”ô€ô…Ý…¥Ð¹•ÝA…”¡Ù¥•ÝÁ½ÉÑÍlÉt¤ì(€½¹ÍÐ•ÉÉ½ÉÌ€ômtì(€Á…”¹½¸ ‰Á…••ÉÉ½Èˆ°•ÉÉ½È€ôø•ÉÉ½ÉÌ¹ÁÕÍ ¡•ÉÉ½È¹µ•ÍÍ…”¤¤ì(€…Ý…¥Ð½¹Ñ•áÐ¹Õ¹É½ÕÑ” ˆ¨¨½…Á¤½™±½ÀµÍÑ…ÑÕÌˆ¤ì(€…Ý…¥Ð½¹Ñ•áÐ¹É½ÕÑ” ˆ¨¨½…Á¤½™±½ÀµÍÑ…ÑÕÌˆ°É½ÕÑ”€ôøÉ½ÕÑ”¹™Õ±™¥±°¡ìÍÑ…ÑÕÌè€ÔÀÌ°½¹Ñ•¹ÑQåÁ”è€‰…ÁÁ±¥…Ñ¥½¸½©Í½¸ˆ°‰½‘äè)M=8¹ÍÑÉ¥¹¥™ä¡í•ÉÉ½Èè‰Í¥µÕ±…Ñ•Í½ÕÉ”™…¥±ÕÉ”‰ô¤ô¤¤ì(€ÑÉäì(€€€…Ý…¥ÐÁ…”¹½Ñ¼¡€‘í‰…Í•UI1ô½™±½Á€¤ì(€€€…Ý…¥ÐÁ…”¹±½…Ñ½È ˆÉ‘1¥Ù•Q•ÍÑ¹•Ðm‘…Ñ„µÍÑ…ÑÕÍtˆ¤¹Ý…¥Ñ½È¡ìÍÑ…Ñ”è€‰Ù¥Í¥‰±”ˆô¤ì(€€€…Ý…¥ÐÁ…”¹Ý…¥Ñ½ÉÕ¹Ñ¥½¸  ¤€ôø‘½Õµ•¹Ð¹ÅÕ•ÉåM•±•Ñ½È ˆÉ‘1¥Ù•Q•ÍÑ¹•Ðm‘…Ñ„µÍÑ…ÑÕÍtˆ¤ü¹Ñ•áÑ½¹Ñ•¹Ð¹¥¹±Õ‘•Ì ‰U¹Ù•É¥™¥•ˆ¤¤ì(€€€…ÍÍ•ÉÐ¹•ÅÕ…°¡…Ý…¥ÐÁ…”¹±½…Ñ½È ˆÉ‘1¥Ù•Q•ÍÑ¹•Ðˆ¤¹•ÑÑÑÉ¥‰ÕÑ” ‰‘…Ñ„µÍÑ…Ñ”ˆ¤°€‰‰…ˆ¤ì(€€€…Ý…¥ÐÁ…”¹±½…Ñ½È ˆÉ‘±½Á1…¹Õ…”ˆ¤¹Í•±•Ñ=ÁÑ¥½¸ ‰ÑÈˆ¤ì(€€€…Ý…¥ÐÁ…”¹Ý…¥Ñ½ÉÕ¹Ñ¥½¸  ¤€ôø‘½Õµ•¹Ð¹‘½Õµ•¹Ñ±•µ•¹Ð¹±…¹œ€ôôô€‰ÑÈˆ¤ì(€€€…Ý…¥ÐÁ…”¹Ý…¥Ñ½ÉÕ¹Ñ¥½¸  ¤€ôø‘½Õµ•¹Ð¹ÅÕ•ÉåM•±•Ñ½È ˆÉ‘1¥Ù•Q•ÍÑ¹•Ðm‘…Ñ„µÍÑ…ÑÕÍtˆ¤ü¹Ñ•áÑ½¹Ñ•¹Ð¹¥¹±Õ‘•Ì ‰¿}ÉÕ±…¹…µ…“Äˆ¤¤ì(€€€…ÍÍ•ÉÐ¹‘½•Í9½Ñ5…Ñ ¡…Ý…¥ÐÁ…”¹±½…Ñ½È ˆÉ‘1¥Ù•Q•ÍÑ¹•Ðm‘…Ñ„µ‘•Ñ…¥±tˆ¤¹Ñ•áÑ½¹Ñ•¹Ð ¤°€½Í¥µÕ±…Ñ•Í½ÕÉ”™…¥±ÕÉ”¼¤ì(€€€…ÍÍ•ÉÐ¹‘••ÁÅÕ…°¡•ÉÉ½ÉÌ°mt°€‰A$™…¥±ÕÉ”±½…±¥é…Ñ¥½¸µÕÍÐ¹½ÐÑ¡É½Ü„‰É½ÝÍ•È•á•ÁÑ¥½¸ˆ¤ì(€ô™¥¹…±±äì…Ý…¥Ð½¹Ñ•áÐ¹±½Í” ¤ìô)ô¤ì(()Ñ•ÍÐ ‰%É•…Ñ”°•¹ÉåÁÑ•‰…­ÕÀ°É•ÍÑ½É”°ÁÉ½µÁÑÌ…¹µ½­•Í¥¹•™±½ÝÌÝ½É¬¥¸‰½Ñ ±½…±•Ì…Ð•Ù•ÉäÙ¥•ÝÁ½ÉÐˆ°ìÑ¥µ•½ÕÐè€ÈÐÀÀÀÀô°…Íå¹Œ€ ¤€ôøì(€™½È€¡½¹ÍÐÙ¥•ÝÁ½ÉÐ½˜Ù¥•ÝÁ½ÉÑÌ¤™½È€¡½¹ÍÐ±½…±”½˜l‰•¸ˆ°€‰ÑÈ‰t¤ì(€€€½¹ÍÐì½¹Ñ•áÐ°Á…”ô€ô…Ý…¥Ð¹•ÝA…”¡Ù¥•ÝÁ½ÉÐ¤ì(€€€½¹ÍÐ•ÉÉ½ÉÌ€ômtìÁ…”¹½¸ ‰Á…••ÉÉ½Èˆ°•ÉÉ½È€ôø•ÉÉ½ÉÌ¹ÁÕÍ ¡•ÉÉ½È¹µ•ÍÍ…”¤¤ì(€€€ÑÉäì(€€€€€…Ý…¥ÐÁ…”¹½Ñ¼¡€‘í‰…Í•UI1ô½€¤ì(€€€€€…Ý…¥ÐÁ…”¹±½…Ñ½È ˆÉ•…Ñ•	Ñ¸ˆ¤¹Ý…¥Ñ½È¡ìÍÑ…Ñ”è€‰Ù¥Í¥‰±”ˆô¤ì(€€€€€½¹ÍÐ±…¹	ÕÑÑ½¸€ôÁ…”¹±½…Ñ½È¡€É‘1…¹MÝ¥Ñ¡•È‰ÕÑÑ½¹m‘…Ñ„µ±…¹œôˆ‘í±½…±•ô‰u€¤ì(€€€€€¥˜€¡…Ý…¥ÐÁ…”¹±½…Ñ½È ‰¡Ñµ°ˆ¤¹•ÑÑÑÉ¥‰ÕÑ” ‰±…¹œˆ¤€„ôô±½…±”¤ì(€€€€€€€¥˜€¡Ù¥•ÝÁ½ÉÐ¹¥Í5½‰¥±”¤…Ý…¥Ð±…¹	ÕÑÑ½¸¹Ñ…À ¤ì•±Í”…Ý…¥Ð±…¹	ÕÑÑ½¸¹±¥¬ ¤ì(€€€€€€€…Ý…¥ÐÁ…”¹Ý…¥Ñ½ÉÕ¹Ñ¥½¸¡•áÁ•Ñ•€ôø‘½Õµ•¹Ð¹‘½Õµ•¹Ñ±•µ•¹Ð¹±…¹œ€ôôô•áÁ•Ñ•°±½…±”¤ì(€€€€€ô(€€€€€½¹ÍÐÍ¡½ÉÑQ•áÐ€ô±½…±”€ôôô€‰ÑÈˆ€ü€‰A…É½±„•¸…è€ÄÈ­…É…­Ñ•È½±µ…³Ä¸ˆ€è€‰Q¡”Á…ÍÍÝ½ÉµÕÍÐ‰”…Ð±•…ÍÐ€ÄÈ¡…É…Ñ•ÉÌ¸ˆì(€€€€€…Ý…¥Ð…Ñ¥Ù…Ñ”¡Á…”¹±½…Ñ½È ˆÉ•…Ñ•	Ñ¸ˆ¤°Ù¥•ÝÁ½ÉÐ¤ì(€€€€€…ÍÍ•ÉÐ¹•ÅÕ…° ¡…Ý…¥ÐÁ…”¹±½…Ñ½È ˆÑ½…ÍÐˆ¤¹Ñ•áÑ½¹Ñ•¹Ð ¤¤¹ÑÉ¥´ ¤°Í¡½ÉÑQ•áÐ¤ì(€€€€€…Ý…¥ÐÁ…”¹±½…Ñ½È ˆÁ…ÍÌÄˆ¤¹™¥±° ‰•Á¡•µ•É…°µ‰É½ÝÍ•Èµ½¹±äµÁ…ÍÍÝ½Éˆ¤ì(€€€€€…Ý…¥ÐÁ…”¹±½…Ñ½È ˆÁ…ÍÌÈˆ¤¹™¥±° ‰•Á¡•µ•É…°µ‰É½ÝÍ•Èµ½¹±äµÁ…ÍÍÝ½Éˆ¤ì(€€€€€…Ý…¥Ð…Ñ¥Ù…Ñ”¡Á…”¹±½…Ñ½È ˆÉ•…Ñ•	Ñ¸ˆ¤°Ù¥•ÝÁ½ÉÐ¤ì(€€€€€…Ý…¥ÐÁ…”¹Ý…¥Ñ½ÉÕ¹Ñ¥½¸  ¤€ôø€¡‘½Õµ•¹Ð¹ÅÕ•ÉåM•±•Ñ½È ˆ¥‘•¹Ñ¥Ñå=ÕÐˆ¤ü¹Ñ•áÑ½¹Ñ•¹Ðñð€ˆˆ¤¹¥¹±Õ‘•Ì ‰‘¥é­•äéèÙ5¬ˆ¤°¹Õ±°°ìÑ¥µ•½ÕÐè€ÌÔÀÀÀô¤ì(€€€€€½¹ÍÐ‘¥€ô€¡…Ý…¥ÐÁ…”¹±½…Ñ½È ˆ¥‘•¹Ñ¥Ñå=ÕÐˆ¤¹Ñ•áÑ½¹Ñ•¹Ð ¤¤¹ÍÁ±¥Ð ‰q¸ˆ¥lÁt¹ÑÉ¥´ ¤ì(€€€€€½¹ÍÐ‘½Ý¹±½…‘Ù•¹Ð€ôÁ…”¹Ý…¥Ñ½ÉÙ•¹Ð ‰‘½Ý¹±½…ˆ¤ì(€€€€€…Ý…¥Ð…Ñ¥Ù…Ñ”¡Á…”¹±½…Ñ½È ˆ‰…­ÕÁ	Ñ¸ˆ¤°Ù¥•ÝÁ½ÉÐ¤ì(€€€€€½¹ÍÐ‰…­ÕÀ€ô…Ý…¥Ð‘½Ý¹±½…‘Ù•¹Ðì(€€€€€…ÍÍ•ÉÐ¹µ…Ñ ¡‰…­ÕÀ¹ÍÕ•ÍÑ•‘¥±•¹…µ” ¤°€½É•‘‘É…½¸µÑ•¡¹½½É”´¸©p¹©Í½¸¼¤ì(€€€€€½¹ÍÐ‰…­ÕÁA…Ñ €ô…Ý…¥Ð‰…­ÕÀ¹Á…Ñ  ¤ì(€€€€€±•ÐÁÉ½µÁÑQ•áÐ€ô€ˆˆì(€€€€€Á…”¹½¹” ‰‘¥…±½œˆ°…Íå¹Œ‘¥…±½œ€ôøìÁÉ½µÁÑQ•áÐ€ô‘¥…±½œ¹µ•ÍÍ…” ¤ì…Ý…¥Ð‘¥…±½œ¹…•ÁÐ ‰•Á¡•µ•É…°µ‰É½ÝÍ•Èµ½¹±äµÁ…ÍÍÝ½Éˆ¤ìô¤ì(€€€€€…Ý…¥ÐÁ…”¹±½…Ñ½È ˆÉ•ÍÑ½É•%¹ÁÕÐˆ¤¹Í•Ñ%¹ÁÕÑ¥±•Ì¡‰…­ÕÁA…Ñ ¤ì(€€€€€½¹ÍÐÉ•ÍÑ½É•‘Q•áÐ€ô±½…±”€ôôô€‰ÑÈˆ€ü€‰-¥µ±¥¬•É¤çñ­±•¹‘¤¸ˆ€è€‰%‘•¹Ñ¥ÑäÉ•ÍÑ½É•¸ˆì(€€€€€…Ý…¥ÐÁ…”¹Ý…¥Ñ½ÉÕ¹Ñ¥½¸¡•áÁ•Ñ•€ôø€¡‘½Õµ•¹Ð¹ÅÕ•ÉåM•±•Ñ½È ˆÑ½…ÍÐˆ¤ü¹Ñ•áÑ½¹Ñ•¹Ðñð€ˆˆ¤¹ÑÉ¥´ ¤€ôôô•áÁ•Ñ•°É•ÍÑ½É•‘Q•áÐ¤ì(€€€€€…Ý…¥ÐÁ…”¹Ý…¥Ñ½ÉÕ¹Ñ¥½¸¡•áÁ•Ñ•€ôø€¡‘½Õµ•¹Ð¹ÅÕ•ÉåM•±•Ñ½È ˆ¥‘•¹Ñ¥Ñå=ÕÐˆ¤ü¹Ñ•áÑ½¹Ñ•¹Ðñð€ˆˆ¤¹ÍÑ…ÉÑÍ]¥Ñ ¡•áÁ•Ñ•¤°‘¥¤ì(€€€€€…ÍÍ•ÉÐ¹•ÅÕ…° ¡…Ý…¥ÐÁ…”¹±½…Ñ½È ˆ¥‘•¹Ñ¥Ñå=ÕÐˆ¤¹Ñ•áÑ½¹Ñ•¹Ð ¤¤¹ÍÁ±¥Ð ‰q¸ˆ¥lÁt¹ÑÉ¥´ ¤°‘¥¤ì(€€€€€…ÍÍ•ÉÐ¹•ÅÕ…°¡ÁÉ½µÁÑQ•áÐ°±½…±”€ôôô€‰ÑÈˆ€ü€‰e•‘•¬Á…É½±…ÏÅ»Ä¥Èèˆ€è€‰¹Ñ•ÈÑ¡”‰…­ÕÀÁ…ÍÍÝ½Éèˆ¤ì(€€€€€…ÍÍ•ÉÐ¹•ÅÕ…° ¡…Ý…¥ÐÁ…”¹±½…Ñ½È ˆÑ½…ÍÐˆ¤¹Ñ•áÑ½¹Ñ•¹Ð ¤¤¹ÑÉ¥´ ¤°É•ÍÑ½É•‘Q•áÐ¤ì(€€€€€…Ý…¥Ð…Ñ¥Ù…Ñ”¡Á…”¹±½…Ñ½È ˆ¡•±±½	Ñ¸ˆ¤°Ù¥•ÝÁ½ÉÐ¤ì(€€€€€…Ý…¥ÐÁ…”¹Ý…¥Ñ½ÉÕ¹Ñ¥½¸¡•áÁ•Ñ•€ôø€¡‘½Õµ•¹Ð¹ÅÕ•ÉåM•±•Ñ½È ˆ¡•±±½=ÕÐˆ¤ü¹Ñ•áÑ½¹Ñ•¹Ðñð€ˆˆ¤¹¥¹±Õ‘•Ì¡•áÁ•Ñ•¤°±½…±”€ôôô€‰ÑÈˆ€ü€‰ÏÅÉ„ˆ€è€‰Í•Äˆ¤ì(€€€€€…Ý…¥ÐÁ…”¹±½…Ñ½È ˆÉ‘Y•É¥™åI½½´ˆ¤¹™¥±° ‰µ‰É½ÝÍ•Èµµ¥ÍÍ¥¹œµÉ½½´ˆ¤ì(€€€€€…Ý…¥ÐÁ…”¹±½…Ñ½È ˆÉ‘Y•É¥™å¥ˆ¤¹™¥±°¡‘¥‘I•‘É…½¸¤ì(€€€€€…Ý…¥Ð…Ñ¥Ù…Ñ”¡Á…”¹±½…Ñ½È ˆÉ‘Y•É¥™å	ÕÑÑ½¸ˆ¤°Ù¥•ÝÁ½ÉÐ¤ì(€€€€€…Ý…¥ÐÁ…”¹Ý…¥Ñ½ÉÕ¹Ñ¥½¸  ¤€ôø€¡‘½Õµ•¹Ð¹ÅÕ•ÉåM•±•Ñ½È ˆÉ‘Y•É¥™åI•ÍÕ±Ðˆ¤ü¹Ñ•áÑ½¹Ñ•¹Ðñð€ˆˆ¤¹¥¹±Õ‘•Ì ˆÐÀÐˆ¤¤ì(€€€€€…ÍÍ•ÉÐ¹µ…Ñ ¡…Ý…¥ÐÁ…”¹±½…Ñ½È ˆÉ‘Y•É¥™åI•ÍÕ±Ðˆ¤¹Ñ•áÑ½¹Ñ•¹Ð ¤°±½…±”€ôôô€‰ÑÈˆ€ü€½Ç|Í¥ÍÑ•µ‘”­…çÅÐ‰Õ±Õ¹…µ…“Ä¼€è€½•áÑ•É¹…°ÍåÍÑ•´É•ÑÕÉ¹•¹¼É•½É½¤¤ì(€€€€€…ÍÍ•ÉÐ¹•ÅÕ…°¡…Ý…¥ÐÁ…”¹±½…Ñ½È ˆÉ‘Y•É¥™åI•ÍÕ±Ðˆ¤¹•ÑÑÑÉ¥‰ÕÑ” ‰‘…Ñ„µÍÑ…Ñ”ˆ¤°€‰‰…ˆ°€‰•áÑ•É¹…°…‰Í•¹”¥Ì¹½Ð„±½…°½Ý¹•ÉÍ¡¥ÀÁ…ÍÌˆ¤ì(€€€€€…ÍÍ•ÉÐ¹‘••ÁÅÕ…°¡•ÉÉ½ÉÌ°mt°€‘í±½…±•ô¼‘íÙ¥•ÝÁ½ÉÐ¹¹…µ•ô%•ÉÉ½ÉÍ€¤ì(€€€ô™¥¹…±±äì…Ý…¥Ð½¹Ñ•áÐ¹±½Í” ¤ìô(€ô)ô¤ì(
+    if (action === "kvGet" && payload.key === "d-browser-missing-room") {
+      return route.fulfill({ status: 404, contentType: "application/json", body: JSON.stringify({ error: "external record absent" }) });
+    }
+    const bodies = {
+      health: { ok: true, technocore: true }, rooms: { rooms: [] }, config: {},
+      read: { messages: [], next: null }, kvGet: { value: null }
+    };
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(bodies[action] || { ok: true }) });
+  });
+  return { context, page: await context.newPage() };
+}
+
+async function activate(locator, viewport) {
+  if (viewport.isMobile) await locator.tap();
+  else await locator.click();
+}
+
+async function assertNoHorizontalOverflow(page) {
+  const diagnosis = await page.evaluate(() => {
+    const client = document.documentElement.clientWidth;
+    const offenders = [...document.querySelectorAll("body *")].map(el => {
+      const r = el.getBoundingClientRect();
+      return { tag: el.tagName.toLowerCase(), id: el.id || "", className: typeof el.className === "string" ? el.className.slice(0,100) : "", text: (el.innerText || el.textContent || "").trim().replace(/\s+/g," ").slice(0,100), left: Math.round(r.left), right: Math.round(r.right), width: Math.round(r.width), scrollWidth: el.scrollWidth };
+    }).filter(x => x.width && (x.left < -1 || x.right > client + 1)).slice(0,25);
+    return { client, scroll: document.documentElement.scrollWidth, offenders };
+  });
+  assert.ok(diagnosis.scroll <= diagnosis.client + 1, `horizontal overflow / DOM offenders: ${JSON.stringify(diagnosis)}`);
+}
+
+async function assertVisibleCopyLocale(page, locale, label) {
+  const copy = await page.evaluate(() => {
+    const clone = document.body.cloneNode(true);
+    clone.querySelectorAll("script,style,noscript,code,pre,input,textarea,select,[hidden],[aria-hidden='true']").forEach(el => el.remove());
+    return (clone.innerText || clone.textContent || "").replace(/\s+/g, " ").trim();
+  });
+  if (locale === "en") {
+    assert.doesNotMatch(copy, /[Ã§ÄŸÄ±Ã¶ÅŸÃ¼Ä°]/i, `${label}: Turkish UI characters remain in English copy`);
+  } else {
+    const untranslated = /\b(?:the password|no records|no signed|refresh status|refresh proof|refresh inbox|enter a valid|enter your|open room|public self-service unavailable|waiting for demo|live-verify)\b/i.exec(copy);
+    assert.equal(untranslated, null, `${label}: English UI phrase remains: ${untranslated?.[0]}`);
+  }
+}
+
+before(async () => {
+  const port = 43_000 + Math.floor(Math.random() * 1_000);
+  baseURL = `http://127.0.0.1:${port}`;
+  server = spawn(process.execPath, ["scripts/local-preview-server.mjs"], {
+    cwd: process.cwd(), env: { ...process.env, PORT: String(port) }, stdio: ["ignore", "pipe", "pipe"]
+  });
+  server.stdout.setEncoding("utf8").on("data", (part) => { serverStdout += part; });
+  server.stderr.setEncoding("utf8").on("data", (part) => { serverStderr += part; });
+  await waitForServer(server, baseURL);
+  browser = await chromium.launch({ headless: true });
+});
+
+after(async () => {
+  await browser?.close();
+  if (server && server.exitCode === null) {
+    server.kill("SIGTERM");
+    await new Promise((resolve) => {
+      server.once("exit", resolve);
+      setTimeout(resolve, 2_000).unref();
+    });
+  }
+});
+
+test("main page boots from empty storage and translates in desktop and mobile", async () => {
+  for (const viewport of viewports) {
+    const { context, page } = await newPage(viewport);
+    const errors = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    try {
+      await page.goto(`${baseURL}/`);
+      await page.locator("h1").waitFor({ state: "visible" });
+      await page.locator("#rdTestnetToolkit").waitFor({ state: "visible" });
+      await page.locator("#rdTclkWorkbench").waitFor({ state: "visible" });
+      await page.locator("#rdProvFixSummary").waitFor({ state: "visible" });
+      const catalogAudit = await page.evaluate(() => window.RD_I18N.audit());
+      assert.ok(catalogAudit.catalogs >= 6, `all module catalogs registered: ${JSON.stringify(catalogAudit)}`);
+      assert.match(await page.locator("#heroDid").textContent(), /did:key:z6Mk/);
+      assert.equal(await page.locator("#flopCommunityLink").isVisible(), true);
+      assert.match(await page.evaluate(() => localStorage.getItem("reddragon-lang")), /^(tr|en)$/);
+      await page.locator('#rdLangSwitcher button[data-lang="en"]').click();
+      await page.locator("#flopCommunityLink").filter({ hasText: "Open FLOP Observatory" }).waitFor({ state: "visible" });
+      assert.equal(await page.locator("html").getAttribute("lang"), "en");
+      assert.equal(await page.locator("#flopCommunityLink").getAttribute("href"), "/flop");
+      assert.match(await page.locator("#brandSub").textContent(), /Community Observatory/);
+      assert.match(await page.locator("#rdDidProvenance .rd-prov-head h2").textContent(), /who built this tool/i);
+      assert.equal(await page.locator("#rdDidProvenance .rd-prov-kv span").first().textContent(), "Verified owned room");
+      assert.equal(await page.locator("#rdDidProvenance .rd-prov-kv span").nth(2).textContent(), "Mailbox channel");
+      assert.match(await page.locator("#rdTestnetToolkit h2").textContent(), /testnet-ready/i);
+      assert.match(await page.locator("#rdTclkWorkbench .rd-tclk-head p").textContent(), /verifiable agent-to-agent/i);
+      await page.waitForFunction(() => /proof signals|core proof/i.test(document.querySelector("#rdProvFixSummary")?.textContent || ""));
+      assert.match(await page.locator("#rdProvFixSummary").textContent(), /proof signals|core proof/i);
+      assert.doesNotMatch(await page.locator("#rdTestnetToolkit .rd-testnet-head p").textContent(), /^FLOP'un gÃ¼ncel/);
+      assert.doesNotMatch(await page.locator("#rdDidProvenance").innerText(), /Live-verifies/);
+      await assertVisibleCopyLocale(page, "en", `${viewport.name}/home`);
+
+      assert.equal((await page.locator("#helloText").inputValue()).startsWith("Hello Technocore!"), true, "English default message must be localized");
+      await page.locator("#createBtn").click();
+      assert.equal((await page.locator("#toast").textContent()).trim(), "The password must be at least 12 characters.");
+      await page.locator('#rdLangSwitcher button[data-lang="tr"]').click();
+      await page.locator("#flopCommunityLink").filter({ hasText: "FLOP GÃ¶zlemevini aÃ§" }).waitFor({ state: "visible" });
+      assert.equal(await page.locator("html").getAttribute("lang"), "tr");
+      assert.match(await page.locator("#brandSub").textContent(), /Topluluk GÃ¶zlemevi/);
+      assert.match(await page.locator("#rdDidProvenance .rd-prov-head h2").textContent(), /bu aracÄ± kim geliÅŸtirdi/i);
+      assert.equal(await page.locator("#rdDidProvenance .rd-prov-kv span").first().textContent(), "SahipliÄŸi doÄŸrulanmÄ±ÅŸ oda");
+      assert.equal(await page.locator("#rdDidProvenance .rd-prov-kv span").nth(2).textContent(), "Posta kutusu kanalÄ±");
+      assert.match(await page.locator("#rdTestnetToolkit h2").textContent(), /testnet'e hazÄ±r mÄ±sÄ±n/i);
+      assert.match(await page.locator("#rdTclkWorkbench .rd-tclk-head p").textContent(), /doÄŸrulanabilir ajanlar arasÄ±/i);
+      await page.waitForFunction(() => /kanÄ±t|doÄŸrulanamadÄ±/i.test(document.querySelector("#rdProvFixSummary")?.textContent || ""));
+      assert.match(await page.locator("#rdProvFixSummary").textContent(), /kanÄ±t|doÄŸrulanamadÄ±/i);
+      assert.doesNotMatch(await page.locator("#rdTestnetToolkit .rd-testnet-head p").textContent(), /Turns FLOP's current/);
+      assert.doesNotMatch(await page.locator("#rdDidProvenance").innerText(), /Live-verifies/);
+      await assertVisibleCopyLocale(page, "tr", `${viewport.name}/home`);
+      assert.equal((await page.locator("#helloText").inputValue()).startsWith("Merhaba Technocore!"), true, "Turkish default message must be localized");
+      await page.locator("#createBtn").click();
+      assert.equal((await page.locator("#toast").textContent()).trim(), "Parola en az 12 karakter olmalÄ±.");
+      await assertNoHorizontalOverflow(page);
+      assert.deepEqual(errors, [], `${viewport.name} page errors`);
+    } finally { await context.close(); }
+  }
+});
+
+test("main page keeps local activity isolated by public DID on all viewports", async () => {
+  for (const viewport of viewports) {
+    const { context, page } = await newPage(viewport);
+    try {
+      await page.goto(`${baseURL}/`);
+      const did = page.locator("#rdLedgerDid");
+      await did.waitFor({ state: "visible" });
+      await did.fill(didRedDragon);
+      await page.locator("#rdFaucetAmount").fill("0.25");
+      await page.locator("#rdFaucetRef").fill("local-browser-check");
+      await activate(page.locator("#rdRecordFaucet"), viewport);
+      assert.match(await page.locator("#rdLedgerRows").textContent(), /local-browser-check/);
+      const redKey = `reddragon-flop-testnet-ledger:${didRedDragon}`;
+      const otherKey = `reddragon-flop-testnet-ledger:${didOther}`;
+      assert.equal(await page.evaluate((key) => JSON.parse(localStorage.getItem(key) || "null")?.entries?.length, redKey), 1);
+      assert.equal(await page.evaluate((key) => localStorage.getItem(key), otherKey), null);
+
+      await did.fill(didOther);
+      assert.match(await page.locator("#rdLedgerRows").textContent(), /no records|henÃ¼z kayÄ±t/i);
+      await page.locator("#rdInferenceAmount").fill("1.5");
+      await page.locator("#rdInferenceRef").fill("other-did-local-check");
+      await activate(page.locator("#rdRecordInference"), viewport);
+      assert.match(await page.locator("#rdLedgerRows").textContent(), /other-did-local-check/);
+      assert.equal(await page.evaluate((key) => JSON.parse(localStorage.getItem(key) || "null")?.entries?.length, otherKey), 1);
+
+      await did.fill(didRedDragon);
+      assert.match(await page.locator("#rdLedgerRows").textContent(), /local-browser-check/);
+      assert.doesNotMatch(await page.locator("#rdLedgerRows").textContent(), /other-did-local-check/);
+      await assertNoHorizontalOverflow(page);
+    } finally { await context.close(); }
+  }
+});
+
+test("/flop Turkish and English copy, fail-closed status, and responsive layout", async () => {
+  for (const viewport of viewports) {
+    const { context, page } = await newPage(viewport);
+    try {
+      await page.goto(`${baseURL}/flop`);
+      await page.locator("#flop-live-status").waitFor({ state: "visible" });
+      await page.locator("#rdLiveTestnet [data-status]").waitFor({ state: "visible" });
+      const language = page.locator("#rdFlopLanguage");
+      await language.selectOption("tr");
+      assert.equal(await page.locator("html").getAttribute("lang"), "tr");
+      assert.equal(await page.locator("#live-title").textContent(), "CanlÄ± FLOP durumu");
+      await assertVisibleCopyLocale(page, "tr", `${viewport.name}/flop`);
+      await page.reload();
+      assert.equal(await language.inputValue(), "tr", "Turkish choice should survive reload");
+      await language.selectOption("en");
+      assert.equal(await page.locator("html").getAttribute("lang"), "en");
+      assert.equal(await page.locator("#live-title").textContent(), "Live FLOP status");
+      await page.reload();
+      assert.equal(await language.inputValue(), "en", "English choice should survive reload");
+      assert.match(await page.locator("#rdLiveTestnet [data-status]").textContent(), /planned|unreleased/i);
+      assert.match(await page.locator("#rdLiveDevnet [data-detail]").textContent(), /administrator-assisted|administrator assistance/i);
+      assert.doesNotMatch(await page.locator("#rdLiveDevnet [data-detail]").textContent(), /public self-service unavailable/);
+      await assertVisibleCopyLocale(page, "en", `${viewport.name}/flop`);
+      await assertNoHorizontalOverflow(page);
+    } finally { await context.close(); }
+  }
+});
+
+
+test("/flop keeps source failures unverified and localized", async () => {
+  const { context, page } = await newPage(viewports[2]);
+  const errors = [];
+  page.on("pageerror", error => errors.push(error.message));
+  await context.unroute("**/api/flop-status");
+  await context.route("**/api/flop-status", route => route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({error:"simulated source failure"}) }));
+  try {
+    await page.goto(`${baseURL}/flop`);
+    await page.locator("#rdLiveTestnet [data-status]").waitFor({ state: "visible" });
+    await page.waitForFunction(() => document.querySelector("#rdLiveTestnet [data-status]")?.textContent.includes("Unverified"));
+    assert.equal(await page.locator("#rdLiveTestnet").getAttribute("data-state"), "bad");
+    await page.locator("#rdFlopLanguage").selectOption("tr");
+    await page.waitForFunction(() => document.documentElement.lang === "tr");
+    await page.waitForFunction(() => document.querySelector("#rdLiveTestnet [data-status]")?.textContent.includes("DoÄŸrulanamadÄ±"));
+    assert.doesNotMatch(await page.locator("#rdLiveTestnet [data-detail]").textContent(), /simulated source failure/);
+    assert.deepEqual(errors, [], "API failure localization must not throw a browser exception");
+  } finally { await context.close(); }
+});
+
+
+test("DID create, encrypted backup, restore, prompts and mocked signed flows work in both locales at every viewport", { timeout: 240000 }, async () => {
+  for (const viewport of viewports) for (const locale of ["en", "tr"]) {
+    const { context, page } = await newPage(viewport);
+    const errors = []; page.on("pageerror", error => errors.push(error.message));
+    try {
+      await page.goto(`${baseURL}/`);
+      await page.locator("#createBtn").waitFor({ state: "visible" });
+      const langButton = page.locator(`#rdLangSwitcher button[data-lang="${locale}"]`);
+      if (await page.locator("html").getAttribute("lang") !== locale) {
+        if (viewport.isMobile) await langButton.tap(); else await langButton.click();
+        await page.waitForFunction(expected => document.documentElement.lang === expected, locale);
+      }
+      const shortText = locale === "tr" ? "Parola en az 12 karakter olmalÄ±." : "The password must be at least 12 characters.";
+      await activate(page.locator("#createBtn"), viewport);
+      assert.equal((await page.locator("#toast").textContent()).trim(), shortText);
+      await page.locator("#pass1").fill("ephemeral-browser-only-password");
+      await page.locator("#pass2").fill("ephemeral-browser-only-password");
+      await activate(page.locator("#createBtn"), viewport);
+      await page.waitForFunction(() => (document.querySelector("#identityOut")?.textContent || "").includes("did:key:z6Mk"), null, { timeout: 35000 });
+      const did = (await page.locator("#identityOut").textContent()).split("\n")[0].trim();
+      const downloadEvent = page.waitForEvent("download");
+      await activate(page.locator("#backupBtn"), viewport);
+      const backup = await downloadEvent;
+      assert.match(backup.suggestedFilename(), /reddragon-technocore-.*\.json/);
+      const backupPath = await backup.path();
+      let promptText = "";
+      page.once("dialog", async dialog => { promptText = dialog.message(); await dialog.accept("ephemeral-browser-only-password"); });
+      await page.locator("#restoreInput").setInputFiles(backupPath);
+      const restoredText = locale === "tr" ? "Kimlik geri yÃ¼klendi." : "Identity restored.";
+      await page.waitForFunction(expected => (document.querySelector("#toast")?.textContent || "").trim() === expected, restoredText);
+      await page.waitForFunction(expected => (document.querySelector("#identityOut")?.textContent || "").startsWith(expected), did);
+      assert.equal((await page.locator("#identityOut").textContent()).split("\n")[0].trim(), did);
+      assert.equal(promptText, locale === "tr" ? "Yedek parolasÄ±nÄ± gir:" : "Enter the backup password:");
+      assert.equal((await page.locator("#toast").textContent()).trim(), restoredText);
+      await activate(page.locator("#helloBtn"), viewport);
+      await page.waitForFunction(expected => (document.querySelector("#helloOut")?.textContent || "").includes(expected), locale === "tr" ? "sÄ±ra" : "seq");
+      await page.locator("#rdVerifyRoom").fill("d-browser-missing-room");
+      await page.locator("#rdVerifyDid").fill(didRedDragon);
+      await activate(page.locator("#rdVerifyButton"), viewport);
+      await page.waitForFunction(() => (document.querySelector("#rdVerifyResult")?.textContent || "").includes("404"));
+      assert.match(await page.locator("#rdVerifyResult").textContent(), locale === "tr" ? /DÄ±ÅŸ sistemde kayÄ±t bulunamadÄ±/ : /external system returned no record/i);
+      assert.equal(await page.locator("#rdVerifyResult").getAttribute("data-state"), "bad", "external absence is not a local ownership pass");
+      assert.deepEqual(errors, [], `${locale}/${viewport.name} DID errors`);
+    } finally { await context.close(); }
+  }
+});

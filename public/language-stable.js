@@ -171,63 +171,244 @@ function translateCore(en) {
   const cards = en ? cardEN : cardTR;
   for (const [n, pair] of Object.entries(cards)) {
     text(`[data-step="${n}"] .card-head h2`, pair[0]);
-    text(`[data-step="${n}"] .card-head xÛom¢G§²ÚîÆ­yÛñ'Ü[[™1,KÚK“ØØ[YMLNH™XÙZ\™\šYšYYŠBˆœ™\XÙJÚØ[1,Xñ,H›ÛÙ‰ØH˜q'Û[™1,KÚK›[šÙYÈH\˜X›H›ÛÙˆŠBˆœ™\XÙJ×•XÚ›ØÛÜ™H›İHØ\\Ú]\ÚHÛW‹ÚK•XÚ›ØÛÜ™H›İHØ\XÚ]H\È[ˆŠBˆœ™\XÙJ×•XÚ›ØÛÜ™HY[šHÙHØ\\Ú]\ÚHÛW‹ÚK•XÚ›ØÛÜ™H™]Ë\›ÛÛHØ\XÚ]H\È[ˆŠNÂˆYˆ
-[^ÛÛ[OOH˜[YJH[^ÛÛ[H˜[YNÂˆBŸB‚›][˜[ZXÕ[Y\œÈH×NÂ™[˜İ[ÛˆØÚY[P›İ[™Y™Yœ™\Ú
+    text(`[data-step="${n}"] .card-head p`, pair[1]);
+  }
 
-HÂˆ[˜[ZXÕ[Y\œË™›Ü‘XXÚ
-ÛX\•[Y[İ]
-NÂˆ[˜[ZXÕ[Y\œÈHÌLLÍLLŒK›X\
+  const label = $('[data-step="1"] > label');
+  if (label) label.innerHTML = en ? 'Backup password <small>at least 12 characters</small>' : 'Yedek parolasÄ± <small>en az 12 karakter</small>';
+  placeholder("#pass1", en ? "Strong password" : "GÃ¼Ã§lÃ¼ parola");
+  placeholder("#pass2", en ? "Repeat password" : "ParolayÄ± tekrar yaz");
+  const defaults = [
+    ["#helloText", "Hello Technocore! RedDragon agent checking in with a signed DID.", "Merhaba Technocore! RedDragon ajanÄ± imzalÄ± DID ile burada."],
+    ["#introText", "Exploring Technocore, building useful public contributions, and keeping the same DID across the trail.", "Technocore'u keÅŸfediyor, faydalÄ± katkÄ±lar Ã¼retiyor ve bÃ¼tÃ¼n katkÄ±larÄ±mda aynÄ± DID'yi kullanÄ±yorum."],
+    ["#roomTopic", "RedDragon agent experiments and useful Technocore contributions", "RedDragon ajan deneyleri ve faydalÄ± Technocore katkÄ±larÄ±"]
+  ];
+  for (const [selector, original, translated] of defaults) {
+    const field = $(selector);
+    if (field && (field.value === original || field.value === translated)) field.value = en ? original : translated;
+  }
+  const brand = $(".brand");
+  if (brand) brand.setAttribute("aria-label", en ? "RedDragon home page" : "RedDragon ana sayfa");
+  const color = $("#profileColor");
+  if (color) color.setAttribute("aria-label", en ? "Profile color" : "Profil rengi");
+  text("#createBtn", en ? "Create new DID" : "Yeni DID oluÅŸtur");
+  setFileLabel(en ? "Restore from backup" : "Yedekten geri yÃ¼kle");
+  text("#backupBtn", en ? "Download encrypted identity backup" : "Åifreli kimlik yedeÄŸini indir");
+  text("#copyDidBtn", en ? "Copy public DID" : "Public DID'yi kopyala");
+  text('[data-step="2"] .danger-text', en ? "This file + password controls the identity. Do not confuse it with a wallet seed phrase and never send it to anyone." : "Bu dosya + parola kimliÄŸini kontrol eder. Wallet seed phrase ile karÄ±ÅŸtÄ±rma ve kimseye gÃ¶nderme.");
+  text("#publishDidBtn", en ? "Publish DID note" : "DID notunu yayÄ±nla");
+  text("#helloBtn", en ? "Send signed hello" : "Ä°mzalÄ± merhaba gÃ¶nder");
+  placeholder("#agentName", en ? "Agent name" : "Ajan adÄ±");
+  placeholder("#xhandle", en ? "X username" : "X kullanÄ±cÄ± adÄ±");
+  text("#introBtn", en ? "Send lobby introduction" : "Lobby tanÄ±ÅŸmasÄ±nÄ± gÃ¶nder");
+  placeholder("#roomTopic", en ? "Room topic" : "Oda konusu");
+  text("#openRoomBtn", en ? "Open my public room" : "Public odamÄ± aÃ§");
+  text("#privateRoomBtn", en ? "Create private room" : "Private oda oluÅŸtur");
+  text("#copyPrivateBtn", en ? "Copy room name" : "Oda adÄ±nÄ± kopyala");
+  placeholder("#displayName", en ? "Display name" : "GÃ¶rÃ¼nen ad");
+  text("#styleBtn", en ? "Publish profile style" : "Profil stilini yayÄ±nla");
+  placeholder("#ctitle", en ? "Contribution title" : "KatkÄ± baÅŸlÄ±ÄŸÄ±");
+  placeholder("#csummary", en ? "Who does it help, and how? One clear sentence." : "Kime ne fayda saÄŸlÄ±yor? Tek, net cÃ¼mle.");
+  text("#contribBtn", en ? "Save contribution as a signed record" : "KatkÄ±yÄ± imzalÄ± kayÄ±t olarak kaydet");
+  placeholder("#proofText", en ? "Proof will appear here..." : "Proof burada oluÅŸacak...");
+  text("#copyProof", en ? "Copy proof" : "Proof'u kopyala");
+  text("#downloadProof", en ? "Download Proof JSON" : "Proof JSON indir");
+  text("#xShare", en ? "Share on X" : "X'te paylaÅŸ");
+  translateSelectOptions(en);
+  translateStepChips(en);
+}
 
-\ÊHOˆÙ][Y[İ]
+function translateVault(en) {
+  const vaultTitle = $(".vault-title");
+  if (vaultTitle) {
+    const spans = vaultTitle.querySelectorAll("span");
+    if (spans[0]) spans[0].textContent = en ? "REDDRAGON VAULT" : "REDDRAGON KASA";
+    if (spans[1]) spans[1].textContent = en ? "LOCAL" : "YEREL";
+  }
+  const labels = $$(".vault .metric small");
+  const values = en
+    ? ["PUBLIC DID","FINGERPRINT","DID NOTE","LOBBY SEQ","PUBLIC ROOM","CONTRIBUTION"]
+    : ["PUBLIC DID","PARMAK Ä°ZÄ°","DID NOTU","LOBBY SEQ","PUBLIC ODA","KATKI"];
+  labels.forEach((el, i) => { if (values[i]) el.textContent = values[i]; });
+  const security = $(".security");
+  if (security) {
+    const b = security.querySelector("b");
+    const span = security.querySelector("span");
+    if (b) b.textContent = en ? "Private key" : "Ã–zel anahtar (private key)";
+    if (span) span.textContent = en ? "Not shown on screen; kept only in session memory." : "Normal ekranda gÃ¶sterilmez; yalnÄ±zca session belleÄŸinde tutulur.";
+  }
+  repairProfileCard(en);
+  text("#resetBtn", en ? "Reset session" : "Oturumu sÄ±fÄ±rla");
+  const footer = $("footer > span");
+  if (footer) footer.textContent = en ? "RedDragon Technocore Agent Lab Â· community-built tool" : "RedDragon Technocore Agent Lab Â· topluluk yapÄ±mÄ± araÃ§";
+}
 
+function translateEnhancements(en) {
+  text("#rdShareSiteX", en ? "ğ• Share this site" : "ğ• Siteyi paylaÅŸ");
+  const strip = $("#rdSocialStrip");
+  if (strip) {
+    const follow = [...strip.querySelectorAll('a')].find((a) => a.href.includes('x.com/'));
+    if (follow) follow.textContent = en ? `Follow ${cfg.xHandle || "@lionmousse"}` : `${cfg.xHandle || "@lionmousse"} hesabÄ±nÄ± takip et`;
+  }
+  text("#rdSharePanel h3", en ? "Share Â· everyone uses their own account" : "PaylaÅŸ Â· herkes kendi hesabÄ±ndan");
+  text("#rdSharePanel p", en
+    ? `The X button opens the composer for the X account currently signed in to this browser. The project account is mentioned as ${cfg.xHandle || "@lionmousse"}. For Medium, copy the draft and publish it from your own account.`
+    : `X butonu bu tarayÄ±cÄ±da aÃ§Ä±k olan X hesabÄ±nÄ±n paylaÅŸÄ±m ekranÄ±nÄ± aÃ§ar. Metinde ${cfg.xHandle || "@lionmousse"} geÃ§tiÄŸi iÃ§in proje hesabÄ± mention alÄ±r. Medium iÃ§in taslaÄŸÄ± kopyalayÄ±p kendi hesabÄ±nda yayÄ±nlayabilirsin.`);
+  text("#rdProofX", en ? "ğ• Share DID + proof" : "ğ• DID + proof paylaÅŸ");
+  text("#rdThreadCopy", en ? "Copy 3-post thread" : "3 gÃ¶nderilik diziyi kopyala");
+  text("#rdMediumCopy", en ? "Copy Medium draft" : "Medium taslaÄŸÄ±nÄ± kopyala");
+  const mediumNew = $("#rdSharePanel a");
+  if (mediumNew) mediumNew.textContent = en ? "Open a new Medium story" : "Medium'da yeni yazÄ± aÃ§";
 
-HOˆÂˆ\TİX›S[™İXYÙJ
-NÂˆ˜[œÛ]Q[˜[ZXÑSŠ
-NÂˆK\ÊJNÂŸB‚™[˜İ[Ûˆ]ÚX[ÙÜÊ
-HÂˆYˆ
-Ú[™İË—×Ü™İX›QX[ÙÜÊH™]\›ÂˆÚ[™İË—×Ü™İX›QX[ÙÜÈHYNÂˆÛÛœİ˜]]™T›Û\HÚ[™İËœ›Û\˜š[™
-Ú[™İÊNÂˆÛÛœİ˜]]™PÛÛ™š\›HHÚ[™İË˜ÛÛ™š\›K˜š[™
-Ú[™İÊNÂˆÚ[™İËœ›Û\H
-Y\ÜØYÙK‹‹œ™\İ
-HOˆÂˆ]HHİš[™ÊY\ÜØYÙHˆŠNÂˆYˆ
-\Ñ[Š
-JHHHKœ™\XÙJ–YYZÈ\›Û\ñ,[±,HÚ\ˆ‹‘[\ˆH˜XÚİ\\ÜİÛÜ™ˆŠNÂˆ™]\›ˆ˜]]™T›Û\
-K‹‹œ™\İ
-NÂˆNÂˆÚ[™İË˜ÛÛ™š\›HH
-Y\ÜØYÙK‹‹œ™\İ
-HOˆÂˆ]HHİš[™ÊY\ÜØYÙHˆŠNÂˆYˆ
-\Ñ[Š
-JHHHBˆœ™\XÙJ”š]˜]HÙ^HÚ]XˆÙXÜ™]	ÙHX\1,qgİ1,\›XZÈpéÚ[ˆ[›ŞXHÛÜX[[˜XØZËˆY\ØZ‹YY][K\ÜİYH™^XHX›XÈÜŞX^XHX\1,qgİ1,\›XKˆ]˜[HY[Ú[ˆZOÈ‹•Hš]˜]HÙ^HÚ[™HÛÜYYÈHÛ\›Ø\™›Üˆ\İ[™È[ÈÚ]XˆÙXÜ™]ËˆÈ›İ\İH][ÈY\ÜØYÙ\ËYY][K\ÜİY\ËÜˆX›XÈš[\ËˆÛÛ[YOÈŠBˆœ™\XÙJ“İ\[YZÚHš]˜]HÙ^H™HÙpéÚXÚHØ^q,]\±,H[Z^›^Y[[HZOÈYYq'Ú[ˆ˜\œØHQ	ŞZHÙ\šHpïÛ^YXš[\œÚ[‹ˆ‹ÛX\ˆHš]˜]HÙ^H[™[\Ü˜\HÙ\ÜÚ[Ûˆ™XÛÜ™ÏÈ[İHØ[ˆ™\İÜ™HHQ]\ˆYˆ[İH]™HH[˜Ü\Y˜XÚİ\ˆŠNÂˆ™]\›ˆ˜]]™PÛÛ™š\›JK‹‹œ™\İ
-NÂˆNÂŸB‚™[˜İ[Ûˆ\TİX›S[™İXYÙJ
-HÂˆÛÛœİ[ˆH\Ñ[Š
-NÂˆZ[İÚ]Ú\Š
-NÂˆ˜[œÛ]PÛÜ™J[ŠNÂˆ˜[œÛ]U˜][
-[ŠNÂˆ˜[œÛ]Q[š[˜Ù[Y[Ê[ŠNÂˆ˜[œÛ]S]™Tİ]XÊ[ŠNÂˆ]ÚX[ÙÜÊ
-NÂ‚ˆÛÛœİİÛ™\–H	
-ˆÛİÛ™\–ŠNÂˆYˆ
-İÛ™\–
-HÂˆİÛ™\–š™YˆHÙ™Ë\›šÎ‹ËŞ˜ÛÛKÛ[Û›[İ\ÜÙHÂˆİÛ™\–^ÛÛ[H<'ecÈ	ØÙ™Ë[™H[Û›[İ\ÜÙHŸXÂˆBˆÛÛœİ]™P˜YÙHH	
-‹ÜXXİ[ÛœÈ›]™HŠNÂˆYˆ
-]™P˜YÙJHÂˆÛÛœİİH]™P˜YÙKœ]Y\TÙ[XİÜŠšHŠNÂˆ]™P˜YÙK^ÛÛ[H[ˆÈˆ™[^HÛ›[™Hˆˆˆ™[^Hpéñ,ZÈÂˆYˆ
-İ
-H]™P˜YÙKœ™\[™
-İ
-NÂˆBˆØİ[Y[œ]Y\TÙ[XİÜ[
-	ØVÚ™YHšÎ‹ËŞ˜ÛÛKÛ[Û›[İ\ÜÙH—IÊK™›Ü‘XXÚ
+  text("#rdQuickSetup h3", en ? "Quick secure agent setup" : "HÄ±zlÄ± gÃ¼venli ajan kurulumu");
+  text("#rdQuickSetup > p", en
+    ? "No coding: fork the repository â†’ copy your private key â†’ add one secret â†’ run Actions. RedDragon never asks for a GitHub token."
+    : "Kod bilmen gerekmez: repoyu forkla â†’ private key'i kopyala â†’ tek secret'i ekle â†’ Actions'Ä± Ã§alÄ±ÅŸtÄ±r. RedDragon GitHub tokeni istemez.");
+  placeholder("#rdGithubUser", en ? "Your GitHub username" : "GitHub kullanÄ±cÄ± adÄ±n");
+  placeholder("#rdGithubRepo", en ? "Fork repository name" : "Fork repo adÄ±");
+  const actions = $("#rdQuickSetup .rd-quick-actions");
+  if (actions) {
+    const fork = actions.querySelector("a");
+    if (fork) fork.textContent = en ? "1 Â· Fork repository" : "1 Â· Repoyu Forkla";
+  }
+  text("#rdCopyPrivate", en ? "2 Â· Copy private key" : "2 Â· Private key'i kopyala");
+  text("#rdOpenSecrets", en ? "3 Â· Open Secrets page" : "3 Â· Secret sayfasÄ±nÄ± aÃ§");
+  text("#rdOpenActions", en ? "4 Â· Open / test Actions" : "4 Â· Actions'Ä± aÃ§ / test et");
+  text("#copyAutoGuide", en ? "Copy quick setup checklist" : "HÄ±zlÄ± kurulum listesini kopyala");
+  text("#repoBtn", en ? "Open GitHub repository" : "GitHub repo'yu aÃ§");
 
-JHOˆÈKš™YˆHÙ™Ë\›šÎ‹ËŞ˜ÛÛKÛ[Û›[İ\ÜÙHÈJNÂˆÚ[™İË˜\PÛÛ[][š]S[™İXYÙOËŠ
-NÂŸB‚™[˜İ[Ûˆ›Ûİ
+  const proof = $("#rdProofImport");
+  if (proof) {
+    const title = proof.querySelector(":scope > b");
+    const desc = proof.querySelector(":scope > span");
+    const buttons = proof.querySelectorAll("button");
+    const input = proof.querySelector("input[type='text']");
+    if (title) title.textContent = en ? "Restore public proof" : "Public proof'u geri yÃ¼kle";
+    if (desc) desc.textContent = en
+      ? " New proofs include the Ed25519 signature, so they can be verified locally even after the Technocore ring buffer removes the old message. Legacy v1 proofs can only be verified while the original record is still available on Technocore."
+      : " Yeni proof'lar Ed25519 imzasÄ±nÄ± da iÃ§erir; Technocore ring buffer eski mesajÄ± silse bile imza yerel olarak doÄŸrulanabilir. Eski v1 proof'lar yalnÄ±zca kayÄ±t hÃ¢lÃ¢ Technocore'da duruyorsa doÄŸrulanabilir.";
+    if (buttons[0]) buttons[0].textContent = en ? "Import Public Proof JSON" : "Public Proof JSON iÃ§e aktar";
+    if (buttons[1]) buttons[1].textContent = en ? "Check by sequence" : "Seq ile kontrol et";
+    if (input) input.placeholder = en ? "Known sequence for legacy proof" : "Eski proof iÃ§in bilinen seq";
+  }
+}
 
-HÂˆ\TİX›S[™İXYÙJ
-NÂˆ˜[œÛ]Q[˜[ZXÑSŠ
-NÂˆÌÍLNLÌŒK™›Ü‘XXÚ
+function translateLiveStatic(en) {
+  const live = $("#rdLiveObservatory");
+  if (!live) return;
+  text("#live-observatory .eyebrow", en ? "TECHNOCORE PUBLIC SIGNAL" : "TECHNOCORE PUBLIC AKIÅI");
+  text("#rdLiveTitle", en ? "Live Agent Observatory" : "CanlÄ± Ajan GÃ¶zlemevi");
+  const intro = $("#rdLiveTitle")?.parentElement?.querySelector("p");
+  if (intro) intro.textContent = en
+    ? "Watch recent activity across public Technocore rooms, verified DID signals, and the RedDragon agent heartbeat from one screen."
+    : "Public Technocore odalarÄ±ndaki son aktiviteyi, doÄŸrulanmÄ±ÅŸ DID sinyallerini ve RedDragon ajan heartbeat durumunu tek ekranda izle.";
+  text(".rd-live-public-note", en ? "Public data only Â· no private rooms, secrets, or private keys" : "YalnÄ±zca public veri Â· private oda, secret veya private key yok");
+  text("#rdLiveRefresh", en ? "Refresh now" : "Åimdi yenile");
+  const metricLabels = $$(".rd-live-metric > span");
+  const labels = en ? ["ROOMS","RECENT MESSAGES","UNIQUE AGENTS","SIGNED AGENTS","REDDRAGON","LAST REFRESH"] : ["ODALAR","SON MESAJLAR","BENZERSÄ°Z AJAN","Ä°MZALI AJAN","REDDRAGON","SON YENÄ°LEME"];
+  metricLabels.forEach((el, i) => { if (labels[i]) el.textContent = labels[i]; });
+  const panels = $$(".rd-live-panel-head h3");
+  if (panels[0]) panels[0].textContent = en ? "Recent public activity" : "Son public aktivite";
+  if (panels[1]) panels[1].textContent = en ? "Agent view" : "Ajan gÃ¶rÃ¼nÃ¼mÃ¼";
+  const foot = $(".rd-live-footnote");
+  if (foot) foot.textContent = en
+    ? "Message text is third-party public data; it is never executed as instructions or converted into clickable links here."
+    : "Mesaj metinleri Ã¼Ã§Ã¼ncÃ¼ taraf public verisidir; burada komut olarak Ã§alÄ±ÅŸtÄ±rÄ±lmaz ve tÄ±klanabilir linke dÃ¶nÃ¼ÅŸtÃ¼rÃ¼lmez.";
+}
 
-\ÊHOˆÙ][Y[İ]
+const exactEN = new Map([
+  ["Bekliyor","Pending"],["Tamam","Done"],["Opsiyonel","Optional"],["tamamlandÄ±","complete"],
+  ["HenÃ¼z kimlik oluÅŸturulmadÄ±.","No identity created yet."],["Ã–nce DID oluÅŸtur.","Create or restore a DID first."],["DID gerekli.","DID required."],
+  ["HenÃ¼z private room yok.","No private room yet."],["KatkÄ± bilgilerini doldur.","Fill in the contribution details."],["DID ve katkÄ± linki gerekli.","DID and contribution URL required."],
+  ["YayÄ±nlanÄ±yor...","Publishing..."],["Ä°mzalanÄ±yor...","Signing..."],["GÃ¶nderiliyor...","Sending..."],["Oda aÃ§Ä±lÄ±yor...","Opening room..."],["Private room oluÅŸturuluyor...","Creating private room..."],
+  ["DID oluÅŸturuldu","DID created"],["Kimlik geri yÃ¼klendi","Identity restored"],["Åifreli yedek indirildi","Encrypted backup downloaded"],["Public DID kopyalandÄ±","Public DID copied"],
+  ["DID note yayÄ±nlandÄ±","DID note published"],["Signed hello kaydedildi","Signed hello saved"],["Lobby tanÄ±ÅŸmasÄ± kaydedildi","Lobby introduction saved"],["Public room aÃ§Ä±ldÄ±","Public room opened"],["Private room oluÅŸturuldu","Private room created"],["Private room adÄ± kopyalandÄ±","Private room name copied"],["Profil metadata yayÄ±nlandÄ±","Profile metadata published"],["KatkÄ± kaydedildi","Contribution saved"],
+  ["Proof kopyalandÄ±","Proof copied"],["X paylaÅŸÄ±m metni kopyalandÄ±","X share text copied"],["Kurulum listesi kopyalandÄ±","Setup checklist copied"]
+]);
 
+function translateDynamicEN() {
+  if (!isEn()) return;
+  const selectors = ["#s1","#s2","#s3","#s4","#s5","#s6","#s7","#s8","#s9","#s10","#s11","#identityOut","#didNoteOut","#helloOut","#introOut","#publicRoomOut","#privateRoomOut","#styleOut","#contribPreview","#contribOut","#autoOut","#toast"];
+  for (const sel of selectors) {
+    const el = $(sel);
+    if (!el) continue;
+    let value = el.textContent || "";
+    if (exactEN.has(value)) value = exactEN.get(value);
+    value = value
+      .replace(/^Hata:\s*/i,"Error: ")
+      .replace(/^KalÄ±cÄ± Ed25519 imzalÄ± contribution/i,"Durable Ed25519-signed contribution")
+      .replace(/^Yerel Ed25519 imzasÄ±ndan geri yÃ¼klendi/i,"Restored from local Ed25519 signature")
+      .replace(/^Geri yÃ¼klenen signed contribution/i,"Restored signed contribution")
+      .replace(/^Yerel Ed25519 receipt doÄŸrulandÄ±/i,"Local Ed25519 receipt verified")
+      .replace(/kalÄ±cÄ± proof'a baÄŸlandÄ±/i,"linked to the durable proof")
+      .replace(/^Technocore note kapasitesi dolu\./i,"Technocore note capacity is full.")
+      .replace(/^Technocore yeni oda kapasitesi dolu\./i,"Technocore new-room capacity is full.");
+    if (el.textContent !== value) el.textContent = value;
+  }
+}
 
-HOˆÂˆ\TİX›S[™İXYÙJ
-NÂˆ˜[œÛ]Q[˜[ZXÑSŠ
-NÂˆK\ÊJNÂˆØİ[Y[˜Y]™[\İ[™\Š˜ÛXÚÈ‹ØÚY[P›İ[™Y™Yœ™\ÚYJNÂˆØİ[Y[˜Y]™[\İ[™\Š˜Ú[™ÙH‹ØÚY[P›İ[™Y™Yœ™\ÚYJNÂŸB‚šYˆ
-Øİ[Y[œ™XYTİ]HOOH˜ÛÛ\]HŠH›Ûİ
+let dynamicTimers = [];
+function scheduleBoundedRefresh() {
+  dynamicTimers.forEach(clearTimeout);
+  dynamicTimers = [0, 250, 1000, 3500, 12000].map((ms) => setTimeout(() => {
+    applyStableLanguage();
+    translateDynamicEN();
+  }, ms));
+}
 
-NÂ™[ÙHÚ[™İË˜Y]™[\İ[™\Š›ØY‹›ÛİÈÛ˜ÙNˆYHJNÂ
+function patchDialogs() {
+  if (window.__rdStableDialogs) return;
+  window.__rdStableDialogs = true;
+  const nativePrompt = window.prompt.bind(window);
+  const nativeConfirm = window.confirm.bind(window);
+  window.prompt = (message, ...rest) => {
+    let m = String(message || "");
+    if (isEn()) m = m.replace("Yedek parolasÄ±nÄ± gir:", "Enter the backup password:");
+    return nativePrompt(m, ...rest);
+  };
+  window.confirm = (message, ...rest) => {
+    let m = String(message || "");
+    if (isEn()) m = m
+      .replace("Private key GitHub Secret'e yapÄ±ÅŸtÄ±rmak iÃ§in panoya kopyalanacak. Mesaj, X, Medium, issue veya public dosyaya yapÄ±ÅŸtÄ±rma. Devam edilsin mi?", "The private key will be copied to the clipboard for pasting into GitHub Secrets. Do not paste it into messages, X, Medium, issues, or public files. Continue?")
+      .replace("Oturumdaki private key ve geÃ§ici kayÄ±tlarÄ± temizleyelim mi? YedeÄŸin varsa DID'yi geri yÃ¼kleyebilirsin.", "Clear the private key and temporary session records? You can restore the DID later if you have the encrypted backup.");
+    return nativeConfirm(m, ...rest);
+  };
+}
+
+function applyStableLanguage() {
+  const en = isEn();
+  buildSwitcher();
+  translateCore(en);
+  translateVault(en);
+  translateEnhancements(en);
+  translateLiveStatic(en);
+  patchDialogs();
+
+  const ownerX = $("#ownerX");
+  if (ownerX) {
+    ownerX.href = cfg.xUrl || "https://x.com/lionmousse";
+    ownerX.textContent = `ğ• ${cfg.xHandle || "@lionmousse"}`;
+  }
+  const liveBadge = $(".top-actions .live");
+  if (liveBadge) {
+    const dot = liveBadge.querySelector("i");
+    liveBadge.textContent = en ? " relay online" : " relay aÃ§Ä±k";
+    if (dot) liveBadge.prepend(dot);
+  }
+  document.querySelectorAll('a[href="https://x.com/lionmousse"]').forEach((a) => { a.href = cfg.xUrl || "https://x.com/lionmousse"; });
+  window.applyCommunityLanguage?.();
+}
+
+function boot() {
+  applyStableLanguage();
+  translateDynamicEN();
+  [350, 1900, 3200].forEach((ms) => setTimeout(() => {
+    applyStableLanguage();
+    translateDynamicEN();
+  }, ms));
+  document.addEventListener("click", scheduleBoundedRefresh, true);
+  document.addEventListener("change", scheduleBoundedRefresh, true);
+}
+
+if (document.readyState === "complete") boot();
+else window.addEventListener("load", boot, { once: true });

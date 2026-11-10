@@ -30,7 +30,207 @@ const COPY = {
     gatewayOk: "Model kataloÄŸu yanÄ±t verdi", gatewayBad: "DoÄŸrulanamadÄ± Â· katalog eriÅŸilemiyor", gatewayDetail: "Inference veya Ã¼cretli istek gÃ¶nderilmez.",
     packagesOk: "ResmÃ® paket referanslarÄ±", packagesBad: "DoÄŸrulanamadÄ± Â· belgelere eriÅŸilemiyor",
     paper: "Yellow Paper v0.5.0 Â· taslak Â· E.38 aÃ§Ä±k", paperDrift: "CanlÄ± sayfa ve GitHub kopyasÄ± farklÄ±; dosya geÃ§miÅŸi depo CI etkinliÄŸinden ayrÄ± gÃ¶steriliyor.", paperMatch: "GitHub iÃ§erik geÃ§miÅŸi ve depo baÅŸlÄ±ÄŸÄ± ayrÄ± ayrÄ± kontrol edildi.",
-    noToken: "ResmÃ® baÄŸlantÄ±lar sayfasÄ±nda canlÄ± FLOP tokenÄ±, claim veya airdrop olmadÄ±ÄŸÄ± belirtiliyor.", tokenUnverified: "ResmÃ® token ve claim durumu kontrol edilemedi.", tokenChanged: "ResmÃ® baÄŸlantÄ±lar sayfasÄ±ndaki token/claim ifadesi d}Û½m¢G§²ÚîÆ­yØ¸ˆ°(€€€€‰Í½ÕÉ”ˆè€‰M½ÕÉ”¡•¬€ÄÀ9½Ø€ÈÀÈØèe•±±½ÜA…Á•ÈØÀ¸Ô¸À‘É…™Ð¸1¥Ù”Á…”Í…åÌÕÁ‘…Ñ•€ÈÐM•Àì¥Ñ!Õˆ½¹Ñ•¹Ð™¥±”ÕÁ‘…Ñ•€ÈØ=Ð…¹É•Á½Í¥Ñ½Éä¡•…½¸€Ô9½Ø¥Ì$µ½¹±ä¸¸ÌàÉ•µ…¥¹Ì½Á•¸¸AÕ‰±¥ŒÑ•ÍÑ¹•ÐÉ•µ…¥¹ÌÁ±…¹¹•½Õ¹É•±•…Í•¸ˆ°(€€€€‰åÀˆè€‰e•±±½ÜA…Á•Èˆ°(€€€€‰…•¹Ðˆè€‰•¹Ðˆ°(€€€€‰Ñ•…Í•Èˆè€‰Q•…Í•Èˆ°(€€€€‰•áÁ½ÉÑ…¥°ˆè€‰½Õ±¹½Ð•áÁ½ÉÐ±•‘•È¸ˆ(€ô)ôì()½¹ÍÐI}1=A}MA}Q1=õÝ¥¹‘½Ü¹I}$Äá8ü¹É•¥ÍÑ•È ‰™±½ÁÕ¥‘”ˆ±I}1=A}MA}=Ad¥ññI}1=A}MA}=Adì)™Õ¹Ñ¥½¸É‘±½ÁMÁ•½Áä ¤ì(€É•ÑÕÉ¸I}1=A}MA}Q1=mÉ‘±½ÁMÁ•1…¹œ ¥tì)ô()™Õ¹Ñ¥½¸É‘±½ÁMÁ•Q½Ñ…±Ì¡•¹ÑÉ¥•Ì¤ì(€±•Ð±…¥µ•€ô€Àì(€±•ÐÍÁ•¹Ð€ô€Àì(€™½È€¡½¹ÍÐ•¹ÑÉä½˜ÉÉ…ä¹¥ÍÉÉ…ä¡•¹ÑÉ¥•Ì¤€ü•¹ÑÉ¥•Ì€èmt¤ì(€€€½¹ÍÐ…µ½Õ¹Ð€ô5…Ñ ¹µ…à À°9Õµ‰•È¡•¹ÑÉäü¹…µ½Õ¹Ð¤ñð€À¤ì(€€€¥˜€¡•¹ÑÉäü¹ÑåÁ”€ôôô€‰™…Õ•Ðˆ¤±…¥µ•€¬ô…µ½Õ¹Ðì(€€€¥˜€¡•¹ÑÉäü¹ÑåÁ”€ôôô€‰¥¹™•É•¹”ˆ¤ÍÁ•¹Ð€¬ô…µ½Õ¹Ðì(€ô(€É•ÑÕÉ¸ì±…¥µ•°ÍÁ•¹Ð°ÁÕ‰±¥•¹ÑM•¹…É¥½U¹±½­•è¹Õ±°°µ…¥¹¹•ÑU¹±½­AÉ½½˜è€‰¹½Ð•ÍÑ…‰±¥Í¡•‰ä±½…°Ñ•ÍÑ¹•ÐÉ•½É‘Ìˆôì)ô()™Õ¹Ñ¥½¸É‘±½ÁMÁ•áÁ½ÉÑ1•‘•È ¤ì(€½¹ÍÐÐ€ôÉ‘±½ÁMÁ•½Áä ¤ì(€ÑÉäì(€€€½¹ÍÐÉ…Ü€ô)M=8¹Á…ÉÍ”¡±½…±MÑ½É…”¹•Ñ%Ñ•´¡I}1=A}1I}-d¤ñð€‰¹Õ±°ˆ¤ì(€€€½¹ÍÐ±•‘•È€ôÉ…Ü€˜˜É…Ü¹Ù•ÉÍ¥½¸€ôôô€Ä€˜˜É…Ü¹‘¥€ôôôI}1=A}MA}%€˜˜ÉÉ…ä¹¥ÍÉÉ…ä¡É…Ü¹•¹ÑÉ¥•Ì¤(€€€€€€üÉ…Ü(€€€€€€èìÙ•ÉÍ¥½¸è€Ä°‘¥èI}1=A}MA}%°É•…Ñ•‘Ðè¹•Ü…Ñ” ¤¹Ñ½%M=MÑÉ¥¹œ ¤°•¹ÑÉ¥•Ìèmtôì(€€€½¹ÍÐÁ…å±½…€ôì(€€€€€Í¡•µ„è€‰É•‘‘É…½¸µ™±½ÀµÑ•ÍÑ¹•Ðµ±•‘•È½ØÌˆ°(€€€€€‘¥èI}1=A}MA}%°(€€€€€•áÁ½ÉÑ•‘Ðè¹•Ü…Ñ” ¤¹Ñ½%M=MÑÉ¥¹œ ¤°(€€€€€½™™¥¥…±MÑ…ÑÕÌèì(€€€€€€€¡•­•‘ÐèI}1=A}MA}!-°(€€€€€€€å•±±½ÝA…Á•ÉY•ÉÍ¥½¸è€ˆÀ¸Ô¸À€¡‘É…™Ð€¼¥µÁ±•µ•¹Ñ…Ñ¥½¸ÍÁ•ŒƒŠP¥Ñ•É…Ñ¥¹œ¤ˆ°(€€€€€€€å•±±½ÝA…Á•ÉUÁ‘…Ñ•è€ˆÈÀÈØ´Àä´ÈÐˆ°(€€€€€€€…ÕÑ¡½É¥Ñ…Ñ¥Ù•I•™•É•¹”è€‰1¥Ù”1=@9•ÑÝ½É¬e•±±½ÜA…Á•È¥µÁ±•µ•¹Ñ…Ñ¥½¸ÍÁ•¥™¥…Ñ¥½¸ˆ°(€€€€€€€‘•¥Í¥½¸è€‰´ÀÐÐÀˆ°(€€€€€€€Á±…¹¹•‘Q•ÍÑ¹•Ðè€‰DÐ€ÈÀÈØì€Ì9½ØÑ…É•ÐÕ¹½¹™¥Éµ•°ÁÕ‰±¥Œ¹•ÑÝ½É¬Á±…¹¹•½Õ¹É•±•…Í•½¸¡•¬‘…Ñ”ˆ°(€€€€€€€Á±…¹¹•‘5…¥¹¹•Ðè€‰DÄ€ÈÀÈÜˆ°(€€€€€€€•¹•Í¥ÍMÕÁÁ±å±½Àè€ÐÐÀÀÀÀÀÀÀÀ°(€€€€€€€•¹•Í¥Í5¥¹•É¥É‘É½Á±½Àè€ÄÈÀÀÀÀÀÀÀÀ°(€€€€€€€•¹•Í¥ÍY…±¥‘…Ñ½É¥É‘É½Á±½Àè€ÄÈÀÀÀÀÀÀÀÀ°(€€€€€€€•¹•Í¥Í•¹Ñ¥É‘É½Á±½Àè€ÄÈÀÀÀÀÀÀÀÀ°(€€€€€€€•¹•Í¥ÍI•Í•ÉÙ•±½Àè€àÀÀÀÀÀÀÀÀ°(€€€€€€€Ù…±¥‘…Ñ½É5¥¹¥µÕµMÑ…­•±½Àè€ÄÈÀÀÀÀÀ°(€€€€€€€™…Õ•Ñ¹‘Á½¥¹ÑY•É¥™¥•‘1¥Ù”è™…±Í”°(€€€€€€€¥¹™•É•¹•¹‘Á½¥¹ÑY•É¥™¥•‘1¥Ù”è™…±Í”°(€€€€€€€ÍÁ•¹‘Q½U¹±½­I…Ñ¥™¥•‘%¹e•±±½ÝA…Á•ÈèÑÉÕ”°(€€€€€€€ÁÕ‰±¥•¹ÑA…•MÑ…Ñ•ÍMÁ•¹‘Q½U¹±½¬ÍÑ¼ÄèÑÉÕ”°(€€€€€€€ÍÁ•¹‘Q½U¹±½­MÑ…ÑÕÌè€‰e•±±½ÜA…Á•ÈHà¸ÜµHà¸àÍÁ•¥™ä€ÌèÄ™¥¹…±¥é•±½­•µÉ…¹ÐÁ…å…‰±”Õ¹±½¬…™Ñ•È‘¥ÍÁÕÑ”Ý¥¹‘½Ü°Ý¥Ñ „€ÜÔ”±½­•µÍÁ•¹…À¸¸Ìà½¹Ù•ÉÍ¥½¸Í½É¥¹œ°¥‘•¹Ñ¥Ñä…¹…ÁÌÉ•µ…¥¸½Á•¸ìÉÕ¹Ñ¥µ”¥µÁ±•µ•¹Ñ…Ñ¥½¸¥ÌÁ…ÉÑ¥…°¸ˆ°(€€€€€€€Í½ÕÉ•ÌèmI}1=A}e11=]}AAH°I}1=A}9P°I}1=A}QMIt(€€€€€ô°(€€€€€Í•¹…É¥¼èì(€€€€€€€¹…µ”è€‰5…¥¹¹•Ð±½­••¹ÐÉ…¹ÐHà¸Ü€ÌèÄ¥±±ÕÍÑÉ…Ñ¥½¸ˆ°(€€€€€€€É…Ñ¥¼è€ˆÌ1=@•±¥¥‰±”™¥¹…±¥é•±½­•µÉ…¹ÐÁ…å…‰±”€´ø€Ä1=@ÁÉ¥¹¥Á…°Õ¹±½­•ˆ°(€€€€€€€ÍÑ…ÑÕÌè€‰¹½Éµ…Ñ¥Ù”Hà¸ßŠMHà¸àÉÕ±”™½Èµ…¥¹¹•ÐÉ…¹Ð°¹½Ð„Ñ•ÍÑ¹•ÐµÍÁ•¹É•‘¥Ðì¸Ìà½¹Ù•ÉÍ¥½¸Í½É¥¹œ…¹•±¥¥‰¥±¥ÑäÉ•µ…¥¸½Á•¸ˆ(€€€€€ô°(€€€€€Ñ½Ñ…±ÌèÉ‘±½ÁMÁ•Q½Ñ…±Ì¡±•‘•È¹•¹ÑÉ¥•Ì¤°(€€€€€•¹ÑÉ¥•Ìè±•‘•È¹•¹ÑÉ¥•Ì°(€€€€€‘¥Í±…¥µ•Èè€‰	É½ÝÍ•Èµ±½…°…Ñ¥Ù¥Ñä±•‘•ÈìÙ•É¥™ä•… •áÑ•É¹…°É•™•É•¹”¥¹‘•Á•¹‘•¹Ñ±ä¸½¹Ñ…¥¹Ì¹¼ÁÉ¥Ù…Ñ”­•ä¸I•Ý…É•±¥¥‰¥±¥Ñä…¹™¥¹…°…¥É‘É½Àµ•¡…¹¥Ì…É”¹½ÐÕ…É…¹Ñ••¸ˆ(€€€ôì(€€€½¹ÍÐ‰±½ˆ€ô¹•Ü	±½ˆ¡m)M=8¹ÍÑÉ¥¹¥™ä¡Á…å±½…°¹Õ±°°€È¤€¬€‰q¸‰t°ìÑåÁ”è€‰…ÁÁ±¥…Ñ¥½¸½©Í½¸ˆô¤ì(€€€½¹ÍÐÕÉ°€ôUI0¹É•…Ñ•=‰©•ÑUI0¡‰±½ˆ¤ì(€€€½¹ÍÐ„€ô‘½Õµ•¹Ð¹É•…Ñ•±•µ•¹Ð ‰„ˆ¤ì(€€€„¹¡É•˜€ôÕÉ°ì(€€€„¹‘½Ý¹±½…€ôÉ•‘‘É…½¸µ™±½Àµ±•‘•È´‘í¹•Ü…Ñ” ¤¹Ñ½%M=MÑÉ¥¹œ ¤¹Í±¥” À°€ÄÀ¥ô¹©Í½¹€ì(€€€‘½Õµ•¹Ð¹‰½‘ä¹…ÁÁ•¹‘¡¥±¡„¤ì(€€€„¹±¥¬ ¤ì(€€€„¹É•µ½Ù” ¤ì(€€€Í•ÑQ¥µ•½ÕÐ  ¤€ôøUI0¹É•Ù½­•=‰©•ÑUI0¡ÕÉ°¤°€ÔÀÀÀ¤ì(€ô…Ñ ì(€€€…±•ÉÐ¡Ð¹•áÁ½ÉÑ…¥°¤ì(€ô)ô()™Õ¹Ñ¥½¸É‘±½ÁMÁ•M•Ñ½½Ñ•È¡¡½ÍÐ°Ð¤ì(€½¹ÍÐ¹½Ñ”€ô¡½ÍÐ¹ÅÕ•ÉåM•±•Ñ½È ˆ¹ÉµÑ•ÍÑ¹•Ðµ¹½Ñ”ˆ¤ì(€¥˜€ …¹½Ñ”¤É•ÑÕÉ¸ì(€¹½Ñ”¹Ñ•áÑ½¹Ñ•¹Ð€ô€ˆˆì(€½¹ÍÐ±•…€ô‘½Õµ•¹Ð¹É•…Ñ•±•µ•¹Ð ‰ÍÁ…¸ˆ¤ì(€±•…¹Ñ•áÑ½¹Ñ•¹Ð€ôI•‘É…½¸%è€‘íI}1=A}MA}%õq¸‘íÐ¹Í½ÕÉ•ô€ì(€¹½Ñ”¹…ÁÁ•¹‘¡¥±¡±•…¤ì((€½¹ÍÐåÀ€ô‘½Õµ•¹Ð¹É•…Ñ•±•µ•¹Ð ‰„ˆ¤ì(€åÀ¹¡É•˜€ôI}1=A}e11=]}AAHì(€åÀ¹Ñ…É•Ð€ô€‰}‰±…¹¬ˆì(€åÀ¹É•°€ô€‰¹½½Á•¹•È¹½É•™•ÉÉ•Èˆì(€åÀ¹Ñ•áÑ½¹Ñ•¹Ð€ôÐ¹åÀì((€½¹ÍÐÍ•ÀÄ€ô‘½Õµ•¹Ð¹É•…Ñ•Q•áÑ9½‘” ˆƒ
-Ü€ˆ¤ì((€½¹ÍÐ…•¹Ð€ô‘½Õµ•¹Ð¹É•…Ñ•±•µ•¹Ð ‰„ˆ¤ì(€…•¹Ð¹¡É•˜€ôI}1=A}9Pì(€…•¹Ð¹Ñ…É•Ð€ô€‰}‰±…¹¬ˆì(€…•¹Ð¹É•°€ô€‰¹½½Á•¹•È¹½É•™•ÉÉ•Èˆì(€…•¹Ð¹Ñ•áÑ½¹Ñ•¹Ð€ôÐ¹…•¹Ðì((€½¹ÍÐÍ•ÀÈ€ô‘½Õµ•¹Ð¹É•…Ñ•Q•áÑ9½‘” ˆƒ
-Ü€ˆ¤ì((€½¹ÍÐÑ•…Í•È€ô‘½Õµ•¹Ð¹É•…Ñ•±•µ•¹Ð ‰„ˆ¤ì(€Ñ•…Í•È¹¡É•˜€ôI}1=A}QMHì(€Ñ•…Í•È¹Ñ…É•Ð€ô€‰}‰±…¹¬ˆì(€Ñ•…Í•È¹É•°€ô€‰¹½½Á•¹•È¹½É•™•ÉÉ•Èˆì(€Ñ•…Í•È¹Ñ•áÑ½¹Ñ•¹Ð€ôÐ¹Ñ•…Í•Èì((€¹½Ñ”¹…ÁÁ•¹¡åÀ°Í•ÀÄ°…•¹Ð°Í•ÀÈ°Ñ•…Í•È¤ì(€¹½Ñ”¹ÍÑå±”¹Ý¡¥Ñ•MÁ…”€ô€‰ÁÉ”µ±¥¹”ˆì)ô()™Õ¹Ñ¥½¸É‘±½ÁMÁ•A…Ñ  ¤ì(€½¹ÍÐ¡½ÍÐ€ô‘½Õµ•¹Ð¹•Ñ±•µ•¹Ñ	å% ‰É‘Q•ÍÑ¹•ÑQ½½±­¥Ðˆ¤ì(€¥˜€ …¡½ÍÐ¤É•ÑÕÉ¸™…±Í”ì(€¥˜€¡¡½ÍÐ¹‘…Ñ…Í•Ð¹ÍÁ•I•™É•Í €ôôôI}1=A}MA}!-¤É•ÑÕÉ¸ÑÉÕ”ì((€½¹ÍÐÐ€ôÉ‘±½ÁMÁ•½Áä ¤ì(€½¹ÍÐÑÈ€ôÉ‘±½ÁMÁ•1…¹œ ¤€ôôô€‰ÑÈˆì(€½¹ÍÐ¡•…€ô¡½ÍÐ¹ÅÕ•ÉåM•±•Ñ½È ˆ¹ÉµÑ•ÍÑ¹•Ðµ¡•…ˆ¤ì(€½¹ÍÐ¥¹ÑÉ¼€ô¡•…ü¹ÅÕ•ÉåM•±•Ñ½È ‰Àˆ¤ì(€½¹ÍÐ‰…‘”€ô¡•…ü¹ÅÕ•ÉåM•±•Ñ½È ˆ¹ÉµÑ•ÍÑ¹•Ðµ‰…‘”ˆ¤ì(€¥˜€¡¥¹ÑÉ¼¤¥¹ÑÉ¼¹Ñ•áÑ½¹Ñ•¹Ð€ôÐ¹¥¹ÑÉ¼ì(€¥˜€¡‰…‘”¤‰…‘”¹Ñ•áÑ½¹Ñ•¹Ð€ôÐ¹‰…‘”ì((€½¹ÍÐÍÑ…ÑÕÌ€ô¡½ÍÐ¹ÅÕ•ÉåM•±•Ñ½È ˆ¹ÉµÑ•ÍÑ¹•ÐµÍÑ…ÑÕÌˆ¤ì(€½¹ÍÐ½±Ì€ôÍÑ…ÑÕÌ€üÉÉ…ä¹™É½´¡ÍÑ…ÑÕÌ¹¡¥±‘É•¸¤¹™¥±Ñ•È ¡•°¤€ôø•°¹Ñ…9…µ”€ôôô€‰%Xˆ¤€èmtì(€¥˜€¡½±ÍlÁt¤ì(€€€½¹ÍÐˆ€ô½±ÍlÁt¹ÅÕ•ÉåM•±•Ñ½È ‰ˆˆ¤ì(€€€¥˜€¡ˆ¤ì(€€€€€ˆ¹Ñ•áÑ½¹Ñ•¹Ð€ôÑÈ€ü€‰…¹³ÄÁÕ‰±¥Œ•¹‘Á½¥¹Ð‘¿}ÉÕ±…¹µ…“Äˆ€è€‰9¼±¥Ù”ÁÕ‰±¥Œ•¹‘Á½¥¹ÐÙ•É¥™¥•ˆì(€€€€€ˆ¹‘…Ñ…Í•Ð¹ÍÑ…Ñ”€ô€‰½™˜ˆì(€€€ô(€ô(€¥˜€¡½±ÍlÅt¤ì(€€€½¹ÍÐÍµ…±°€ô½±ÍlÅt¹ÅÕ•ÉåM•±•Ñ½È ‰Íµ…±°ˆ¤ì(€€€½¹ÍÐÍÑÉ½¹œ€ô½±ÍlÅt¹ÅÕ•ÉåM•±•Ñ½È ‰ÍÑÉ½¹œˆ¤ì(€€€¥˜€¡Íµ…±°¤Íµ…±°¹Ñ•áÑ½¹Ñ•¹Ð€ôÑÈ€ü€‰Q•ÍÑ¹•ÐÁ±…»Äˆ€è€‰Q•ÍÑ¹•ÐÁ±…¸ˆì(€€€¥˜€¡ÍÑÉ½¹œ¤ÍÑÉ½¹œ¹Ñ•áÑ½¹Ñ•¹Ð€ô€‰Á±…¹¹•€¼Õ¹É•±•…Í•ˆì(€ô(€¥˜€¡½±ÍlÉt¤ì(€€€½¹ÍÐÍµ…±°€ô½±ÍlÉt¹ÅÕ•ÉåM•±•Ñ½È ‰Íµ…±°ˆ¤ì(€€€½¹ÍÐÍÑÉ½¹œ€ô½±ÍlÉt¹ÅÕ•ÉåM•±•Ñ½È ‰ÍÑÉ½¹œˆ¤ì(€€€¥˜€¡Íµ…±°¤Íµ…±°¹Ñ•áÑ½¹Ñ•¹Ð€ô€‰e•±±½ÜA…Á•Èˆì(€€€¥˜€¡ÍÑÉ½¹œ¤ÍÑÉ½¹œ¹Ñ•áÑ½¹Ñ•¹Ð€ô€‰ØÀ¸Ô¸Àƒ
-Ü´ÀÐÐÀˆì(€ô(€¥˜€¡½±ÍlÍt¤ì(€€€½¹ÍÐÍµ…±°€ô½±ÍlÍt¹ÅÕ•ÉåM•±•Ñ½È ‰Íµ…±°ˆ¤ì(€€€½¹ÍÐÍÑÉ½¹œ€ô½±ÍlÍt¹ÅÕ•ÉåM•±•Ñ½È ‰ÍÑÉ½¹œˆ¤ì(€€€¥˜€¡Íµ…±°¤Íµ…±°¹Ñ•áÑ½¹Ñ•¹Ð€ôÑÈ€ü€‰M½¸­½¹ÑÉ½°ˆ€è€‰1…ÍÐ¡•­•ˆì(€€€¥˜€¡ÍÑÉ½¹œ¤ÍÑÉ½¹œ¹Ñ•áÑ½¹Ñ•¹Ð€ôI}1=A}MA}!-ì(€ô(€½¹ÍÐÍÑ…ÑÕÍ@€ôÍÑ…ÑÕÌü¹ÅÕ•ÉåM•±•Ñ½È ‰Àˆ¤ì(€¥˜€¡ÍÑ…ÑÕÍ@¤ÍÑ…ÑÕÍ@¹Ñ•áÑ½¹Ñ•¹Ð€ôÐ¹•¹‘Á½¥¹Ðì((€½¹ÍÐÍÕµµ…Éä€ô¡½ÍÐ¹ÅÕ•ÉåM•±•Ñ½È ˆ¹Éµ±•‘•ÈµÍÕµµ…Éäˆ¤ì(€½¹ÍÐÍÕµµ…Éå½±Ì€ôÍÕµµ…Éä€üÉÉ…ä¹™É½´¡ÍÕµµ…Éä¹¡¥±‘É•¸¤€èmtì(€¥˜€¡ÍÕµµ…Éå½±ÍlÉt¤ì(€€€½¹ÍÐ±…‰•°€ôÍÕµµ…Éå½±ÍlÉt¹ÅÕ•ÉåM•±•Ñ½È ‰Íµ…±°ˆ¤ì(€€€¥˜€¡±…‰•°¤±…‰•°¹Ñ•áÑ½¹Ñ•¹Ð€ôÐ¹Õ¹±½­1…‰•°ì(€ô((€½¹ÍÐ…É‘Ì€ôÉÉ…ä¹™É½´¡¡½ÍÐ¹ÅÕ•ÉåM•±•Ñ½É±° ˆ¹ÉµÑ•ÍÑ¹•Ðµ…Éˆ¤¤ì(€¥˜€¡…É‘ÍlÁt¤ì(€€€½¹ÍÐ Ì€ô…É‘ÍlÁt¹ÅÕ•ÉåM•±•Ñ½È ‰ Ìˆ¤ì(€€€½¹ÍÐÀ€ô…É‘ÍlÁt¹ÅÕ•ÉåM•±•Ñ½È ‰Àˆ¤ì(€€€¥˜€¡ Ì¤ Ì¹Ñ•áÑ½¹Ñ•¹Ð€ôÐ¹ÍÁ•¹‘Q¥Ñ±”ì(€€€¥˜€¡À¤À¹Ñ•áÑ½¹Ñ•¹Ð€ôÐ¹ÍÁ•¹‘%¹ÑÉ¼ì(€ô((€½¹ÍÐÍÑ•ÁÌ€ôÉÉ…ä¹™É½´¡¡½ÍÐ¹ÅÕ•ÉåM•±•Ñ½É±° ˆ¹ÉµÑ•ÍÑ¹•ÐµÍÑ•Àˆ¤¤ì(€¥˜€¡ÍÑ•ÁÍlÉt¤ì(€€€½¹ÍÐˆ€ôÍÑ•ÁÍlÉt¹ÅÕ•ÉåM•±•Ñ½È ‰ˆˆ¤ì(€€€½¹ÍÐÍÁ…¸€ôÍÑ•ÁÍlÉt¹ÅÕ•ÉåM•±•Ñ½È ‰ÍÁ…¸ˆ¤ì(€€€¥˜€¡ˆ¤ˆ¹Ñ•áÑ½¹Ñ•¹Ð€ôÐ¹Á±…¸Ìì(€€€¥˜€¡ÍÁ…¸¤ÍÁ…¸¹Ñ•áÑ½¹Ñ•¹Ð€ôÐ¹Á±…¸Íì(€ô((€É‘±½ÁMÁ•M•Ñ½½Ñ•È¡¡½ÍÐ°Ð¤ì((€½¹ÍÐ½±‘áÁ½ÉÐ€ô‘½Õµ•¹Ð¹•Ñ±•µ•¹Ñ	å% ‰É‘áÁ½ÉÑ1•‘•Èˆ¤ì(€¥˜€¡½±‘áÁ½ÉÐ€˜˜½±‘áÁ½ÉÐ¹‘…Ñ…Í•Ð¹ÍÁ•I•™É•Í €„ôôI}1=A}MA}!-¤ì(€€€½¹ÍÐÉ•Á±…•µ•¹Ð€ô½±‘áÁ½ÉÐ¹±½¹•9½‘”¡ÑÉÕ”¤ì(€€€É•Á±…•µ•¹Ð¹‘…Ñ…Í•Ð¹ÍÁ•I•™É•Í €ôI}1=A}MA}!-ì(€€€½±‘áÁ½ÉÐ¹É•Á±…•]¥Ñ ¡É•Á±…•µ•¹Ð¤ì(€€€É•Á±…•µ•¹Ð¹…‘‘Ù•¹Ñ1¥ÍÑ•¹•È ‰±¥¬ˆ°É‘±½ÁMÁ•áÁ½ÉÑ1•‘•È¤ì(€ô((€¡½ÍÐ¹‘…Ñ…Í•Ð¹ÍÁ•I•™É•Í €ôI}1=A}MA}!-ì(€É•ÑÕÉ¸ÑÉÕ”ì)ô()™Õ¹Ñ¥½¸É‘±½ÁMÁ•MÑ…ÉÐ ¤ì(€¥˜€¡É‘±½ÁMÁ•A…Ñ  ¤¤É•ÑÕÉ¸ì(€±•Ð…ÑÑ•µÁÑÌ€ô€Àì(€½¹ÍÐÑ¥µ•È€ôÍ•Ñ%¹Ñ•ÉÙ…°  ¤€ôøì(€€€…ÑÑ•µÁÑÌ€¬ô€Äì(€€€¥˜€¡É‘±½ÁMÁ•A…Ñ  ¤ñð…ÑÑ•µÁÑÌ€øô€ÐÀ¤±•…É%¹Ñ•ÉÙ…°¡Ñ¥µ•È¤ì(€ô°€ÈÔÀ¤ì)ô()¥˜€¡‘½Õµ•¹Ð¹É•…‘åMÑ…Ñ”€ôôô€‰±½…‘¥¹œˆ¤ì(€‘½Õµ•¹Ð¹…‘‘Ù•¹Ñ1¥ÍÑ•¹•È ‰=5½¹Ñ•¹Ñ1½…‘•ˆ°É‘±½ÁMÁ•MÑ…ÉÐ°ì½¹”èÑÉÕ”ô¤ì)ô•±Í”ì(€É‘±½ÁMÁ•MÑ…ÉÐ ¤ì)ô(
+    noToken: "ResmÃ® baÄŸlantÄ±lar sayfasÄ±nda canlÄ± FLOP tokenÄ±, claim veya airdrop olmadÄ±ÄŸÄ± belirtiliyor.", tokenUnverified: "ResmÃ® token ve claim durumu kontrol edilemedi.", tokenChanged: "ResmÃ® baÄŸlantÄ±lar sayfasÄ±ndaki token/claim ifadesi deÄŸiÅŸmiÅŸ; yeniden incelenmeli.",
+    sdk: "SDK sÃ¼rÃ¼mleri", validator: "Validator paketi", manual: "Validator kÄ±lavuzu", admission: "KatÄ±lÄ±m", none: "listelenmiyor",
+    intro: "GeliÅŸtiriciler ve ajanlar iÃ§in herkese aÃ§Ä±k gÃ¶zlemevi. ResmÃ® bilgileri taslaklardan ve belirsizliklerden ayÄ±rÄ±r; her Ã¶nemli bilgiye kaynaÄŸÄ±nÄ± ekler.", title: "FLOP'u tahmin yÃ¼rÃ¼tmeden takip et.", kicker: "BAÄžIMSIZ TOPLULUK ARACI Â· KAYNAK ODAKLI Â· AIRDROP GARANTÄ°SÄ° YOK", official: "ResmÃ® Yellow Paper'Ä± oku", lab: "DoÄŸrulanabilir Ajan LaboratuvarÄ±'nÄ± aÃ§",
+    card: [
+      ["RESMÃŽ TEKNÄ°K TANIM", "Yellow Paper v0.5.0 (taslak)", "Normatif uygulama tanÄ±mÄ± taslak durumunda ve deÄŸiÅŸmeye devam ediyor.", "ResmÃ® kaynak â†’"],
+      ["GENESIS ARZI Â· TASLAK", "4,4 milyar FLOP", "Taslakta miner, validator ve ajan gruplarÄ±na 1,2'ÅŸer milyar, ayrÄ±ca 800 milyon rezerv yazÄ±yor. Bunlar kiÅŸisel Ã¶dÃ¼l deÄŸildir.", "Â§9 / Ek A â†’"],
+      ["MAKALE GEÃ‡MÄ°ÅžÄ°", "Ä°Ã§erik geÃ§miÅŸi kontrol ediliyorâ€¦", "GitHub dosya geÃ§miÅŸi ile depo baÅŸlÄ±ÄŸÄ± ayrÄ± ayrÄ± kontrol edilir.", "Yellow Paper dosya geÃ§miÅŸi â†’"],
+      ["AIRDROP DÃ–NÃœÅžÃœMÃœ Â· E.38 AÃ‡IK", "DÃ¶nÃ¼ÅŸÃ¼m kurallarÄ± aÃ§Ä±k", "E.38, testnet dÃ¶nÃ¼ÅŸÃ¼m puanlamasÄ± ve Ã¶nemli uygunluk kurallarÄ±nÄ± henÃ¼z belirlemiyor. KiÅŸisel Ã¶dÃ¼l tahmini yoktur.", "E.38'i incele â†’"],
+      ["AJAN GENESIS GRUBU", "1,2 milyar FLOP", "Bu bir grup havuzudur, kiÅŸisel tahsis deÄŸildir. E.38 dÃ¶nÃ¼ÅŸÃ¼m kurallarÄ± henÃ¼z tamamlanmadÄ±.", "ResmÃ® ajan sayfasÄ± â†’"],
+      ["HALKA AÃ‡IK TESTNET", "PlanlandÄ± / yayÄ±mlanmadÄ±", "Kaynak kontrolÃ¼nde halka aÃ§Ä±k testnet baÅŸlangÄ±cÄ± doÄŸrulanmadÄ±. Devnet ile testnet'i karÄ±ÅŸtÄ±rma.", "ResmÃ® testnet durumu â†’"],
+      ["Ä°Ã‡ERÄ°K ÃœRETÄ°CÄ° BAÅžVURUSU", "ResmÃ® durumu kontrol et", "BaÅŸvuru durumu deÄŸiÅŸebilir. KiÅŸisel Ã¶deme garantisi yoktur.", "ResmÃ® baÅŸvuru â†’"],
+      ["GPU PÄ°YASASI", "ResmÃ® piyasa izleyicisi", "Piyasa bilgisi faucet, testnet hizmeti veya Ã¶dÃ¼l garantisi deÄŸildir.", "GPU piyasasÄ±nÄ± aÃ§ â†’"],
+      ["DEVNET Â· GELÄ°ÅžTÄ°RME AÄžI", "Halka aÃ§Ä±k uÃ§lar; kÄ±sÄ±tlÄ± katÄ±lÄ±m", "ResmÃ® aÄŸ belgeleri uÃ§larÄ± listeliyor; tarihli zaman Ã§izelgesi SSS'si aÅŸaÄŸÄ±da ve Ã¶dÃ¼l ifadesi canlÄ± kontrol zamanÄ± ile raporlanÄ±yor.", "ResmÃ® devnet durumu â†’"]
+    ]
+  }
+};
+
+const FLOP_STATUS_COPY = window.RD_I18N?.register("flopStatus", COPY) || COPY;
+const getLang = () => {
+  try { const v = localStorage.getItem("reddragon-lang"); if (v === "tr" || v === "en") return v; } catch {}
+  return String(navigator.language || "").toLowerCase().startsWith("tr") ? "tr" : "en";
+};
+let liveSourceFailure = false;
+const setLang = (lang) => {
+  const value = lang === "tr" ? "tr" : "en";
+  try { localStorage.setItem("reddragon-lang", value); } catch {}
+  renderStatic(value);
+  if (window.__rdFlopStatus) renderStatus(window.__rdFlopStatus, value);
+  else if (liveSourceFailure) renderFailure(value);
+};
+const fmtTime = (value, lang) => {
+  if (!value || Number.isNaN(Date.parse(value))) return lang === "tr" ? "doÄŸrulanamadÄ±" : "unverified";
+  return new Intl.DateTimeFormat(lang === "tr" ? "tr-TR" : "en-US", { dateStyle: "medium", timeStyle: "short", timeZone: "Europe/Istanbul" }).format(new Date(value));
+};
+const put = (root, selector, text) => { const el = root.querySelector(selector); if (el) el.textContent = text; };
+
+function renderStatic(lang) {
+  if (!document.getElementById("flop-live-status")) return;
+  const c = FLOP_STATUS_COPY[lang];
+  document.documentElement.lang = lang;
+  const select = document.getElementById("rdFlopLanguage"); if (select) select.value = lang;
+  put(document, ".hero h1", c.title); put(document, ".hero .lead", c.intro); put(document, ".hero .kicker", c.kicker);
+  const actions = document.querySelectorAll(".hero .actions a"); if (actions[0]) actions[0].textContent = c.official; if (actions[1]) actions[1].textContent = c.lab;
+  const nav = document.querySelectorAll(".topbar nav a");
+  const navText = lang === "tr" ? ["Yellow Paper", "Ajan", "GPU PiyasasÄ±", "Ajan LaboratuvarÄ±", "@lionmousse"] : ["Yellow Paper", "Agent", "GPU Market", "Agent Lab", "@lionmousse"];
+  nav.forEach((el, i) => { if (navText[i]) el.textContent = navText[i]; });
+  const notice = document.querySelector(".hero .notice");
+  if (notice) notice.textContent = lang === "tr" ? "BaÄŸÄ±msÄ±z topluluk projesi. FLOP Labs ile baÄŸlantÄ±lÄ± deÄŸildir, onun tarafÄ±ndan onaylanmaz veya iÅŸletilmez. ResmÃ® aÄŸ kurallarÄ± ve uygunlukta yetkili FLOP Labs'tir." : "Independent community project. Not affiliated with, endorsed by, or operated by FLOP Labs. FLOP Labs remains the authority for official network rules and eligibility.";
+  document.querySelectorAll(".status-grid .status-card").forEach((card, i) => {
+    const item = c.card[i]; if (!item) return;
+    const span = card.querySelector("span"); const h = card.querySelector("h2"); const p = card.querySelector("p"); const a = card.querySelector("a");
+    if (span) span.textContent = item[0]; if (h && i !== 2) h.textContent = item[1]; if (p && i !== 2) p.textContent = item[2]; if (a && i !== 2) a.textContent = item[3];
+  });
+  const sections = document.querySelectorAll("main > .why");
+  if (sections[0]) {
+    put(sections[0], ".kicker", lang === "tr" ? "TECHNOCORE Â· CANLI GENEL KAPASÄ°TE" : "TECHNOCORE Â· LIVE PUBLIC CAPACITY");
+    put(sections[0], "h2", lang === "tr" ? "Listelenen odalar hizmetin tamamÄ± gibi sunulmuyor." : "Capacity signals, without pretending listed rooms are the whole service.");
+    put(sections[0], "p:not(.kicker)", lang === "tr" ? "Technocore'dan yalnÄ±zca okunur canlÄ± Ã¼st veriler. Listelenen oda sayÄ±sÄ± gizli veya Ã¶zel odalarÄ± kapsamayabilir; bu nedenle listelenen doluluk toplam sÄ±nÄ±r deÄŸil, alt sÄ±nÄ±rdÄ±r." : "Read-only live metadata from Technocore. The listed-room count can exclude unlisted/private rooms, so listed occupancy is a lower bound rather than the enforced total.");
+    const links = sections[0].querySelectorAll(".actions a"); if (links[0]) links[0].textContent = lang === "tr" ? "Kapasite sorunu #253" : "Capacity issue #253"; if (links[1]) links[1].textContent = lang === "tr" ? "Listelenen sayÄ±m notu #260" : "Listed-count caveat #260";
+  }
+  if (sections[1]) {
+    put(sections[1], ".kicker", lang === "tr" ? "BU GÃ–ZLEMEVÄ° NEDEN VAR?" : "WHY THIS EXISTS");
+    put(sections[1], "h2", lang === "tr" ? "BelirsizliÄŸi gÃ¶rÃ¼nÃ¼r kÄ±lar." : "Useful to the community because it makes uncertainty visible.");
+    put(sections[1], "p:not(.kicker)", lang === "tr" ? "FLOP hÄ±zla deÄŸiÅŸiyor. Topluluk paylaÅŸÄ±mlarÄ± ve herkese aÃ§Ä±k kopyalar gÃ¼ncelliÄŸini yitirebilir. Bu gÃ¶zlemevi taslaklarÄ± ve belirsizliÄŸi etiketler, her iddianÄ±n yanÄ±na kaynak koyar ve kontrol tarihini gÃ¶sterir." : "FLOP is moving quickly. Community posts and public mirrors can become stale as the live specification changes. This observatory labels drafts and uncertainty, links sources beside claims and records check times.");
+    const labels = lang === "tr" ? [["Kaynak farklÄ±lÄ±klarÄ±", "ResmÃ® sayfalar arasÄ±ndaki iÃ§erik farkÄ±nÄ± izler."], ["Testnet hazÄ±rlÄ±ÄŸÄ±", "Uydurma uÃ§ noktalar veya Ã¶dÃ¼l formÃ¼lleri olmadan durumu izler."], ["DoÄŸrulanabilir ajan kimliÄŸi", "Ed25519 DID, imzalÄ± Technocore kayÄ±tlarÄ± ve kaynak doÄŸrulama."], ["TCLK PAPER Ã§alÄ±ÅŸma alanÄ±", "FLOP'un aÃ§Ä±k TCLK/Technocore ekosistemi iÃ§in ajan araÃ§larÄ±."]] : [["Source-drift tracking", "Detects when official public surfaces disagree with the live specification."], ["Testnet readiness", "Tracks status without inventing endpoints or reward formulas."], ["Verifiable agent identity", "Ed25519 DID, signed Technocore records and provenance checks."], ["TCLK PAPER workbench", "Agent tools around FLOP's public TCLK/Technocore ecosystem."]];
+    sections[1].querySelectorAll(".feature-list > div").forEach((row, i) => { put(row, "b", labels[i]?.[0]); put(row, "span", labels[i]?.[1]); });
+  }
+  const machine = document.querySelector(".machine");
+  if (machine) { put(machine, ".kicker", lang === "tr" ? "AJANLAR, GELÄ°ÅžTÄ°RÄ°CÄ°LER VE Ä°NCELEYENLER Ä°Ã‡Ä°N" : "FOR AGENTS, BUILDERS & REVIEWERS"); put(machine, "h2", lang === "tr" ? "Ä°nsanlar ve yazÄ±lÄ±mlar iÃ§in okunabilir." : "Human-readable and machine-readable."); put(machine, "p", lang === "tr" ? "ResmÃ® kaynak durumu JSON olarak yayÄ±mlanÄ±r; aynÄ± temkinli bilgileri baÅŸka araÃ§lar da kullanabilir." : "Current source status is published as JSON so agents and tools can use the same conservative facts."); const links = machine.querySelectorAll(".actions a"); if (links[0]) links[0].textContent = lang === "tr" ? "Durum JSON'unu aÃ§" : "Open source-status JSON"; if (links[1]) links[1].textContent = lang === "tr" ? "GitHub kaynak kodu" : "Inspect source on GitHub"; }
+  const sources = document.querySelector(".sources");
+  if (sources) { put(sources, ".kicker", lang === "tr" ? "KULLANILAN RESMÃŽ KAYNAKLAR" : "OFFICIAL SOURCES USED"); put(sources, "h2", lang === "tr" ? "Birincil kaynaklar" : "Primary references"); const rows = sources.querySelectorAll(".source-links a"); const labels = lang === "tr" ? [["FLOP Yellow Paper", "Normatif uygulama tanÄ±mÄ±"], ["FLOP Ajan sayfasÄ±", "Ajan iÅŸleyiÅŸi ve kullanÄ±m biÃ§imi"], ["FLOP Teaser", "Genel bakÄ±ÅŸ ve yol haritasÄ±"], ["flop.finance", "ResmÃ® proje ve baÅŸvurular"], ["FLOP GPU piyasasÄ±", "ResmÃ® kiralÄ±k GPU izleyicisi"], ["flop-labs/yellowpaper", "AÃ§Ä±k teknik metin ve iÃ§erik geÃ§miÅŸi"], ["ResmÃ® testnet aÄŸÄ±", "BaÅŸlangÄ±Ã§, sÃ¼rÃ¼m ve katÄ±lÄ±m durumu"], ["ResmÃ® devnet aÄŸÄ±", "GeliÅŸtirme aÄŸÄ± ve kabul durumu"], ["Testnet zaman Ã§izelgesi", "Ã‡alÄ±ÅŸma hedefleri ve devnet ayrÄ±mÄ±"]] : [["FLOP Yellow Paper", "Normative implementation specification"], ["FLOP Agent page", "Public agent mechanics and usage model"], ["FLOP Teaser", "Project overview and roadmap"], ["flop.finance", "Official project and applications"], ["FLOP GPU market", "Official rentable-GPU monitor"], ["flop-labs/yellowpaper", "Public technical spec and content history"], ["Official testnet network", "Launch, release and admission status"], ["Official devnet network", "Development network and admission"], ["Testnet timeline", "Working dates and devnet distinction"]]; rows.forEach((a,i)=>{put(a,"b",labels[i]?.[0]);put(a,"span",labels[i]?.[1]);}); }
+  const section = document.getElementById("join-guide");
+  if (section) {
+    section.querySelector(".kicker").textContent = lang === "tr" ? "PRATÄ°K REHBER Â· DEVNET TESTNET DEÄžÄ°LDÄ°R" : "PRACTICAL GUIDE Â· DEVNET IS NOT TESTNET";
+    section.querySelector("h2").textContent = lang === "tr" ? "Åžu anda neler yapabilirsin?" : "What you can do now";
+    const trCards = [
+      ["Devnet ile baÅŸla", "YayÄ±mlanan salt okunur model kataloÄŸunu veya SDK/CLI belgelerini kullan. Validator paketi mevcut olsa da katÄ±lÄ±m iÃ§in FLOP operasyon irtibatÄ±, onay, fonlama ve aktivasyon gerekir. Yerel etkinliÄŸi testnet puanÄ± sayma."],
+      ["Halka aÃ§Ä±k testnet aÃ§Ä±ldÄ±ÄŸÄ±nda", "Ã–nce resmÃ® testnet kimliÄŸini, genesis deÄŸerini, sÃ¼rÃ¼mÃ¼, RPC'yi, faucet'i ve katÄ±lÄ±m kurallarÄ±nÄ± doÄŸrula. Belgeler planned/unreleased diyorsa testnet'e katÄ±lÄ±m izni var sayma."],
+      ["GPU yok mu? HazÄ±rlÄ±k yapabilirsin", "Teknik tanÄ±mÄ± ve SDK belgelerini oku, belgelenmiÅŸ API'lere ajan baÄŸla, herkese aÃ§Ä±k DID biÃ§imini doÄŸrula ve kaynak sÃ¼rÃ¼mlerini karÅŸÄ±laÅŸtÄ±r. GPU yalnÄ±zca miner Ã§alÄ±ÅŸtÄ±rma rolÃ¼ iÃ§in gerekir."],
+      ["Ã–dÃ¼l garantisi yok", "Devnet Ã¶dÃ¼l veya airdrop puanÄ± kazandÄ±rmaz. DID, faucet notu, model isteÄŸi, cÃ¼zdan bakiyesi veya elle kaydedilmiÅŸ etkinlik uygunluk kanÄ±tÄ± deÄŸildir. E.38 dÃ¶nÃ¼ÅŸÃ¼m kurallarÄ±nÄ±n bir kÄ±smÄ± aÃ§Ä±k bÄ±rakÄ±lmÄ±ÅŸtÄ±r."]
+    ];
+    section.querySelectorAll(".guide-grid article").forEach((article, i) => { if (lang === "tr" && trCards[i]) { put(article, "h3", trCards[i][0]); put(article, "p", trCards[i][1]); } else if (lang === "en") { const en = [["Start with devnet", "Use the published read-only model catalog or SDK/CLI documentation. A validator package exists, but joining is administrator-assisted and requires an operations contact, approval, funding and activation. Do not treat local activity as testnet credit."], ["When public testnet opens", "First verify the official testnet identity, genesis, release, RPC, faucet and admission rules. The official onboarding guides are not permission to join the production testnet while they still say planned/unreleased."], ["No GPU? You can still prepare", "Read the spec and SDK docs, build an agent against documented APIs, validate a public DID format, compare official source versions and track your own local checklist. GPU ownership is needed for miner operation, not for reading or SDK integration."], ["Rewards are not guaranteed", "Devnet has no reward or airdrop weight. A public DID, faucet note, model request, wallet balance or manually saved activity is not proof of eligibility. E.38 leaves important testnet-to-genesis conversion rules open."]]; put(article, "h3", en[i][0]); put(article, "p", en[i][1]); } });
+    const guideLinks = section.querySelectorAll(".guide-grid article a"); const labels = lang === "tr" ? ["SDK sÃ¼rÃ¼mleri ve Ã¶rnekler â†—", "ResmÃ® testnet baÅŸlangÄ±Ã§ durumu â†—", "Miner rehberi ve roller â†—", "ResmÃ® dÃ¶nÃ¼ÅŸÃ¼m durumu â†—"] : ["SDK versions and examples â†—", "Recheck official launch status â†—", "Miner guide and role details â†—", "Official conversion status â†—"]; guideLinks.forEach((a,i)=>{if(labels[i])a.textContent=labels[i];});
+    const toolLinks = section.querySelectorAll(".tool-links a"); const toolLabels = lang === "tr" ? ["Ajan LaboratuvarÄ± ve DID araÃ§larÄ±", "Validator kÄ±lavuzu ve katÄ±lÄ±m adÄ±mlarÄ± â†—", "ResmÃ® baÄŸlantÄ±lar ve dolandÄ±rÄ±cÄ±lÄ±k uyarÄ±larÄ± â†—"] : ["Open Agent Lab and existing DID tools", "Validator guide and current admission steps â†—", "Check official links and scam guidance â†—"]; toolLinks.forEach((a,i)=>{if(toolLabels[i])a.textContent=toolLabels[i];});
+  }
+  const live = document.getElementById("flop-live-status");
+  if (live) {
+    put(live, ".section-heading .kicker", lang === "tr" ? "SALT OKUNUR KAYNAK KONTROLÃœ" : "READ-ONLY SOURCE CHECK");
+    put(live, "#live-title", lang === "tr" ? "CanlÄ± FLOP durumu" : "Live FLOP status");
+    put(live, "#rdLiveSummary", c.summary); put(live, "#rdRefreshStatus", c.refresh);
+    put(live, "#rdLiveDisclaimer", lang === "tr" ? "Kontroller iÅŸlem gÃ¶ndermez, imza atmaz, faucet claim'i yapmaz veya inference Ã§alÄ±ÅŸtÄ±rmaz. Zaman aÅŸÄ±mÄ± ya da bozuk yanÄ±t doÄŸrulanamadÄ± olarak gÃ¶sterilir." : "Status checks do not submit transactions, sign, claim faucet funds, or run inference. A timeout or malformed response is shown as unverified.");
+  }
+  const footer = document.getElementById("rdFooterChecked"); if (footer && !window.__rdFlopStatus) footer.textContent = lang === "tr" ? "kontrol yÃ¼kleniyor" : "status check loading";
+}
+
+function renderStatus(data, lang = getLang()) {
+  liveSourceFailure = false;
+  const c = FLOP_STATUS_COPY[lang];
+  const show = (id, status, detail, state = "warn") => {
+    const card = document.getElementById(id); if (!card) return;
+    card.dataset.state = state; put(card, "[data-status]", status); put(card, "[data-detail]", detail);
+  };
+  const unverified = (obj) => !obj || obj.state === "unverified" || !!obj.error;
+  const timeline = data.timeline || {};
+  const timelineLink = document.getElementById("rdLiveTimelineLink");
+  if (timelineLink) timelineLink.textContent = lang === "tr" ? "ResmÃ® zaman Ã§izelgesi / Ã¶dÃ¼l SSS'si â†—" : "Official timeline / reward FAQ â†—";
+  const timelineDate = timeline.updated || (lang === "tr" ? "tarihi doÄŸrulanamadÄ±" : "date unverified");
+  const target = timeline.testnetTarget || (lang === "tr" ? "hedef doÄŸrulanamadÄ±" : "target unverified");
+  const testnetDetail = data.testnet?.state === "not-live" && timeline.state === "verified" && timeline.testnetOpenClaim
+    ? `${c.testnetDetail} ${c.timelineConflict.replace("{date}", timelineDate).replace("{target}", target)}`
+    : c.testnetDetail;
+  if (data.testnet?.state === "not-live") show("rdLiveTestnet", c.testnetNotLive, testnetDetail, "warn");
+  else if (data.testnet?.state === "manual-verification-required") show("rdLiveTestnet", c.testnetManual, testnetDetail, "warn");
+  else show("rdLiveTestnet", c.testnetUnverified, testnetDetail, "bad");
+  const rewardsText = data.devnet?.rewards === "none" && timeline.state === "verified"
+    ? c.devnetNoRewards.replace("{date}", timelineDate)
+    : c.devnetRewardUnverified;
+  if (data.devnet?.state === "public-development-network") show("rdLiveDevnet", c.devnetPublic, `${c.devnetDetail} ${data.devnet.operatorEnrollment === "administrator-assisted / public self-service unavailable" ? c.enrollment : c.enrollmentUnverified} ${rewardsText}`, "good");
+  else show("rdLiveDevnet", c.devnetUnverified, c.devnetError, "bad");
+  const rpc = data.services?.rpc;
+  show("rdLiveRpc", rpc?.state === "identity-matched" ? c.rpcMatched : c.rpcUnverified, rpc?.state === "identity-matched" ? `${c.rpcDetail} ${rpc.chain} Â· ${rpc.version}` : `${c.rpcDetail} ${rpc?.error ? c.rpcError : ""}`, rpc?.state === "identity-matched" ? "good" : "warn");
+  const gateway = data.services?.gateway;
+  show("rdLiveGateway", gateway?.state === "catalog-responded" ? c.gatewayOk : c.gatewayBad, gateway?.state === "catalog-responded" ? `${c.gatewayDetail} Â· ${gateway.count} ${lang === "tr" ? "model" : "models"}` : `${c.gatewayDetail} ${gateway?.error ? c.gatewayError : ""}`, gateway?.state === "catalog-responded" ? "good" : "warn");
+  const packages = data.packages;
+  let versions = (packages?.versions || []).map((v) => `${v.name} ${v.version}`).join(" Â· ");
+  const validator = packages?.validatorPackage || (lang === "tr" ? "doÄŸrulanamadÄ±" : "unverified");
+  const mismatch = packages?.validatorPackage && packages.validatorManualVersion && packages.validatorPackage !== packages.validatorManualVersion
+    ? ` Â· ${c.validator}: ${packages.validatorPackage}; ${c.manual}: ${packages.validatorManualVersion} (${packages.validatorManualUpdated || ""})` : ` Â· ${c.validator}: ${validator}`;
+  show("rdLivePackages", packages?.state === "verified-from-docs" ? c.packagesOk : c.packagesBad, `${c.sdk}: ${versions || c.none}${mismatch} Â· ${c.admission}: ${packages?.validatorAdmission === "administrator-assisted" ? c.enrollment : packages?.validatorAdmission === "unverified" ? c.enrollmentUnverified : c.none}`, packages?.state === "verified-from-docs" ? "good" : "warn");
+  const yp = data.yellowPaper || {};
+  const official = data.officialLinks || {};
+  const tokenText = official.state !== "verified" || official.error
+    ? c.tokenUnverified
+    : official.tokenClaim === true ? c.noToken : c.tokenChanged;
+  const content = yp.githubContentCommit;
+  const head = yp.githubRepositoryHead;
+  const diff = content && head && content.sha !== head.sha;
+  const paperDetail = diff ? `${c.paperDrift} Content ${fmtTime(content.date, lang)} Â· repo ${fmtTime(head.date, lang)} (${head.message || ""})` : c.paperMatch;
+  show("rdLivePaper", c.paper, `${paperDetail} Â· ${lang === "tr" ? "CanlÄ± sayfa" : "Live page"} ${yp.livePageUpdated || c.none}. ${c.devnetNoRewards ? (data.devnet?.rewards === "none" && data.timeline?.state === "verified" ? c.devnetNoRewards.replace("{date}", data.timeline.updated || c.none) : c.devnetRewardUnverified) : ""} ${tokenText}`, "warn");
+  const checkedAt = data.checkedAt || data.cachedAt;
+  const old = data.stale || !checkedAt || Date.now() - Date.parse(checkedAt) > 24 * 60 * 60 * 1000;
+  put(document, "#rdLiveChecked", `${old ? c.stale : c.checked}: ${fmtTime(checkedAt, lang)}${data.cachedAt ? ` Â· ${lang === "tr" ? "Ã¶nbellek" : "cache"} ${fmtTime(data.cachedAt, lang)}` : ""}`);
+  const footer = document.getElementById("rdFooterChecked"); if (footer) footer.textContent = `${lang === "tr" ? "kontrol" : "checked"} ${fmtTime(checkedAt, lang)}`;
+  const paperTitle = document.getElementById("rdPaperSyncTitle"); const paperText = document.getElementById("rdPaperSyncText");
+  if (paperTitle) paperTitle.textContent = diff ? (lang === "tr" ? "GitHub iÃ§erik gÃ¼ncellemesi canlÄ± sayfadan yeni" : "GitHub paper content is newer than live page") : (lang === "tr" ? "Depo baÅŸlÄ±ÄŸÄ± CI-only olabilir" : "Latest repository commit may be CI-only");
+  if (paperText) paperText.textContent = diff ? `${lang === "tr" ? "CanlÄ± FLOP sayfasÄ±" : "Live FLOP page"}: ${yp.livePageUpdated || (lang === "tr" ? "doÄŸrulanamadÄ±" : "unverified")}. ${lang === "tr" ? "GitHub makale dosyasÄ±" : "GitHub paper file"}: ${content?.date || "unverified"}. ${lang === "tr" ? "Depo baÅŸlÄ±ÄŸÄ±" : "Repository head"}: ${head?.date || "unverified"} Â· ${head?.message || ""}.` : c.paperMatch;
+  const didStatus = document.getElementById("rdTestnetToolkit");
+  if (didStatus) {
+    const statusCols = Array.from(didStatus.querySelectorAll(".rd-testnet-status > div"));
+    if (statusCols[0]) { const b = statusCols[0].querySelector("b"); if (b) { b.textContent = data.testnet?.state === "not-live" ? c.testnetNotLive : c.testnetUnverified; b.dataset.state = data.testnet?.state === "not-live" ? "off" : "warn"; } }
+    if (statusCols[3]) { const strong = statusCols[3].querySelector("strong"); if (strong) strong.textContent = fmtTime(checkedAt, lang); }
+    const note = didStatus.querySelector(".rd-testnet-note"); if (note) { const source = note.querySelector("a"); if (source) source.textContent = lang === "tr" ? "ResmÃ® FLOP aÄŸ durumu" : "Official FLOP network status"; }
+  }
+}
+
+function renderFailure(lang = getLang()) {
+  const c = FLOP_STATUS_COPY[lang];
+  liveSourceFailure = true;
+  for (const id of ["rdLiveTestnet", "rdLiveDevnet", "rdLiveRpc", "rdLiveGateway", "rdLivePackages", "rdLivePaper"]) {
+    const card = document.getElementById(id); if (!card) continue;
+    card.dataset.state = "bad";
+    put(card, "[data-status]", c.failed);
+    put(card, "[data-detail]", lang === "tr" ? "CanlÄ± kaynak kontrolÃ¼ tamamlanamadÄ±; tahmin gÃ¶sterilmiyor." : "The live source check failed; no inferred status is shown.");
+  }
+  put(document, "#rdLiveChecked", lang === "tr" ? "Son kontrol: kaynaklara eriÅŸilemedi" : "Last check: sources unreachable");
+  put(document, "#rdFooterChecked", lang === "tr" ? "durum doÄŸrulanamadÄ±" : "status unverified");
+}
+
+async function refresh() {
+  const c = FLOP_STATUS_COPY[getLang()];
+  const timeout = AbortSignal.timeout(8000);
+  try {
+    const response = await fetch("/api/flop-status", { method: "GET", headers: { accept: "application/json" }, cache: "no-store", credentials: "same-origin", signal: timeout });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+    if (!data || data.schema !== "reddragon-flop-live-status/v1" || !data.checkedAt) throw new Error("Invalid status response");
+    window.__rdFlopStatus = data;
+    renderStatus(data, getLang());
+  } catch {
+    const lang = getLang();
+    const failureCopy = FLOP_STATUS_COPY[lang];
+    renderFailure(lang);
+    const toolkit = document.getElementById("rdTestnetToolkit");
+    if (toolkit) {
+      const statusCols = Array.from(toolkit.querySelectorAll(".rd-testnet-status > div"));
+      const t = failureCopy;
+      if (statusCols[0]) {
+        const label = statusCols[0].querySelector("b");
+        if (label) { label.textContent = t.testnetUnverified; label.dataset.state = "warn"; }
+      }
+      if (statusCols[3]) {
+        const checked = statusCols[3].querySelector("strong");
+        if (checked) checked.textContent = lang === "tr" ? "doÄŸrulanamadÄ±" : "unverified";
+      }
+      const note = toolkit.querySelector(".rd-testnet-note");
+      if (note) note.textContent = lang === "tr" ? "CanlÄ± resmÃ® kaynak kontrolÃ¼ baÅŸarÄ±sÄ±z; testnet durumu doÄŸrulanamadÄ±. Devnet ayrÄ± bir geliÅŸtirme aÄŸÄ±dÄ±r." : "Live official source checks failed; testnet status is unverified. Devnet is a separate development network.";
+    }
+  }
+}
+
+renderStatic(getLang());
+document.getElementById("rdFlopLanguage")?.addEventListener("change", (event) => setLang(event.target.value));
+document.getElementById("rdRefreshStatus")?.addEventListener("click", refresh);
+refresh();
