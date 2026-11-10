@@ -149,7 +149,21 @@ test("main page boots from empty storage and translates in desktop and mobile", 
       const catalogAudit = await page.evaluate(() => window.RD_I18N.audit());
       assert.ok(catalogAudit.catalogs >= 6, `all module catalogs registered: ${JSON.stringify(catalogAudit)}`);
       assert.match(await page.locator("#heroDid").textContent(), /did:key:z6Mk/);
-      assert.equal(await page.locator("#flopCommunityLink").isVisible(), true);
+      const communityNav = page.locator("#flopCommunityLink");
+      assert.equal(await communityNav.getAttribute("href"), "/flop");
+      if (viewport.width > 980) {
+        assert.equal(await communityNav.isVisible(), true, `${viewport.name} desktop navigation should be visible`);
+        await activate(communityNav, viewport);
+      } else {
+        assert.equal(await communityNav.isVisible(), false, `${viewport.name} compact navigation is intentionally hidden`);
+        const heroNav = page.locator('.hero-actions .ghost-link[href="/flop"]');
+        assert.equal(await heroNav.isVisible(), true, `${viewport.name} must expose a touchable FLOP navigation CTA`);
+        await activate(heroNav, viewport);
+      }
+      await page.waitForURL((url) => url.pathname === "/flop");
+      await page.locator("h1").waitFor({ state: "visible" });
+      await page.goBack();
+      await page.locator("#rdTestnetToolkit").waitFor({ state: "visible" });
       assert.match(await page.evaluate(() => localStorage.getItem("reddragon-lang")), /^(tr|en)$/);
       await page.locator('#rdLangSwitcher button[data-lang="en"]').click();
       await page.locator(".hero-actions .ghost-link").filter({ hasText: "Open FLOP Observatory" }).waitFor({ state: "visible" });
