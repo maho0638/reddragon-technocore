@@ -214,6 +214,9 @@ function translateCore(en) {
   text("#copyProof", en ? "Copy proof" : "Proof'u kopyala");
   text("#downloadProof", en ? "Download Proof JSON" : "Proof JSON indir");
   text("#xShare", en ? "Share on X" : "X'te paylaş");
+  text('[data-step="11"] .warning-box b', window.RD_I18N.t("app.agentSustainable"));
+  text('[data-step="11"] .warning-box span', window.RD_I18N.t("app.agentCadence"));
+  text('[data-step="11"] .automation-grid .hint', window.RD_I18N.t("app.privateKeyHint"));
   translateSelectOptions(en);
   translateStepChips(en);
 }
@@ -283,6 +286,7 @@ function translateEnhancements(en) {
     const desc = proof.querySelector(":scope > span");
     const buttons = proof.querySelectorAll("button");
     const input = proof.querySelector("input[type='text']");
+    const note = proof.querySelector(".rd-proof-import-note");
     if (title) title.textContent = en ? "Restore public proof" : "Public proof'u geri yükle";
     if (desc) desc.textContent = en
       ? " New proofs include the Ed25519 signature, so they can be verified locally even after the Technocore ring buffer removes the old message. Legacy v1 proofs can only be verified while the original record is still available on Technocore."
@@ -290,6 +294,7 @@ function translateEnhancements(en) {
     if (buttons[0]) buttons[0].textContent = en ? "Import Public Proof JSON" : "Public Proof JSON içe aktar";
     if (buttons[1]) buttons[1].textContent = en ? "Check by sequence" : "Seq ile kontrol et";
     if (input) input.placeholder = en ? "Known sequence for legacy proof" : "Eski proof için bilinen seq";
+    if (note) note.textContent = window.RD_I18N.t("app.proofImportNote");
   }
 }
 

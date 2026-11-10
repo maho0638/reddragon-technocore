@@ -8,6 +8,8 @@ const app = await readFile(new URL("../public/app.js", import.meta.url), "utf8")
 const flopStatus = await readFile(new URL("../public/flop-live-status.js", import.meta.url), "utf8");
 const patches = await readFile(new URL("../public/patches.js", import.meta.url), "utf8");
 const enhancements = await readFile(new URL("../public/enhancements.js", import.meta.url), "utf8");
+const languageStable = await readFile(new URL("../public/language-stable.js", import.meta.url), "utf8");
+const proofImport = await readFile(new URL("../public/proof-import.js", import.meta.url), "utf8");
 const browserWorkflow = await readFile(new URL("../.github/workflows/flop-site-browser-audit.yml", import.meta.url), "utf8");
 const productionBrowserAudit = await readFile(new URL("./browser/site-acceptance.spec.mjs", import.meta.url), "utf8");
 const context = { window: {}, localStorage: { getItem: () => "en" }, navigator: { language: "en-US" } };
@@ -44,6 +46,15 @@ test("restore, security, relay and capacity UI messages use complete shared tran
   assert.match(patches, /patchText\("relayOffline"\)/);
   assert.match(enhancements, /enhancementText\("capacity404"\)/);
   assert.match(enhancements, /enhancementText\("relayOnline"\)/);
+});
+
+test("onboarding and proof-import UI copy uses shared translations in both languages", () => {
+  for (const key of ["proofImportNote", "agentSustainable", "agentCadence", "privateKeyHint"]) {
+    assert.ok(i18n.t(`app.${key}`, {}, "en").length > 0);
+    assert.ok(i18n.t(`app.${key}`, {}, "tr").length > 0);
+  }
+  for (const key of ["agentSustainable", "agentCadence", "privateKeyHint"]) assert.ok(languageStable.includes(`app.${key}`));
+  assert.ok(proofImport.includes('window.RD_I18N.t("app.proofImportNote")'));
 });
 
 test("live-status API failure localizes both status panels without an undefined-language exception", () => {

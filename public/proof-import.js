@@ -604,8 +604,9 @@ function installUi() {
   manual.append(seqInput, seqButton);
 
   const note = document.createElement("div");
+  note.className = "rd-proof-import-note";
   note.style.cssText = "margin-top:10px;font-size:12px;opacity:.78";
-  note.textContent = "Not: Technocore odaları kalıcı arşiv değildir. Yeni sürüm bu yüzden signed receipt'i tarayıcıda yalnızca public veri olarak saklar; private key hiçbir zaman localStorage'a yazılmaz.";
+  note.textContent = window.RD_I18N.t("app.proofImportNote");
 
   box.append(title, desc, document.createElement("br"), button, input, manual, note);
   card.appendChild(box);
