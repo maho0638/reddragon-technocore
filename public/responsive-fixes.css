@@ -5,6 +5,9 @@
 .rd-tclk-shell,.rd-tclk-grid { min-width: 0; }
 .bg-grid { left: 0; top: 0; right: auto; bottom: auto; width: 100vw; height: 100vh; }
 .rd-field-room-tabs,.rd-live-room-tabs { min-width: 0; max-width: 100%; }
+.rd-testnet-note,.rd-testnet-note span { min-width: 0; overflow-wrap: anywhere; }
+.warning-box,.warning-box > * { min-width: 0; }
+.warning-box span { overflow-wrap: anywhere; }
 .card-head { grid-template-columns: auto minmax(0, 1fr) auto; }
 .card :is(p,small,label,code,pre),.rd-prov-section :is(p,small,code),
 .rd-testnet-section :is(p,small,code),.rd-tclk-section :is(p,small,code),
@@ -29,4 +32,6 @@
   .metric.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .secret-row,.top-actions,.rd-prov-head,.rd-testnet-head,.rd-tclk-head { min-width: 0; max-width: 100%; }
   .secret-row { flex-wrap: wrap; }
+  .warning-box { flex-wrap: wrap; }
+  .warning-box span { flex: 1 1 200px; }
 }

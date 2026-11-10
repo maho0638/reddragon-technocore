@@ -146,9 +146,9 @@ test("main page boots from empty storage and translates in desktop and mobile", 
       assert.equal(await page.locator("#flopCommunityLink").isVisible(), true);
       assert.match(await page.evaluate(() => localStorage.getItem("reddragon-lang")), /^(tr|en)$/);
       await page.locator('#rdLangSwitcher button[data-lang="en"]').click();
-      await page.locator("#flopCommunityLink").filter({ hasText: "Open FLOP Observatory" }).waitFor({ state: "visible" });
+      await page.locator(".hero-actions .ghost-link").filter({ hasText: "Open FLOP Observatory" }).waitFor({ state: "visible" });
       assert.equal(await page.locator("html").getAttribute("lang"), "en");
-      assert.equal(await page.locator("#flopCommunityLink").getAttribute("href"), "/flop");
+      assert.equal(await page.locator(".hero-actions .ghost-link").getAttribute("href"), "/flop");
       assert.match(await page.locator("#brandSub").textContent(), /Community Observatory/);
       assert.match(await page.locator("#rdDidProvenance .rd-prov-head h2").textContent(), /who built this tool/i);
       assert.equal(await page.locator("#rdDidProvenance .rd-prov-kv span").first().textContent(), "Verified owned room");
@@ -165,7 +165,7 @@ test("main page boots from empty storage and translates in desktop and mobile", 
       await page.locator("#createBtn").click();
       assert.equal((await page.locator("#toast").textContent()).trim(), "The password must be at least 12 characters.");
       await page.locator('#rdLangSwitcher button[data-lang="tr"]').click();
-      await page.locator("#flopCommunityLink").filter({ hasText: "FLOP Gözlemevini aç" }).waitFor({ state: "visible" });
+      await page.locator(".hero-actions .ghost-link").filter({ hasText: "FLOP Gözlemevini aç" }).waitFor({ state: "visible" });
       assert.equal(await page.locator("html").getAttribute("lang"), "tr");
       assert.match(await page.locator("#brandSub").textContent(), /Topluluk Gözlemevi/);
       assert.match(await page.locator("#rdDidProvenance .rd-prov-head h2").textContent(), /bu aracı kim geliştirdi/i);
@@ -295,8 +295,11 @@ test("DID create, encrypted backup, restore, prompts and mocked signed flows wor
       assert.match(backup.suggestedFilename(), /reddragon-technocore-.*\.json/);
       const backupPath = await backup.path();
       let promptText = "";
-      page.once("dialog", async dialog => { promptText = dialog.message(); await dialog.accept("ephemeral-browser-only-password"); });
+      const promptEvent = page.waitForEvent("dialog");
       await page.locator("#restoreInput").setInputFiles(backupPath);
+      const restorePrompt = await promptEvent;
+      promptText = restorePrompt.message();
+      await restorePrompt.accept("ephemeral-browser-only-password");
       const restoredText = locale === "tr" ? "Kimlik geri yüklendi." : "Identity restored.";
       await page.waitForFunction(expected => (document.querySelector("#toast")?.textContent || "").trim() === expected, restoredText);
       await page.waitForFunction(expected => (document.querySelector("#identityOut")?.textContent || "").startsWith(expected), did);
