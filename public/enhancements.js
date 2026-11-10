@@ -7,6 +7,7 @@ const MEDIUM_URL = cfg.mediumUrl || "https://medium.com/@ayazunal450";
 const MEDIUM_WRITE_URL = cfg.mediumWriteUrl || "https://medium.com/new-story";
 
 const $ = (s) => document.querySelector(s);
+const enhancementText = (key, vars = {}) => window.RD_I18N.t(`patch.${key}`, vars);
 
 function toast(msg) {
   const t = $("#toast");
@@ -301,10 +302,10 @@ async function checkRelay() {
       signal: AbortSignal.timeout(10000)
     });
     if (!r.ok) throw new Error(String(r.status));
-    live.lastChild.textContent = " relay online";
+    live.lastChild.textContent = enhancementText("relayOnline");
     live.classList.add("rd-status-ok");
   } catch {
-    live.lastChild.textContent = " relay offline";
+    live.lastChild.textContent = enhancementText("relayOffline");
     live.classList.add("rd-status-bad");
   }
 }
@@ -318,9 +319,9 @@ function friendlyCapacityErrors() {
       const text = node.textContent || "";
       if (node.querySelector(".rd-capacity-help")) return;
       let msg = "";
-      if (/note limit reached/i.test(text)) msg = "Technocore note kapasitesi dolu. Bu, tarayıcı veya anahtar hatası değil; signed mesaj adımlarına devam edebilirsin.";
-      if (/room limit reached/i.test(text)) msg = "Technocore yeni oda kapasitesi dolu. Bu adım sunucu kapasitesi açılana kadar atlanabilir.";
-      if (/404/.test(text)) msg = "Bu bağlantı artık yoksa site içindeki eski 404 hedefi kullanılmayacak; ana GitHub/Medium/X bağlantıları güncel hedeflere yönlendirildi.";
+      if (/note limit reached/i.test(text)) msg = enhancementText("capacityNote");
+      if (/room limit reached/i.test(text)) msg = enhancementText("capacityRoom");
+      if (/404/.test(text)) msg = enhancementText("capacity404");
       if (msg) {
         const s = document.createElement("span");
         s.className = "rd-capacity-help";

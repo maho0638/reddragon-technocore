@@ -86,10 +86,11 @@ async function assertNoHorizontalOverflow(page) {
     const client = document.documentElement.clientWidth;
     const offenders = [...document.querySelectorAll("body *")].map(el => {
       const r = el.getBoundingClientRect();
-      const ancestors = []; for (let p = el.parentElement, n = 0; p && n < 4; p = p.parentElement, n++) { const pr = p.getBoundingClientRect(); ancestors.push({tag:p.tagName.toLowerCase(),id:p.id||"",className:typeof p.className === "string" ? p.className.slice(0,70) : "",left:Math.round(pr.left),right:Math.round(pr.right),width:Math.round(pr.width),overflowX:getComputedStyle(p).overflowX,scrollWidth:p.scrollWidth}); }
-      return { tag: el.tagName.toLowerCase(), id: el.id || "", className: typeof el.className === "string" ? el.className.slice(0,100) : "", text: (el.innerText || el.textContent || "").trim().replace(/\s+/g," ").slice(0,100), left: Math.round(r.left), right: Math.round(r.right), width: Math.round(r.width), scrollWidth: el.scrollWidth, ancestors };
+      const ancestors = []; let containedByRail = false;
+      for (let p = el.parentElement, n = 0; p && n < 6; p = p.parentElement, n++) { const pr = p.getBoundingClientRect(); const overflowX=getComputedStyle(p).overflowX; if (overflowX === "auto" || overflowX === "scroll") containedByRail = true; ancestors.push({tag:p.tagName.toLowerCase(),id:p.id||"",className:typeof p.className === "string" ? p.className.slice(0,70) : "",left:Math.round(pr.left),right:Math.round(pr.right),width:Math.round(pr.width),overflowX,scrollWidth:p.scrollWidth}); }
+      return { tag: el.tagName.toLowerCase(), id: el.id || "", className: typeof el.className === "string" ? el.className.slice(0,100) : "", text: (el.innerText || el.textContent || "").trim().replace(/\s+/g," ").slice(0,100), left: Math.round(r.left), right: Math.round(r.right), width: Math.round(r.width), scrollWidth: el.scrollWidth, containedByRail, ancestors };
     }).filter(x => x.width && (x.left < -1 || x.right > client + 1)).slice(0,25);
-    return { client, scroll: document.documentElement.scrollWidth, offenders };
+    return { client, scroll: document.documentElement.scrollWidth, offenders, uncontained: offenders.filter(x => !x.containedByRail) };
   });
   assert.ok(diagnosis.scroll <= diagnosis.client + 1, `horizontal overflow / DOM offenders: ${JSON.stringify(diagnosis)}`);
 }
@@ -154,7 +155,7 @@ test("main page boots from empty storage and translates in desktop and mobile", 
       assert.match(await page.locator("#brandSub").textContent(), /Community Observatory/);
       assert.match(await page.locator("#rdDidProvenance .rd-prov-head h2").textContent(), /who built this tool/i);
       assert.equal(await page.locator("#rdDidProvenance .rd-prov-kv span").first().textContent(), "Ownership claim");
-      assert.equal(await page.locator("#rdDidProvenance .rd-prov-kv span").nth(3).textContent(), "Mailbox channel");
+      assert.equal(await page.locator("#rdDidProvenance .rd-prov-kv span").nth(3).textContent(), "Mailbox lane");
       assert.match(await page.locator("#rdTestnetToolkit h2").textContent(), /testnet-ready/i);
       assert.match(await page.locator("#rdTclkWorkbench .rd-tclk-head p").textContent(), /verifiable agent-to-agent/i);
       await page.waitForFunction(() => /proof signals|core proof/i.test(document.querySelector("#rdProvFixSummary")?.textContent || ""));
@@ -213,6 +214,12 @@ test("main page keeps local activity isolated by public DID on all viewports", a
       await activate(page.locator("#rdRecordInference"), viewport);
       assert.match(await page.locator("#rdLedgerRows").textContent(), /other-did-local-check/);
       assert.equal(await page.evaluate((key) => JSON.parse(localStorage.getItem(key) || "null")?.entries?.length, otherKey), 1);
+      const fieldTab = page.locator("#rdFieldRoomTabs .rd-field-room").nth(1);
+      await activate(fieldTab, viewport);
+      assert.equal(await fieldTab.getAttribute("aria-selected"), "true", "touching a room tab selects that room");
+      const liveTab = page.locator("#rdLiveRoomTabs .rd-live-room-tab").nth(1);
+      await activate(liveTab, viewport);
+      assert.equal(await liveTab.getAttribute("aria-selected"), "true", "touching a live room tab changes the selected feed");
 
       await did.fill(didRedDragon);
       assert.match(await page.locator("#rdLedgerRows").textContent(), /local-browser-check/);
@@ -314,10 +321,9 @@ test("DID create, encrypted backup, restore, prompts and mocked signed flows wor
       }
       promptText = restorePrompt.message();
       await restorePrompt.accept("ephemeral-browser-only-password");
-      const restoredText = locale === "tr" ? "Kimlik geri yüklendi." : "Identity restored.";
-      const restoreFailedText = locale === "tr" ? "Yedek açılamadı veya parola yanlış." : "The backup could not be opened or the password was incorrect.";
-      await page.waitForFunction(expected => [expected.success, expected.failed].includes((document.querySelector("#toast")?.textContent || "").trim()), { success: restoredText, failed: restoreFailedText }, { timeout: 12_000 });
-      assert.equal((await page.locator("#toast").textContent()).trim(), restoredText, "encrypted backup should decrypt and restore in browser");
+      const restoredText = locale === "tr" ? "Şifreli kimlik yedeği doğrulandı · DID + private key geri yüklendi" : "Encrypted identity backup verified · DID + private key restored";
+      await page.waitForFunction(expected => (document.querySelector("#toast")?.textContent || "").trim() === expected, restoredText, { timeout: 12_000 });
+      assert.equal((await page.locator("#toast").textContent()).trim(), restoredText, "encrypted backup should decrypt, restore, and show the localized completion message");
       await page.waitForFunction(expected => (document.querySelector("#identityOut")?.textContent || "").startsWith(expected), did);
       assert.equal((await page.locator("#identityOut").textContent()).split("\n")[0].trim(), did);
       assert.equal(promptText, locale === "tr" ? "Yedek parolasını gir:" : "Enter the backup password:");

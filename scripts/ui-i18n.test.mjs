@@ -6,6 +6,8 @@ import test from "node:test";
 const source = await readFile(new URL("../public/ui-i18n.js", import.meta.url), "utf8");
 const app = await readFile(new URL("../public/app.js", import.meta.url), "utf8");
 const flopStatus = await readFile(new URL("../public/flop-live-status.js", import.meta.url), "utf8");
+const patches = await readFile(new URL("../public/patches.js", import.meta.url), "utf8");
+const enhancements = await readFile(new URL("../public/enhancements.js", import.meta.url), "utf8");
 const browserWorkflow = await readFile(new URL("../.github/workflows/flop-site-browser-audit.yml", import.meta.url), "utf8");
 const productionBrowserAudit = await readFile(new URL("./browser/site-acceptance.spec.mjs", import.meta.url), "utf8");
 const context = { window: {}, localStorage: { getItem: () => "en" }, navigator: { language: "en-US" } };
@@ -32,6 +34,16 @@ test("application dynamic status and confirmation copy no longer embeds mixed-la
   }
   assert.ok(app.includes("uiLang()==="));
   assert.match(app, /function automationGuide\(\)[\s\S]*?uiLang\(\)==="en"/);
+});
+
+test("restore, security, relay and capacity UI messages use complete shared translations", () => {
+  const patchKeys = ["publishedPath", "proofCopied", "backupProofFile", "backupJsonOnly", "backupTooLarge", "readyDidNote", "readyHello", "readyIntro", "readyRoom", "readyStyle", "readyContribution", "backupRestoredNote", "backupRestoredToast", "securityHeading", "securityBody", "relayOnline", "relayOffline", "capacityNote", "capacityRoom", "capacity404"];
+  for (const key of patchKeys) for (const lang of ["en", "tr"]) assert.ok(i18n.t(`patch.${key}`, {}, lang).length > 0);
+  assert.match(patches, /patchText\("backupRestoredToast"\)/);
+  assert.match(patches, /patchText\("securityBody"\)/);
+  assert.match(patches, /patchText\("relayOffline"\)/);
+  assert.match(enhancements, /enhancementText\("capacity404"\)/);
+  assert.match(enhancements, /enhancementText\("relayOnline"\)/);
 });
 
 test("live-status API failure localizes both status panels without an undefined-language exception", () => {

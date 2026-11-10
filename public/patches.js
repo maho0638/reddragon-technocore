@@ -1,4 +1,5 @@
 const $ = (s) => document.querySelector(s);
+const patchText = (key, vars = {}) => window.RD_I18N.t(`patch.${key}`, vars);
 
 function showToast(message) {
   const t = $("#toast");
@@ -31,8 +32,8 @@ function patchDidNoteDisplay() {
   const apply = () => {
     const fp = (fpNode.textContent || "").trim();
     if (!/^[0-9a-f]{16}$/.test(fp)) return;
-    if (/Published · \/kv\/did\//.test(out.textContent || "")) {
-      out.textContent = `Published · /kv/did-${fp.slice(0, 2)}/${fp.slice(2)} · current sharded DID path`;
+    if (/^(Published|Yayınlandı) · \/kv\/did\//.test((out.textContent || "").trim())) {
+      out.textContent = patchText("publishedPath", { path: `/kv/did-${fp.slice(0, 2)}/${fp.slice(2)}` });
     }
   };
   new MutationObserver(apply).observe(out, { childList: true, subtree: true, characterData: true });
@@ -48,17 +49,17 @@ function patchIdentityReadyMessages() {
     if (!/^did:key:z6Mk/.test(did)) return;
 
     const replacements = [
-      ["#didNoteOut", /^Önce DID oluştur\.?$/i, "DID hazır · yayınlamaya hazır."],
-      ["#helloOut", /^DID gerekli\.?$/i, "DID hazır · signed hello gönderebilirsin."],
-      ["#introOut", /^DID gerekli\.?$/i, "DID hazır · lobby tanışmasını gönderebilirsin."],
-      ["#publicRoomOut", /^DID gerekli\.?$/i, "DID hazır · oda kapasitesi uygunsa public room açabilirsin."],
-      ["#styleOut", /^DID gerekli\.?$/i, "DID hazır · profil metadata'sını yayınlayabilirsin."],
-      ["#contribOut", /^DID ve katkı linki gerekli\.?$/i, "DID hazır · katkı linki, başlık ve özeti doldur."]
+      ["#didNoteOut", /^(?:Create a DID first|Önce DID oluştur)\.?$/i, "readyDidNote"],
+      ["#helloOut", /^(?:DID required|DID gerekli)\.?$/i, "readyHello"],
+      ["#introOut", /^(?:DID required|DID gerekli)\.?$/i, "readyIntro"],
+      ["#publicRoomOut", /^(?:DID required|DID gerekli)\.?$/i, "readyRoom"],
+      ["#styleOut", /^(?:DID required|DID gerekli)\.?$/i, "readyStyle"],
+      ["#contribOut", /^(?:DID and contribution link required|DID ve katkı linki gerekli)\.?$/i, "readyContribution"]
     ];
 
-    for (const [selector, pattern, text] of replacements) {
+    for (const [selector, pattern, key] of replacements) {
       const node = $(selector);
-      if (node && pattern.test((node.textContent || "").trim())) node.textContent = text;
+      if (node && pattern.test((node.textContent || "").trim())) node.textContent = patchText(key);
     }
   };
 
@@ -98,7 +99,7 @@ function patchProofButtons() {
       const box = $("#proofText");
       if (box) box.value = text;
       await copyText(text);
-      showToast("Proof kopyalandı · DID path güncel");
+      showToast(patchText("proofCopied"));
     };
   }
 
@@ -139,21 +140,21 @@ function patchRestoreFlow() {
       event.stopImmediatePropagation();
       event.preventDefault();
       input.value = "";
-      showToast("Bu public proof dosyası. Geri yükleme için reddragon-technocore-…json dosyasını seç.");
+      showToast(patchText("backupProofFile"));
       return;
     }
     if (!name.endsWith(".json")) {
       event.stopImmediatePropagation();
       event.preventDefault();
       input.value = "";
-      showToast("Kimlik yedeği JSON dosyası olmalı.");
+      showToast(patchText("backupJsonOnly"));
       return;
     }
     if (file.size > 128 * 1024) {
       event.stopImmediatePropagation();
       event.preventDefault();
       input.value = "";
-      showToast("Bu dosya beklenen kimlik yedeğinden çok büyük; güvenlik için açılmadı.");
+      showToast(patchText("backupTooLarge"));
       return;
     }
     restoreAttempt = true;
@@ -164,7 +165,8 @@ function patchRestoreFlow() {
 
     const s2 = $("#s2");
     if (s2) {
-      if (s2.textContent !== "Tamam") s2.textContent = "Tamam";
+      const done = window.RD_I18N.t("app.done");
+      if (s2.textContent !== done) s2.textContent = done;
       if (!s2.classList.contains("done")) s2.classList.add("done");
     }
 
@@ -175,7 +177,7 @@ function patchRestoreFlow() {
     if (card2 && !card2.querySelector(".rd-restore-ok")) {
       const note = document.createElement("div");
       note.className = "result rd-restore-ok";
-      note.textContent = "Şifreli kimlik yedeği doğrulandı ve başarıyla geri yüklendi. Geçmiş public kayıtlar bu kimlik yedeğine gömülmez; daha önce indirdiğin proof JSON ayrı kanıttır.";
+      note.textContent = patchText("backupRestoredNote");
       card2.appendChild(note);
     }
 
@@ -203,7 +205,7 @@ function patchRestoreFlow() {
       restoreAttempt = false;
       restoredBackupVerified = true;
       syncRestoredBackupUi();
-      showToast("Kimlik yedeği doğrulandı · DID + private key geri yüklendi");
+      showToast(patchText("backupRestoredToast"));
     }
   });
   identityObserver.observe(identityOut, { childList: true, subtree: true, characterData: true });
@@ -219,7 +221,9 @@ function patchRestoreFlow() {
 function patchSecurityNote() {
   const note = document.querySelector(".rd-security-note");
   if (!note) return;
-  note.innerHTML = "<b>Güvenlik kuralı</b>RedDragon GitHub şifreni, tokenini veya wallet seed phrase'ini istemez. Private key'i yalnızca kendi GitHub repondaki <b>Actions Secret</b> alanına sen yapıştırırsın. Private key RedDragon sunucusuna gönderilmez ve public GitHub dosyalarına yazılmaz.";
+  const heading = document.createElement("b");
+  heading.textContent = patchText("securityHeading");
+  note.replaceChildren(heading, document.createTextNode(patchText("securityBody")));
 }
 
 async function reliableRelayStatus() {
@@ -235,11 +239,11 @@ async function reliableRelayStatus() {
       signal: controller.signal
     });
     if (!r.ok) throw new Error(String(r.status));
-    live.lastChild.textContent = " relay online";
+    live.lastChild.textContent = patchText("relayOnline");
     live.classList.remove("rd-status-bad");
     live.classList.add("rd-status-ok");
   } catch {
-    live.lastChild.textContent = " relay offline";
+    live.lastChild.textContent = patchText("relayOffline");
     live.classList.remove("rd-status-ok");
     live.classList.add("rd-status-bad");
   } finally {
