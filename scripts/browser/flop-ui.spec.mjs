@@ -385,7 +385,7 @@ test("candidate X share opens a localized compose intent without external writes
       await page.waitForFunction(expected => (document.querySelector("#contribOut")?.textContent || "").includes(expected), locale === "tr" ? "İmzalı katkı" : "Signed contribution");
       const shareButton = page.locator("#xShare");
       assert.equal(await shareButton.isEnabled(), true, "a recorded contribution enables X sharing");
-      assert.equal((await shareButton.textContent()).trim(), locale === "tr" ? "X’te paylaş" : "Share on X");
+      assert.equal((await shareButton.textContent()).trim(), locale === "tr" ? "X'te paylaş" : "Share on X");
 
       await page.evaluate(() => {
         window.__qaExternalIntents = [];
