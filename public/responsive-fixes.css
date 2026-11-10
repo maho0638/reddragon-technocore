@@ -10,6 +10,8 @@
 .warning-box,.warning-box > * { min-width: 0; }
 .warning-box span { overflow-wrap: anywhere; }
 .rd-live-section,.shell { min-width: 0; max-width: 100%; box-sizing: border-box; }
+/* Keep scrollable room rails inside the app viewport; their own touch scroll remains enabled. */
+.shell { overflow-x: clip; }
 footer > div { min-width: 0; max-width: 100%; flex-wrap: wrap; }
 .card-head { grid-template-columns: auto minmax(0, 1fr) auto; }
 .card :is(p,small,label,code,pre),.rd-prov-section :is(p,small,code),

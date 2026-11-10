@@ -17,7 +17,7 @@ function rdProvFixLang() {
 const RD_PROV_FIX_COPY = {
   tr: {
     title: "RedDragon provenance",
-    intro: "Aynı DID altındaki sahiplik beyanını, site manifestini ve tclk yeteneği sinyallerini canlı doğrular. Posta kutusu adı site manifestinde ayrıca listelenir; DID notunda bulunmadıkça imzalı sahiplik bağı sayılmaz. İmzalı manifest-oda kanıtı ayrı ve isteğe bağlı bir sinyaldir.",
+    intro: "Bu araç, aynı DID altındaki sahiplik beyanını, site manifestini ve TCLK yeteneği sinyallerini canlı olarak kontrol eder. Posta kutusu adı site manifestinde ayrıca listelenir; DID notunda bulunmadıkça imzalı sahiplik bağı sayılmaz. İmzalı manifest-oda kanıtı ayrı ve isteğe bağlı bir sinyaldir.",
     owner: "Oda sahiplik beyanı",
     manifest: "İmzalı manifest-oda kanıtı",
     didNote: "DID notu + tclk yeteneği",
@@ -42,7 +42,7 @@ const RD_PROV_FIX_COPY = {
   },
   en: {
     title: "RedDragon provenance",
-    intro: "Live-verifies the ownership claim, site manifest and tclk capability under the same DID. The mailbox name is listed separately in the site manifest and is not treated as a signed DID-note binding. Signed manifest-room proof is a separate optional signal.",
+    intro: "Checks the ownership claim, site manifest and TCLK capability under the same DID. The mailbox name is listed separately in the site manifest and is not treated as a signed DID-note binding. Signed manifest-room proof is a separate optional signal.",
     owner: "Owned-room claim",
     manifest: "Signed manifest-room proof",
     didNote: "DID note + tclk capability",
