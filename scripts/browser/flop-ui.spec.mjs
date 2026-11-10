@@ -154,7 +154,7 @@ test("main page boots from empty storage and translates in desktop and mobile", 
       assert.equal(await page.locator('.hero-actions .ghost-link[href="/flop"]').getAttribute("href"), "/flop");
       assert.match(await page.locator("#brandSub").textContent(), /Community Observatory/);
       assert.match(await page.locator("#rdDidProvenance .rd-prov-head h2").textContent(), /who built this tool/i);
-      assert.match(await page.locator("#rdDidProvenance .rd-prov-head p").textContent(), /Checks the ownership claim/i);
+      assert.match(await page.locator("#rdDidProvenance .rd-prov-head p").textContent(), /Checks the RedDragon Technocore DID binding/i);
       assert.equal(await page.locator("#rdDidProvenance .rd-prov-kv span").first().textContent(), "Ownership claim");
       assert.equal(await page.locator("#rdDidProvenance .rd-prov-kv span").nth(3).textContent(), "Mailbox lane");
       assert.match(await page.locator("#rdTestnetToolkit h2").textContent(), /testnet-ready/i);
@@ -216,11 +216,13 @@ test("main page keeps local activity isolated by public DID on all viewports", a
       assert.match(await page.locator("#rdLedgerRows").textContent(), /other-did-local-check/);
       assert.equal(await page.evaluate((key) => JSON.parse(localStorage.getItem(key) || "null")?.entries?.length, otherKey), 1);
       const fieldTab = page.locator("#rdFieldRoomTabs .rd-field-room").nth(1);
-      assert.ok(await page.locator("#rdFieldRoomTabs").evaluate(el => el.scrollWidth > el.clientWidth), "field room rail should provide its own horizontal scroll");
+      const fieldRailOverflows = await page.locator("#rdFieldRoomTabs").evaluate(el => el.scrollWidth > el.clientWidth);
+      assert.equal(fieldRailOverflows, viewport.width < 650, "field room rail should scroll only when its natural content exceeds the viewport");
       await activate(fieldTab, viewport);
       assert.equal(await fieldTab.getAttribute("aria-selected"), "true", "touching a room tab selects that room");
       const liveTab = page.locator("#rdLiveRoomTabs .rd-live-room-tab").nth(1);
-      assert.ok(await page.locator("#rdLiveRoomTabs").evaluate(el => el.scrollWidth > el.clientWidth), "live room rail should provide its own horizontal scroll");
+      const liveRailOverflows = await page.locator("#rdLiveRoomTabs").evaluate(el => el.scrollWidth > el.clientWidth);
+      assert.equal(liveRailOverflows, viewport.width < 650, "live room rail should scroll only when its natural content exceeds the viewport");
       await activate(liveTab, viewport);
       assert.equal(await liveTab.getAttribute("aria-selected"), "true", "touching a live room tab changes the selected feed");
 
