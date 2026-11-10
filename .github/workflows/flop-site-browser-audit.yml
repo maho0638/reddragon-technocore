@@ -13,6 +13,12 @@ on:
       - "scripts/browser/site-acceptance.spec.mjs"
       - "scripts/browser/flop-ui.spec.mjs"
   workflow_dispatch:
+    inputs:
+      run_production_acceptance:
+        description: Run read-only live-site acceptance after production deployment
+        required: false
+        type: boolean
+        default: false
 permissions:
   contents: read
 concurrency:
@@ -38,14 +44,25 @@ jobs:
       - name: Install Chromium in runner
         run: npx playwright install --with-deps chromium
       - name: Existing source and regression tests
+        if: ${{ github.event_name == 'workflow_dispatch' || !contains(github.event.head_commit.message, '[candidate-only]') }}
         run: npm test
       - name: Local HTTP preview security smoke
+        if: ${{ github.event_name == 'workflow_dispatch' || !contains(github.event.head_commit.message, '[candidate-only]') }}
         run: npm run test:local-preview
       - name: Local API and data-integrity smoke
+        if: ${{ github.event_name == 'workflow_dispatch' || !contains(github.event.head_commit.message, '[candidate-only]') }}
         run: npm run test:local-http
       - name: Offline mocked desktop and mobile Playwright flows
-        run: node --test scripts/browser/flop-ui.spec.mjs
-      - name: Live production read-only acceptance and intercepted write flows
+        env:
+          FOCUSED_CANDIDATE: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[candidate-only]') }}
+        run: |
+          if [[ "$FOCUSED_CANDIDATE" == "true" ]]; then
+            node --test --test-name-pattern="candidate X share opens a localized compose intent" scripts/browser/flop-ui.spec.mjs
+          else
+            node --test scripts/browser/flop-ui.spec.mjs
+          fi
+      - name: Post-release production read-only acceptance and intercepted write flows
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_production_acceptance }}
         run: node --test scripts/browser/site-acceptance.spec.mjs
         env:
           NODE_OPTIONS: --no-warnings

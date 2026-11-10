@@ -44,7 +44,7 @@ async function waitForServer(child, url) {
   throw new Error(`Local preview did not start: ${serverStderr || serverStdout}`);
 }
 
-async function newPage(viewport) {
+async function newPage(viewport, preferredLocale) {
   const context = await browser.newContext({
     viewport: { width: viewport.width, height: viewport.height },
     locale: "en-US",
@@ -52,12 +52,13 @@ async function newPage(viewport) {
     hasTouch: viewport.isMobile,
     permissions: ["clipboard-read", "clipboard-write"]
   });
-  await context.addInitScript(() => {
+  await context.addInitScript((locale) => {
     if (!sessionStorage.getItem("__rdBrowserSmokeInitialized")) {
       localStorage.clear();
       sessionStorage.setItem("__rdBrowserSmokeInitialized", "1");
     }
-  });
+    if (locale === "tr" || locale === "en") localStorage.setItem("reddragon-lang", locale);
+  }, preferredLocale);
   await context.route("**/api/flop-status", (route) => route.fulfill({
     status: 200, contentType: "application/json", body: JSON.stringify(statusFixture)
   }));
@@ -359,6 +360,51 @@ test("DID create, encrypted backup, restore, prompts and mocked signed flows wor
       assert.match(await page.locator("#rdVerifyResult").textContent(), locale === "tr" ? /Dış sistemde kayıt bulunamadı/ : /external system returned no record/i);
       assert.equal(await page.locator("#rdVerifyResult").getAttribute("data-state"), "bad", "external absence is not a local ownership pass");
       assert.deepEqual(errors, [], `${locale}/${viewport.name} DID errors`);
+    } finally { await context.close(); }
+  }
+});
+
+test("candidate X share opens a localized compose intent without external writes", { timeout: 90000 }, async () => {
+  for (const locale of ["en", "tr"]) {
+    const { context, page } = await newPage(viewports[0], locale);
+    const errors = [];
+    page.on("pageerror", error => errors.push(error.message));
+    try {
+      await page.goto(`${baseURL}/`);
+      await page.waitForFunction(expected => document.documentElement.lang === expected, locale);
+      await page.locator("#createBtn").waitFor({ state: "visible" });
+      await page.locator("#pass1").fill("ephemeral-browser-only-password");
+      await page.locator("#pass2").fill("ephemeral-browser-only-password");
+      await page.locator("#createBtn").click();
+      await page.waitForFunction(() => (document.querySelector("#identityOut")?.textContent || "").includes("did:key:z6Mk"), null, { timeout: 35000 });
+      const did = (await page.locator("#identityOut").textContent()).split("\n")[0].trim();
+
+      await page.locator("#clink").fill("https://example.test/red-dragon-contribution");
+      await page.locator("#ctitle").fill("Ephemeral browser audit contribution");
+      await page.locator("#contribBtn").click();
+      await page.waitForFunction(expected => (document.querySelector("#contribOut")?.textContent || "").includes(expected), locale === "tr" ? "İmzalı katkı" : "Signed contribution");
+      const shareButton = page.locator("#xShare");
+      assert.equal(await shareButton.isEnabled(), true, "a recorded contribution enables X sharing");
+      assert.equal((await shareButton.textContent()).trim(), locale === "tr" ? "X’te paylaş" : "Share on X");
+
+      await page.evaluate(() => {
+        window.__qaExternalIntents = [];
+        window.open = url => { window.__qaExternalIntents.push(String(url)); return { opener: null }; };
+      });
+      await shareButton.click();
+      const urls = await page.evaluate(() => window.__qaExternalIntents.splice(0));
+      assert.equal(urls.length, 1, `${locale} should open one intercepted X compose intent`);
+      const intent = new URL(urls[0]);
+      assert.equal(intent.origin, "https://x.com");
+      assert.equal(intent.pathname, "/intent/tweet");
+      const text = intent.searchParams.get("text") || "";
+      assert.match(text, locale === "tr"
+        ? /Technocore ajan kimliğimi oluşturdum ve faydalı bir katkı yayımladım/
+        : /Built my Technocore agent identity and published a useful contribution/);
+      assert.ok(text.includes(did), `${locale} share contains the public DID`);
+      assert.ok(text.includes("https://example.test/red-dragon-contribution"), `${locale} share contains the contribution URL`);
+      assert.match(text, /#Technocore #FLOP/);
+      assert.deepEqual(errors, [], `${locale} X share should not throw a browser exception`);
     } finally { await context.close(); }
   }
 });
