@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
 import { after, before, test } from "node:test";
@@ -295,12 +296,17 @@ test("DID create, encrypted backup, restore, prompts and mocked signed flows wor
       const backup = await downloadEvent;
       assert.match(backup.suggestedFilename(), /reddragon-technocore-.*\.json/);
       const backupPath = await backup.path();
+      const backupContents = await readFile(backupPath);
+      const encryptedBackup = JSON.parse(backupContents.toString("utf8"));
+      assert.equal(encryptedBackup.format, "reddragon-technocore-identity");
+      assert.equal(encryptedBackup.did, did);
+      assert.ok(encryptedBackup.ciphertextB64u && encryptedBackup.saltB64u && encryptedBackup.ivB64u);
       let promptText = "";
       const promptEvent = page.waitForEvent("dialog", { timeout: 8_000 }).catch(() => null);
       const fileChooserEvent = page.waitForEvent("filechooser");
       await activate(page.locator("label.filebtn").filter({ has: page.locator("#restoreInput") }), viewport);
       const fileChooser = await fileChooserEvent;
-      await fileChooser.setFiles(backupPath);
+      await fileChooser.setFiles({ name: backup.suggestedFilename(), mimeType: "application/json", buffer: backupContents });
       const restorePrompt = await promptEvent;
       if (!restorePrompt) {
         const evidence = await page.evaluate(() => ({ files: document.querySelector("#restoreInput")?.files?.length || 0, fileName: document.querySelector("#restoreInput")?.files?.[0]?.name || "", toast: document.querySelector("#toast")?.textContent || "" }));
