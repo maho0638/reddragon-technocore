@@ -16,7 +16,7 @@ function uiLang(){return window.RD_I18N.language();}
 
 function init() {
   $("#brandTitle").textContent = cfg.brandName || "RedDragon";
-  $("#brandSub").textContent = cfg.productName || "Technocore Agent Lab";
+  $("#brandSub").textContent = ui("app.communityBrand");
   $("#ownerX").href = cfg.xUrl || "https://x.com/lionmousse";
   $("#ownerX").textContent = `𝕏 ${cfg.xHandle || "@lionmousse"}`;
   $("#flopLink").href = cfg.flopUrl || "https://flop.finance";
@@ -90,7 +90,7 @@ function updateUI(){
 }
 function contributionText(){ const link=$("#clink").value.trim(),title=$("#ctitle").value.trim(),summary=clean($("#csummary").value),type=$("#ctype").value,handle=$("#xhandle").value.trim(); if(!link||!title)return"";return clean(`Contribution | ${type} | ${title} | ${link}${handle?` | by ${handle}`:""}${summary?` | ${summary}`:""} | DID ${state.did}`); }
 function refreshPreview(){ const t=contributionText();$("#contribPreview").textContent=t||ui("app.contributionPreview"); }
-function makeProof(){ if(!state.did)return null; const proof={tool:`${cfg.brandName||"RedDragon"} ${cfg.productName||"Technocore Agent Lab"}`,owner:cfg.xHandle||"@lionmousse",notice:ui("app.proofNotice"),generatedAt:new Date().toISOString(),did:state.did,fingerprint:state.fingerprint,didNote:state.didNote,lobbyHello:state.hello,lobbyIntro:state.lobby,publicRoom:state.publicRoom?{room:state.publicRoom.room,seq:state.publicRoom.seq}:null,privateRoomCreated:!!state.privateRoom,profileStyle:state.style?{displayName:state.style.displayName,color:state.style.color}:null,contribution:{url:$("#clink").value.trim()||null,title:$("#ctitle").value.trim()||null,type:$("#ctype").value,summary:clean($("#csummary").value)||null,record:state.contrib}};$("#proofText").value=JSON.stringify(proof,null,2);const usable=!!state.contrib;["copyProof","downloadProof","xShare"].forEach(id=>$("#"+id).disabled=!usable);if(usable&&!state.done.has(10)){state.done.add(10);savePublicProgress();}return proof; }
+function makeProof(){ if(!state.did)return null; const proof={tool:`${cfg.brandName||"RedDragon"} ${ui("app.communityBrand")}`,owner:cfg.xHandle||"@lionmousse",notice:ui("app.proofNotice"),generatedAt:new Date().toISOString(),did:state.did,fingerprint:state.fingerprint,didNote:state.didNote,lobbyHello:state.hello,lobbyIntro:state.lobby,publicRoom:state.publicRoom?{room:state.publicRoom.room,seq:state.publicRoom.seq}:null,privateRoomCreated:!!state.privateRoom,profileStyle:state.style?{displayName:state.style.displayName,color:state.style.color}:null,contribution:{url:$("#clink").value.trim()||null,title:$("#ctitle").value.trim()||null,type:$("#ctype").value,summary:clean($("#csummary").value)||null,record:state.contrib}};$("#proofText").value=JSON.stringify(proof,null,2);const usable=!!state.contrib;["copyProof","downloadProof","xShare"].forEach(id=>$("#"+id).disabled=!usable);if(usable&&!state.done.has(10)){state.done.add(10);savePublicProgress();}return proof; }
 async function copyText(value,msg){await navigator.clipboard.writeText(value);toast(msg);}
 function randomPrivateRoom(){ const a=crypto.getRandomValues(new Uint8Array(20));return"p-"+b64u(a).toLowerCase().replace(/_/g,"x").replace(/-/g,"z").slice(0,28); }
 function automationGuide(){

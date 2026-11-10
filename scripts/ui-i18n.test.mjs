@@ -35,6 +35,8 @@ test("application dynamic status and confirmation copy no longer embeds mixed-la
     assert.ok(app.includes(`ui("app.${key}")`), `missing shared UI translation for ${key}`);
   }
   assert.ok(app.includes("uiLang()==="));
+  assert.match(app, /#brandSub"\)\.textContent\s*=\s*ui\("app\.communityBrand"\)/);
+  assert.match(app, /tool:`\$\{cfg\.brandName\|\|"RedDragon"\} \$\{ui\("app\.communityBrand"\)\}`/);
   assert.match(app, /function automationGuide\(\)[\s\S]*?uiLang\(\)==="en"/);
 });
 
