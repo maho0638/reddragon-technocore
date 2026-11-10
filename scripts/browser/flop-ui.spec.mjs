@@ -148,7 +148,7 @@ test("main page boots from empty storage and translates in desktop and mobile", 
       await page.locator('#rdLangSwitcher button[data-lang="en"]').click();
       await page.locator(".hero-actions .ghost-link").filter({ hasText: "Open FLOP Observatory" }).waitFor({ state: "visible" });
       assert.equal(await page.locator("html").getAttribute("lang"), "en");
-      assert.equal(await page.locator(".hero-actions .ghost-link").getAttribute("href"), "/flop");
+      assert.equal(await page.locator('.hero-actions .ghost-link[href="/flop"]').getAttribute("href"), "/flop");
       assert.match(await page.locator("#brandSub").textContent(), /Community Observatory/);
       assert.match(await page.locator("#rdDidProvenance .rd-prov-head h2").textContent(), /who built this tool/i);
       assert.equal(await page.locator("#rdDidProvenance .rd-prov-kv span").first().textContent(), "Verified owned room");
@@ -296,7 +296,10 @@ test("DID create, encrypted backup, restore, prompts and mocked signed flows wor
       const backupPath = await backup.path();
       let promptText = "";
       const promptEvent = page.waitForEvent("dialog");
-      await page.locator("#restoreInput").setInputFiles(backupPath);
+      const fileChooserEvent = page.waitForEvent("filechooser");
+      await activate(page.locator("label.filebtn").filter({ has: page.locator("#restoreInput") }), viewport);
+      const fileChooser = await fileChooserEvent;
+      await fileChooser.setFiles(backupPath);
       const restorePrompt = await promptEvent;
       promptText = restorePrompt.message();
       await restorePrompt.accept("ephemeral-browser-only-password");

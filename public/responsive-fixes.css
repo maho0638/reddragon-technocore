@@ -8,6 +8,7 @@
 .rd-testnet-note,.rd-testnet-note span { min-width: 0; overflow-wrap: anywhere; }
 .warning-box,.warning-box > * { min-width: 0; }
 .warning-box span { overflow-wrap: anywhere; }
+footer > div { min-width: 0; max-width: 100%; flex-wrap: wrap; }
 .card-head { grid-template-columns: auto minmax(0, 1fr) auto; }
 .card :is(p,small,label,code,pre),.rd-prov-section :is(p,small,code),
 .rd-testnet-section :is(p,small,code),.rd-tclk-section :is(p,small,code),
@@ -34,4 +35,5 @@
   .secret-row { flex-wrap: wrap; }
   .warning-box { flex-wrap: wrap; }
   .warning-box span { flex: 1 1 200px; }
+  footer > div { gap: 10px; }
 }
