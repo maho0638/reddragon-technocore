@@ -85,7 +85,8 @@ async function assertNoHorizontalOverflow(page) {
     const client = document.documentElement.clientWidth;
     const offenders = [...document.querySelectorAll("body *")].map(el => {
       const r = el.getBoundingClientRect();
-      return { tag: el.tagName.toLowerCase(), id: el.id || "", className: typeof el.className === "string" ? el.className.slice(0,100) : "", text: (el.innerText || el.textContent || "").trim().replace(/\s+/g," ").slice(0,100), left: Math.round(r.left), right: Math.round(r.right), width: Math.round(r.width), scrollWidth: el.scrollWidth };
+      const ancestors = []; for (let p = el.parentElement, n = 0; p && n < 4; p = p.parentElement, n++) { const pr = p.getBoundingClientRect(); ancestors.push({tag:p.tagName.toLowerCase(),id:p.id||"",className:typeof p.className === "string" ? p.className.slice(0,70) : "",left:Math.round(pr.left),right:Math.round(pr.right),width:Math.round(pr.width),overflowX:getComputedStyle(p).overflowX,scrollWidth:p.scrollWidth}); }
+      return { tag: el.tagName.toLowerCase(), id: el.id || "", className: typeof el.className === "string" ? el.className.slice(0,100) : "", text: (el.innerText || el.textContent || "").trim().replace(/\s+/g," ").slice(0,100), left: Math.round(r.left), right: Math.round(r.right), width: Math.round(r.width), scrollWidth: el.scrollWidth, ancestors };
     }).filter(x => x.width && (x.left < -1 || x.right > client + 1)).slice(0,25);
     return { client, scroll: document.documentElement.scrollWidth, offenders };
   });
@@ -151,7 +152,7 @@ test("main page boots from empty storage and translates in desktop and mobile", 
       assert.equal(await page.locator('.hero-actions .ghost-link[href="/flop"]').getAttribute("href"), "/flop");
       assert.match(await page.locator("#brandSub").textContent(), /Community Observatory/);
       assert.match(await page.locator("#rdDidProvenance .rd-prov-head h2").textContent(), /who built this tool/i);
-      assert.equal(await page.locator("#rdDidProvenance .rd-prov-kv span").first().textContent(), "Verified owned room");
+      assert.equal(await page.locator("#rdDidProvenance .rd-prov-kv span").first().textContent(), "Ownership claim");
       assert.equal(await page.locator("#rdDidProvenance .rd-prov-kv span").nth(2).textContent(), "Mailbox channel");
       assert.match(await page.locator("#rdTestnetToolkit h2").textContent(), /testnet-ready/i);
       assert.match(await page.locator("#rdTclkWorkbench .rd-tclk-head p").textContent(), /verifiable agent-to-agent/i);
@@ -169,7 +170,7 @@ test("main page boots from empty storage and translates in desktop and mobile", 
       assert.equal(await page.locator("html").getAttribute("lang"), "tr");
       assert.match(await page.locator("#brandSub").textContent(), /Topluluk Gözlemevi/);
       assert.match(await page.locator("#rdDidProvenance .rd-prov-head h2").textContent(), /bu aracı kim geliştirdi/i);
-      assert.equal(await page.locator("#rdDidProvenance .rd-prov-kv span").first().textContent(), "Sahipliği doğrulanmış oda");
+      assert.equal(await page.locator("#rdDidProvenance .rd-prov-kv span").first().textContent(), "Sahiplik beyanı");
       assert.equal(await page.locator("#rdDidProvenance .rd-prov-kv span").nth(2).textContent(), "Posta kutusu kanalı");
       assert.match(await page.locator("#rdTestnetToolkit h2").textContent(), /testnet'e hazır mısın/i);
       assert.match(await page.locator("#rdTclkWorkbench .rd-tclk-head p").textContent(), /doğrulanabilir ajanlar arası/i);
@@ -295,12 +296,16 @@ test("DID create, encrypted backup, restore, prompts and mocked signed flows wor
       assert.match(backup.suggestedFilename(), /reddragon-technocore-.*\.json/);
       const backupPath = await backup.path();
       let promptText = "";
-      const promptEvent = page.waitForEvent("dialog");
+      const promptEvent = page.waitForEvent("dialog", { timeout: 8_000 }).catch(() => null);
       const fileChooserEvent = page.waitForEvent("filechooser");
       await activate(page.locator("label.filebtn").filter({ has: page.locator("#restoreInput") }), viewport);
       const fileChooser = await fileChooserEvent;
       await fileChooser.setFiles(backupPath);
       const restorePrompt = await promptEvent;
+      if (!restorePrompt) {
+        const evidence = await page.evaluate(() => ({ files: document.querySelector("#restoreInput")?.files?.length || 0, fileName: document.querySelector("#restoreInput")?.files?.[0]?.name || "", toast: document.querySelector("#toast")?.textContent || "" }));
+        assert.fail(`restore prompt did not open after choosing a valid encrypted backup: ${JSON.stringify(evidence)}`);
+      }
       promptText = restorePrompt.message();
       await restorePrompt.accept("ephemeral-browser-only-password");
       const restoredText = locale === "tr" ? "Kimlik geri yüklendi." : "Identity restored.";
