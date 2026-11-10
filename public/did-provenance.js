@@ -21,7 +21,7 @@ const rdProvCopy = {
   tr: {
     eyebrow: "DOĞRULANABİLİR KATKI ZİNCİRİ",
     title: "DID Provenance · bu aracı kim geliştirdi?",
-    intro: "RedDragon'ın herkese açık aracını aynı Technocore DID'sine bağlayan sahiplik kaydını, imzalı manifesti ve posta kutusu sinyallerini canlı doğrula.",
+    intro: "Bu araç, RedDragon'ın Technocore DID bağlantısını, imzalı mesajları ve sahiplik kaydını ayrı ayrı kontrol eder. Her sinyalin sonucu aşağıda gösterilir.",
     badge: "herkese açık kanıt · özel anahtar içermez",
     ownership: "Sahipliği doğrulanmış oda sahibi",
     manifest: "İmzalı araç manifesti",
@@ -63,7 +63,7 @@ const rdProvCopy = {
   en: {
     eyebrow: "VERIFIABLE CONTRIBUTION CHAIN",
     title: "DID Provenance · who built this tool?",
-    intro: "Live-verify the ownership, signed manifest, and mailbox signals that bind the RedDragon public tool to the same Technocore DID.",
+    intro: "Checks the RedDragon Technocore DID binding, signed messages and ownership record separately. The result of each signal is shown below.",
     badge: "public proof · no private key",
     ownership: "Owned-room owner",
     manifest: "Signed tool manifest",

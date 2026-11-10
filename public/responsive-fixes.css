@@ -5,7 +5,7 @@
 .rd-tclk-shell,.rd-tclk-grid { min-width: 0; }
 .bg-grid { left: 0; top: 0; right: auto; bottom: auto; width: 100vw; height: 100vh; }
 .rd-field-room-tabs,.rd-live-room-tabs { display: flex; flex: 0 1 100%; width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box; overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; touch-action: pan-x; }
-.rd-live-room-tab,.rd-field-room { min-height: 44px; }
+.rd-live-room-tab,.rd-field-room { min-height: 44px; flex: 0 0 auto; }
 .rd-testnet-note,.rd-testnet-note span { min-width: 0; overflow-wrap: anywhere; }
 .warning-box,.warning-box > * { min-width: 0; }
 .warning-box span { overflow-wrap: anywhere; }
