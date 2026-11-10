@@ -3,6 +3,8 @@
 .rd-live-shell,.rd-live-grid,.rd-live-panel,.rd-live-feed-row,.rd-live-agent-card,
 .rd-field,.rd-field-bottom,.rd-prov-shell,.rd-prov-grid,.rd-testnet-shell,.rd-testnet-grid,
 .rd-tclk-shell,.rd-tclk-grid { min-width: 0; }
+.bg-grid { left: 0; top: 0; right: auto; bottom: auto; width: 100vw; height: 100vh; }
+.rd-field-room-tabs,.rd-live-room-tabs { min-width: 0; max-width: 100%; }
 .card-head { grid-template-columns: auto minmax(0, 1fr) auto; }
 .card :is(p,small,label,code,pre),.rd-prov-section :is(p,small,code),
 .rd-testnet-section :is(p,small,code),.rd-tclk-section :is(p,small,code),
@@ -12,6 +14,10 @@
 :is(.hero,.layout,.card,.rd-live-shell,.rd-prov-section,.rd-testnet-section,.rd-tclk-section,.rd-field) svg { max-width: 100%; }
 @media (max-width: 980px) { .layout { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 650px) {
+  .topbar { height: auto; min-height: 72px; flex-wrap: wrap; gap: 8px; }
+  .topbar > .brand { flex: 1 1 auto; min-width: 0; }
+  .topbar > .top-actions { flex: 0 1 auto; min-width: 0; margin-left: auto; }
+  .rd-lang-switcher { max-width: 100%; }
   .row,.automation-grid { grid-template-columns: minmax(0, 1fr); }
   button, input, select, textarea, .filebtn, .actions a { min-height: 44px; }
   .step-chip { min-height: 44px; }

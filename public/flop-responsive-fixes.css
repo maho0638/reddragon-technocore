@@ -14,7 +14,11 @@
   .status-grid,.live-grid,.guide-grid,.source-links { grid-template-columns: minmax(0,1fr); }
   .hero h1 { font-size: clamp(36px, 12vw, 48px); }
   .why,.machine,.sources { padding: clamp(16px,5vw,22px); }
-  .topbar nav { flex-wrap: nowrap; overflow-x: auto; }
-  .topbar nav a { flex: 0 0 auto; min-height: 44px; display: inline-flex; align-items: center; }
+  /* Keep every navigation control reachable without forcing the page wider. */
+  .topbar { align-items: stretch; gap: 12px; }
+  .topbar nav { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; width: 100%; min-width: 0; max-width: 100%; overflow: visible; }
+  .topbar nav a { flex: 0 1 auto; min-height: 44px; display: inline-flex; align-items: center; max-width: 100%; }
+  .topbar nav .lang-pick { flex: 0 0 auto; }
+  .topbar nav .lang-pick select { max-width: 100%; }
   .lang-pick select,.live-center button { min-height: 44px; }
 }
