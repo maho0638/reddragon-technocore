@@ -102,7 +102,10 @@ async function assertVisibleCopyLocale(page, locale, label) {
     return (clone.innerText || clone.textContent || "").replace(/\s+/g, " ").trim();
   });
   if (locale === "en") {
-    assert.doesNotMatch(copy, /[çğıöşüİ]/i, `${label}: Turkish UI characters remain in English copy`);
+    const hits = [...copy.matchAll(/[çğıöşüİ]/gi)].slice(0, 20).map(match => ({
+      character: match[0], context: copy.slice(Math.max(0, match.index - 65), Math.min(copy.length, match.index + 85))
+    }));
+    assert.deepEqual(hits, [], `${label}: Turkish UI characters remain in English copy`);
   } else {
     const untranslated = /\b(?:the password|no records|no signed|refresh status|refresh proof|refresh inbox|enter a valid|enter your|open room|public self-service unavailable|waiting for demo|live-verify)\b/i.exec(copy);
     assert.equal(untranslated, null, `${label}: English UI phrase remains: ${untranslated?.[0]}`);
