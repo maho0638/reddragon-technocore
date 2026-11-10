@@ -17,27 +17,27 @@ function rdProvFixLang() {
 const RD_PROV_FIX_COPY = {
   tr: {
     title: "RedDragon provenance",
-    intro: "Aynı DID altında ownership claim, site manifesti ve tclk capability sinyallerini canlı doğrular. Mailbox adı site manifestinde ayrıca listelenir; DID notunda bulunmadığı sürece imzalı sahiplik bağı olarak değerlendirilmez. Signed manifest-room kanıtı ayrı ve opsiyonel bir sinyaldir.",
-    owner: "Owned-room claim",
-    manifest: "Signed manifest-room kanıtı",
-    didNote: "DID notu + tclk capability",
+    intro: "Aynı DID altındaki sahiplik beyanını, site manifestini ve tclk yeteneği sinyallerini canlı doğrular. Posta kutusu adı site manifestinde ayrıca listelenir; DID notunda bulunmadıkça imzalı sahiplik bağı sayılmaz. İmzalı manifest-oda kanıtı ayrı ve isteğe bağlı bir sinyaldir.",
+    owner: "Oda sahiplik beyanı",
+    manifest: "İmzalı manifest-oda kanıtı",
+    didNote: "DID notu + tclk yeteneği",
     local: "Site manifesti",
     checking: "kontrol ediliyor",
     verified: "doğrulandı",
     missing: "bulunamadı",
     deferred: "Tarihsel kanıt odası şu anda okunamadı",
-    summaryOk: "RedDragon DID → ownership claim → signed manifest-room proof → tclk1:paper zinciri doğrulandı.",
-    summaryDeferred: "Kimlik, ownership ve tclk capability doğrulandı; tarihsel proof room'daki ek signed manifest kanıtı şu anda doğrulanamadı.",
+    summaryOk: "RedDragon DID → sahiplik beyanı → imzalı manifest-oda kanıtı → tclk1:paper zinciri doğrulandı.",
+    summaryDeferred: "Kimlik, sahiplik ve tclk yeteneği doğrulandı; tarihsel kanıt odasındaki ek imzalı manifest kanıtı bu kontrolde doğrulanamadı.",
     summaryBad: "Temel kanıt sinyallerinin bazıları doğrulanamadı.",
     refresh: "Kanıtı yenile",
     manifestJson: "Manifest JSON",
-    openProof: "Tarihsel proof room",
-    capacityNote: "d-reddragon-835ae177 sahiplik odasıdır; d-reddragon-lab tarihsel TCLK/manifest kanıt odasıdır. Sahiplik kaydı ve imzalı manifest kanıtı yenilemede ayrı sorgulanır; kayıt bulunamazsa sahiplik doğrulanmış sayılmaz.",
-    room: "Ownership claim",
-    proofRoom: "Tarihsel proof room",
-    did: "Public DID",
-    mailbox: "Mailbox lane",
-    cap: "TCLK capability",
+    openProof: "Tarihsel kanıt odası",
+    capacityNote: "d-reddragon-835ae177 sahiplik odasıdır; d-reddragon-lab tarihsel TCLK/manifest kanıt odasıdır. Sahiplik kaydı ve imzalı manifest kanıtı yenileme sırasında ayrı sorgulanır; kayıt bulunamazsa sahiplik doğrulanmış sayılmaz.",
+    room: "Sahiplik beyanı",
+    proofRoom: "Tarihsel kanıt odası",
+    did: "Herkese açık DID",
+    mailbox: "Posta kutusu kanalı",
+    cap: "TCLK yeteneği",
     hash: "Manifest SHA-256"
   },
   en: {
@@ -67,7 +67,8 @@ const RD_PROV_FIX_COPY = {
   }
 };
 
-const rdProvFixT = RD_PROV_FIX_COPY[rdProvFixLang()];
+const RD_PROV_FIX_CATALOG = window.RD_I18N?.register("provenanceRefresh", RD_PROV_FIX_COPY) || RD_PROV_FIX_COPY;
+const rdProvFixT = RD_PROV_FIX_CATALOG[rdProvFixLang()];
 let rdProvFixBusy = false;
 
 async function rdProvFixRelay(body) {

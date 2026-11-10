@@ -2,7 +2,7 @@ const COPY = {
   en: {
     refresh: "Refresh status", checking: "Checking…", failed: "Unverified · source unavailable", checked: "Last successful status check", stale: "Cached status · may be stale", summary: "Official sources and public read-only checks. Failed checks remain unverified.",
     testnetNotLive: "Planned / unreleased", testnetUnverified: "Unverified", testnetManual: "Release details found · identity check still required", testnetDetail: "No public testnet launch is confirmed. Devnet is a separate development network.", timelineConflict: "Conflicting dated FAQ: the {date} timeline lists {target} as a working target and also says testnet is open. The network page still marks it planned/unreleased; launch is unconfirmed.",
-    devnetPublic: "Public development endpoints listed", devnetUnverified: "Unverified", devnetDetail: "Public endpoints are listed; operator enrollment requires administrator assistance.", devnetNoRewards: "The official {date} timeline FAQ says devnet earns nothing and has no reward or airdrop weight.", devnetRewardUnverified: "Current reward wording could not be checked in the official timeline FAQ.",
+    devnetPublic: "Public development endpoints listed", enrollment: "Operator onboarding is administrator-assisted; public self-service enrollment is unavailable.", devnetError: "The official devnet source could not be checked.", rpcError: "The read-only RPC check could not be completed.", gatewayError: "The official model catalog could not be checked.", packageError: "Official package references could not be checked.", enrollmentUnverified: "Admission status unverified", devnetUnverified: "Unverified", devnetDetail: "Public endpoints are listed; operator enrollment requires administrator assistance.", devnetNoRewards: "The official {date} timeline FAQ says devnet earns nothing and has no reward or airdrop weight.", devnetRewardUnverified: "Current reward wording could not be checked in the official timeline FAQ.",
     rpcMatched: "Expected genesis matched", rpcUnverified: "Unverified · read-only RPC unavailable or mismatched", rpcDetail: "The RPC must match the official devnet genesis before calling its identity verified.",
     gatewayOk: "Model catalog responded", gatewayBad: "Unverified · catalog unavailable", gatewayDetail: "No inference or paid request is sent.",
     packagesOk: "Current official package references", packagesBad: "Unverified · docs unavailable",
@@ -25,7 +25,7 @@ const COPY = {
   tr: {
     refresh: "Durumu yenile", checking: "Kontrol ediliyor…", failed: "Doğrulanamadı · kaynak erişilemiyor", checked: "Son başarılı durum kontrolü", stale: "Önbellekteki durum · eski olabilir", summary: "Resmî kaynaklar ve yalnızca okunur kontroller. Başarısız kontroller doğrulanamadı olarak kalır.",
     testnetNotLive: "Planlandı / yayımlanmadı", testnetUnverified: "Doğrulanamadı", testnetManual: "Yayın bilgisi var · ağ kimliği ayrıca doğrulanmalı", testnetDetail: "Halka açık testnet başlangıcı doğrulanmadı. Devnet ayrı bir geliştirme ağıdır.", timelineConflict: "Tarihli resmî kaynaklarda çelişki var: {date} tarihli zaman çizelgesi {target} gününü çalışma hedefi olarak veriyor ve testnet'in açık olduğunu da söylüyor. Ağ durumu sayfası hâlâ planlandı/yayımlanmadı diyor; başlangıç doğrulanmadı.",
-    devnetPublic: "Halka açık geliştirme uçları listeleniyor", devnetUnverified: "Doğrulanamadı", devnetDetail: "Halka açık uçlar listeleniyor; operatör katılımı yönetici desteği gerektiriyor.", devnetNoRewards: "{date} tarihli resmî zaman çizelgesi SSS'si devnet'in ödül ve airdrop puanı vermediğini söylüyor.", devnetRewardUnverified: "Resmî zaman çizelgesi SSS'sindeki ödül bilgisi şu anda kontrol edilemedi.",
+    devnetPublic: "Halka açık geliştirme uçları listeleniyor", enrollment: "Operatör başvurusu yönetici desteğiyle yürütülüyor; herkese açık, self-servis başvuru yok.", devnetError: "Resmî devnet kaynağı kontrol edilemedi.", rpcError: "Salt okunur RPC kontrolü tamamlanamadı.", gatewayError: "Resmî model kataloğu kontrol edilemedi.", packageError: "Resmî paket referansları kontrol edilemedi.", enrollmentUnverified: "Katılım durumu doğrulanamadı", devnetUnverified: "Doğrulanamadı", devnetDetail: "Halka açık uçlar listeleniyor; operatör katılımı yönetici desteği gerektiriyor.", devnetNoRewards: "{date} tarihli resmî zaman çizelgesi SSS'si devnet'in ödül ve airdrop puanı vermediğini söylüyor.", devnetRewardUnverified: "Resmî zaman çizelgesi SSS'sindeki ödül bilgisi şu anda kontrol edilemedi.",
     rpcMatched: "Beklenen genesis eşleşti", rpcUnverified: "Doğrulanamadı · RPC erişilemiyor veya kimlik uyuşmuyor", rpcDetail: "RPC ancak resmî devnet genesis değeriyle eşleşirse doğrulanmış sayılır.",
     gatewayOk: "Model kataloğu yanıt verdi", gatewayBad: "Doğrulanamadı · katalog erişilemiyor", gatewayDetail: "Inference veya ücretli istek gönderilmez.",
     packagesOk: "Resmî paket referansları", packagesBad: "Doğrulanamadı · belgelere erişilemiyor",
@@ -47,15 +47,18 @@ const COPY = {
   }
 };
 
+const FLOP_STATUS_COPY = window.RD_I18N?.register("flopStatus", COPY) || COPY;
 const getLang = () => {
   try { const v = localStorage.getItem("reddragon-lang"); if (v === "tr" || v === "en") return v; } catch {}
   return String(navigator.language || "").toLowerCase().startsWith("tr") ? "tr" : "en";
 };
+let liveSourceFailure = false;
 const setLang = (lang) => {
   const value = lang === "tr" ? "tr" : "en";
   try { localStorage.setItem("reddragon-lang", value); } catch {}
   renderStatic(value);
   if (window.__rdFlopStatus) renderStatus(window.__rdFlopStatus, value);
+  else if (liveSourceFailure) renderFailure(value);
 };
 const fmtTime = (value, lang) => {
   if (!value || Number.isNaN(Date.parse(value))) return lang === "tr" ? "doğrulanamadı" : "unverified";
@@ -65,7 +68,7 @@ const put = (root, selector, text) => { const el = root.querySelector(selector);
 
 function renderStatic(lang) {
   if (!document.getElementById("flop-live-status")) return;
-  const c = COPY[lang];
+  const c = FLOP_STATUS_COPY[lang];
   document.documentElement.lang = lang;
   const select = document.getElementById("rdFlopLanguage"); if (select) select.value = lang;
   put(document, ".hero h1", c.title); put(document, ".hero .lead", c.intro); put(document, ".hero .kicker", c.kicker);
@@ -123,7 +126,8 @@ function renderStatic(lang) {
 }
 
 function renderStatus(data, lang = getLang()) {
-  const c = COPY[lang];
+  liveSourceFailure = false;
+  const c = FLOP_STATUS_COPY[lang];
   const show = (id, status, detail, state = "warn") => {
     const card = document.getElementById(id); if (!card) return;
     card.dataset.state = state; put(card, "[data-status]", status); put(card, "[data-detail]", detail);
@@ -143,18 +147,18 @@ function renderStatus(data, lang = getLang()) {
   const rewardsText = data.devnet?.rewards === "none" && timeline.state === "verified"
     ? c.devnetNoRewards.replace("{date}", timelineDate)
     : c.devnetRewardUnverified;
-  if (data.devnet?.state === "public-development-network") show("rdLiveDevnet", c.devnetPublic, `${c.devnetDetail} ${data.devnet.operatorEnrollment || ""} ${rewardsText}`, "good");
-  else show("rdLiveDevnet", c.devnetUnverified, data.devnet?.error || c.devnetDetail, "bad");
+  if (data.devnet?.state === "public-development-network") show("rdLiveDevnet", c.devnetPublic, `${c.devnetDetail} ${data.devnet.operatorEnrollment === "administrator-assisted / public self-service unavailable" ? c.enrollment : c.enrollmentUnverified} ${rewardsText}`, "good");
+  else show("rdLiveDevnet", c.devnetUnverified, c.devnetError, "bad");
   const rpc = data.services?.rpc;
-  show("rdLiveRpc", rpc?.state === "identity-matched" ? c.rpcMatched : c.rpcUnverified, rpc?.state === "identity-matched" ? `${c.rpcDetail} ${rpc.chain} · ${rpc.version}` : `${c.rpcDetail} ${rpc?.error || ""}`, rpc?.state === "identity-matched" ? "good" : "warn");
+  show("rdLiveRpc", rpc?.state === "identity-matched" ? c.rpcMatched : c.rpcUnverified, rpc?.state === "identity-matched" ? `${c.rpcDetail} ${rpc.chain} · ${rpc.version}` : `${c.rpcDetail} ${rpc?.error ? c.rpcError : ""}`, rpc?.state === "identity-matched" ? "good" : "warn");
   const gateway = data.services?.gateway;
-  show("rdLiveGateway", gateway?.state === "catalog-responded" ? c.gatewayOk : c.gatewayBad, gateway?.state === "catalog-responded" ? `${c.gatewayDetail} · ${gateway.count} ${lang === "tr" ? "model" : "models"}` : `${c.gatewayDetail} ${gateway?.error || ""}`, gateway?.state === "catalog-responded" ? "good" : "warn");
+  show("rdLiveGateway", gateway?.state === "catalog-responded" ? c.gatewayOk : c.gatewayBad, gateway?.state === "catalog-responded" ? `${c.gatewayDetail} · ${gateway.count} ${lang === "tr" ? "model" : "models"}` : `${c.gatewayDetail} ${gateway?.error ? c.gatewayError : ""}`, gateway?.state === "catalog-responded" ? "good" : "warn");
   const packages = data.packages;
   let versions = (packages?.versions || []).map((v) => `${v.name} ${v.version}`).join(" · ");
   const validator = packages?.validatorPackage || (lang === "tr" ? "doğrulanamadı" : "unverified");
   const mismatch = packages?.validatorPackage && packages.validatorManualVersion && packages.validatorPackage !== packages.validatorManualVersion
     ? ` · ${c.validator}: ${packages.validatorPackage}; ${c.manual}: ${packages.validatorManualVersion} (${packages.validatorManualUpdated || ""})` : ` · ${c.validator}: ${validator}`;
-  show("rdLivePackages", packages?.state === "verified-from-docs" ? c.packagesOk : c.packagesBad, `${c.sdk}: ${versions || c.none}${mismatch} · ${c.admission}: ${packages?.validatorAdmission || c.none}`, packages?.state === "verified-from-docs" ? "good" : "warn");
+  show("rdLivePackages", packages?.state === "verified-from-docs" ? c.packagesOk : c.packagesBad, `${c.sdk}: ${versions || c.none}${mismatch} · ${c.admission}: ${packages?.validatorAdmission === "administrator-assisted" ? c.enrollment : packages?.validatorAdmission === "unverified" ? c.enrollmentUnverified : c.none}`, packages?.state === "verified-from-docs" ? "good" : "warn");
   const yp = data.yellowPaper || {};
   const official = data.officialLinks || {};
   const tokenText = official.state !== "verified" || official.error
@@ -171,7 +175,7 @@ function renderStatus(data, lang = getLang()) {
   const footer = document.getElementById("rdFooterChecked"); if (footer) footer.textContent = `${lang === "tr" ? "kontrol" : "checked"} ${fmtTime(checkedAt, lang)}`;
   const paperTitle = document.getElementById("rdPaperSyncTitle"); const paperText = document.getElementById("rdPaperSyncText");
   if (paperTitle) paperTitle.textContent = diff ? (lang === "tr" ? "GitHub içerik güncellemesi canlı sayfadan yeni" : "GitHub paper content is newer than live page") : (lang === "tr" ? "Depo başlığı CI-only olabilir" : "Latest repository commit may be CI-only");
-  if (paperText) paperText.textContent = diff ? `${lang === "tr" ? "Canlı FLOP sayfası" : "Live FLOP page"}: ${yp.livePageUpdated || "unknown"}. ${lang === "tr" ? "GitHub makale dosyası" : "GitHub paper file"}: ${content?.date || "unverified"}. ${lang === "tr" ? "Depo başlığı" : "Repository head"}: ${head?.date || "unverified"} · ${head?.message || ""}.` : c.paperMatch;
+  if (paperText) paperText.textContent = diff ? `${lang === "tr" ? "Canlı FLOP sayfası" : "Live FLOP page"}: ${yp.livePageUpdated || (lang === "tr" ? "doğrulanamadı" : "unverified")}. ${lang === "tr" ? "GitHub makale dosyası" : "GitHub paper file"}: ${content?.date || "unverified"}. ${lang === "tr" ? "Depo başlığı" : "Repository head"}: ${head?.date || "unverified"} · ${head?.message || ""}.` : c.paperMatch;
   const didStatus = document.getElementById("rdTestnetToolkit");
   if (didStatus) {
     const statusCols = Array.from(didStatus.querySelectorAll(".rd-testnet-status > div"));
@@ -181,8 +185,21 @@ function renderStatus(data, lang = getLang()) {
   }
 }
 
+function renderFailure(lang = getLang()) {
+  const c = FLOP_STATUS_COPY[lang];
+  liveSourceFailure = true;
+  for (const id of ["rdLiveTestnet", "rdLiveDevnet", "rdLiveRpc", "rdLiveGateway", "rdLivePackages", "rdLivePaper"]) {
+    const card = document.getElementById(id); if (!card) continue;
+    card.dataset.state = "bad";
+    put(card, "[data-status]", c.failed);
+    put(card, "[data-detail]", lang === "tr" ? "Canlı kaynak kontrolü tamamlanamadı; tahmin gösterilmiyor." : "The live source check failed; no inferred status is shown.");
+  }
+  put(document, "#rdLiveChecked", lang === "tr" ? "Son kontrol: kaynaklara erişilemedi" : "Last check: sources unreachable");
+  put(document, "#rdFooterChecked", lang === "tr" ? "durum doğrulanamadı" : "status unverified");
+}
+
 async function refresh() {
-  const c = COPY[getLang()];
+  const c = FLOP_STATUS_COPY[getLang()];
   const timeout = AbortSignal.timeout(8000);
   try {
     const response = await fetch("/api/flop-status", { method: "GET", headers: { accept: "application/json" }, cache: "no-store", credentials: "same-origin", signal: timeout });
@@ -193,16 +210,12 @@ async function refresh() {
     renderStatus(data, getLang());
   } catch {
     const lang = getLang();
-    for (const id of ["rdLiveTestnet", "rdLiveDevnet", "rdLiveRpc", "rdLiveGateway", "rdLivePackages", "rdLivePaper"]) {
-      const card = document.getElementById(id); if (!card) continue;
-      card.dataset.state = "bad"; put(card, "[data-status]", c.failed); put(card, "[data-detail]", lang === "tr" ? "Canlı kaynak kontrolü tamamlanamadı; tahmin gösterilmiyor." : "The live source check failed; no inferred status is shown.");
-    }
-    put(document, "#rdLiveChecked", lang === "tr" ? "Son kontrol: kaynaklara erişilemedi" : "Last check: sources unreachable");
-    put(document, "#rdFooterChecked", lang === "tr" ? "durum doğrulanamadı" : "status unverified");
+    const failureCopy = FLOP_STATUS_COPY[lang];
+    renderFailure(lang);
     const toolkit = document.getElementById("rdTestnetToolkit");
     if (toolkit) {
       const statusCols = Array.from(toolkit.querySelectorAll(".rd-testnet-status > div"));
-      const t = COPY[lang];
+      const t = failureCopy;
       if (statusCols[0]) {
         const label = statusCols[0].querySelector("b");
         if (label) { label.textContent = t.testnetUnverified; label.dataset.state = "warn"; }

@@ -20,42 +20,44 @@ function rdProvLang() {
 const rdProvCopy = {
   tr: {
     eyebrow: "DOĞRULANABİLİR KATKI ZİNCİRİ",
-    title: "DID Provenance · bu aracı kim yaptı?",
-    intro: "RedDragon'ın public aracını aynı Technocore DID'sine bağlayan ownership, imzalı manifest ve mailbox sinyallerini canlı doğrula.",
-    badge: "public proof · private key yok",
-    ownership: "Owned room sahibi",
-    manifest: "İmzalı tool manifest",
-    didNote: "DID notu + mailbox",
+    title: "DID Provenance · bu aracı kim geliştirdi?",
+    intro: "RedDragon'ın herkese açık aracını aynı Technocore DID'sine bağlayan sahiplik kaydını, imzalı manifesti ve posta kutusu sinyallerini canlı doğrula.",
+    badge: "herkese açık kanıt · özel anahtar içermez",
+    ownership: "Sahipliği doğrulanmış oda sahibi",
+    manifest: "İmzalı araç manifesti",
+    didNote: "DID notu + posta kutusu",
     localManifest: "Site manifesti",
     checking: "kontrol ediliyor",
     verified: "doğrulandı",
     missing: "bulunamadı",
-    room: "Owned room",
-    did: "Public DID",
-    mailbox: "Mailbox lane",
+    notFound: "Dış sistemde kayıt bulunamadı (HTTP 404). Bu yanıt tek başına site kodunda hata olduğunu göstermez.",
+    requestFailed: "Dış sistem sorgusu tamamlanamadı.",
+    room: "Sahipliği doğrulanmış oda",
+    did: "Herkese açık DID",
+    mailbox: "Posta kutusu kanalı",
     hash: "Manifest SHA-256",
     refresh: "Kanıtı yenile",
     openManifest: "Manifest JSON",
     openRoom: "Technocore'da oda",
-    verifierTitle: "Technocore DID / owned-room verifier",
-    verifierIntro: "Herhangi bir d- odasının owner kaydını ve aynı DID'den gelen doğrulanmış signed aktiviteyi kontrol et.",
-    roomLabel: "d- owned room",
+    verifierTitle: "Technocore DID / sahiplik odası doğrulayıcısı",
+    verifierIntro: "Herhangi bir d- odasının sahiplik kaydını ve aynı DID'den gelen doğrulanmış imzalı etkinliği kontrol et.",
+    roomLabel: "d- sahiplik odası",
     didLabel: "Beklenen DID",
     verify: "Doğrula",
-    invalidRoom: "Geçerli bir d- owned room adı gir.",
+    invalidRoom: "Geçerli bir d- sahiplik odası adı gir.",
     invalidDid: "Geçerli bir Ed25519 did:key gir.",
-    ownerMismatch: "Owner kaydı beklenen DID ile eşleşmiyor.",
-    ownerOkNoMessage: "Ownership eşleşiyor; fakat bu odada aynı DID'den signed mesaj henüz görünmüyor.",
-    ownerAndMessage: "Ownership eşleşiyor ve aynı DID'den doğrulanmış signed oda aktivitesi var.",
-    mailboxTitle: "RedDragon signed agent mailbox",
-    mailboxIntro: "Technocore'un mb- signed-only lane'ini kullanan public inbox. Gelen metin veri olarak gösterilir; komut olarak çalıştırılmaz.",
-    copyMailbox: "Mailbox adını kopyala",
+    ownerMismatch: "Sahip kaydı beklenen DID ile eşleşmiyor.",
+    ownerOkNoMessage: "Sahiplik eşleşiyor; ancak bu odada aynı DID'den imzalı mesaj görünmüyor.",
+    ownerAndMessage: "Sahiplik eşleşiyor ve aynı DID'den doğrulanmış imzalı oda etkinliği var.",
+    mailboxTitle: "RedDragon imzalı ajan posta kutusu",
+    mailboxIntro: "Technocore'un yalnızca imzalı mesaj kabul eden mb- kanalını kullanan herkese açık posta kutusu. Gelen metin veri olarak gösterilir, komut olarak çalıştırılmaz.",
+    copyMailbox: "Posta kutusu adını kopyala",
     copied: "Kopyalandı",
-    refreshMailbox: "Inbox yenile",
-    noMail: "Henüz signed agent mesajı yok. Mailbox hazır ve yalnızca signed DID mesajlarını kabul eder.",
-    mailboxUnavailable: "Mailbox şu anda okunamadı.",
-    sourceNote: "Bu panel Technocore'un public room, signed did:key, mb- mailbox ve d- owned-room mekanizmalarını kullanır. RedDragon resmî FLOP Labs arayüzü değildir.",
-    selfOk: "RedDragon DID → owned room → site manifest hash zinciri doğrulandı.",
+    refreshMailbox: "Gelen kutusunu yenile",
+    noMail: "Henüz imzalı ajan mesajı yok. Posta kutusu hazır ve yalnızca imzalı DID mesajlarını kabul eder.",
+    mailboxUnavailable: "Posta kutusu şu anda okunamadı.",
+    sourceNote: "Bu panel Technocore'un herkese açık odalarını, imzalı did:key kimliklerini, mb- posta kutularını ve d- sahiplik kayıtlarını kullanır. RedDragon, FLOP Labs'ın resmî arayüzü değildir.",
+    selfOk: "RedDragon DID → sahiplik odası → site manifesti özeti zinciri doğrulandı.",
     selfPartial: "Kanıt zincirinin bazı parçaları henüz Technocore'da görünmüyor; ajan bir sonraki başarılı çalışmada tamamlamayı deneyecek."
   },
   en: {
@@ -70,9 +72,11 @@ const rdProvCopy = {
     checking: "checking",
     verified: "verified",
     missing: "missing",
-    room: "Owned room",
+    notFound: "The external system returned no record (HTTP 404). This response alone does not indicate a site-code defect.",
+    requestFailed: "The external-system request could not be completed.",
+    room: "Verified owned room",
     did: "Public DID",
-    mailbox: "Mailbox lane",
+    mailbox: "Mailbox channel",
     hash: "Manifest SHA-256",
     refresh: "Refresh proof",
     openManifest: "Manifest JSON",
@@ -100,7 +104,8 @@ const rdProvCopy = {
   }
 };
 
-const rdProvT = rdProvCopy[rdProvLang()];
+const rdProvCatalog = window.RD_I18N?.register("provenance", rdProvCopy) || rdProvCopy;
+const rdProvT = rdProvCatalog[rdProvLang()];
 let rdProvBusy = false;
 let rdProvTimer = null;
 
@@ -345,7 +350,7 @@ async function rdProvRunGenericVerify() {
       : rdProvT.ownerOkNoMessage;
   } catch (error) {
     result.dataset.state = "bad";
-    result.textContent = String(error?.message || error || rdProvT.missing);
+    result.textContent = Number(error?.status) === 404 ? rdProvT.notFound : rdProvT.requestFailed;
   }
 }
 

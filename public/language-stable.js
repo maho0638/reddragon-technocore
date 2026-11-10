@@ -178,6 +178,19 @@ function translateCore(en) {
   if (label) label.innerHTML = en ? 'Backup password <small>at least 12 characters</small>' : 'Yedek parolası <small>en az 12 karakter</small>';
   placeholder("#pass1", en ? "Strong password" : "Güçlü parola");
   placeholder("#pass2", en ? "Repeat password" : "Parolayı tekrar yaz");
+  const defaults = [
+    ["#helloText", "Hello Technocore! RedDragon agent checking in with a signed DID.", "Merhaba Technocore! RedDragon ajanı imzalı DID ile burada."],
+    ["#introText", "Exploring Technocore, building useful public contributions, and keeping the same DID across the trail.", "Technocore'u keşfediyor, faydalı katkılar üretiyor ve bütün katkılarımda aynı DID'yi kullanıyorum."],
+    ["#roomTopic", "RedDragon agent experiments and useful Technocore contributions", "RedDragon ajan deneyleri ve faydalı Technocore katkıları"]
+  ];
+  for (const [selector, original, translated] of defaults) {
+    const field = $(selector);
+    if (field && (field.value === original || field.value === translated)) field.value = en ? original : translated;
+  }
+  const brand = $(".brand");
+  if (brand) brand.setAttribute("aria-label", en ? "RedDragon home page" : "RedDragon ana sayfa");
+  const color = $("#profileColor");
+  if (color) color.setAttribute("aria-label", en ? "Profile color" : "Profil rengi");
   text("#createBtn", en ? "Create new DID" : "Yeni DID oluştur");
   setFileLabel(en ? "Restore from backup" : "Yedekten geri yükle");
   text("#backupBtn", en ? "Download encrypted identity backup" : "Şifreli kimlik yedeğini indir");
@@ -383,6 +396,7 @@ function applyStableLanguage() {
     if (dot) liveBadge.prepend(dot);
   }
   document.querySelectorAll('a[href="https://x.com/lionmousse"]').forEach((a) => { a.href = cfg.xUrl || "https://x.com/lionmousse"; });
+  window.applyCommunityLanguage?.();
 }
 
 function boot() {

@@ -11,22 +11,22 @@ function rdTclkLang(){
 
 const rdTclkCopy={
   tr:{
-    kicker:"TCLK / AGENT-TO-AGENT KANIT",
-    title:"RedDragon TCLK PAPER Workbench",
-    intro:"Aynı RedDragon DID'nin payer olduğu doğrulanabilir agent-to-agent prova zincirini gösterir: offer → accept → lock → reveal → signed receipt.",
+    kicker:"TCLK / AJANLAR ARASI KANIT",
+    title:"RedDragon TCLK PAPER çalışma alanı",
+    intro:"Aynı RedDragon DID'sinin ödeyen taraf olduğu doğrulanabilir ajanlar arası prova zincirini gösterir: offer → accept → lock → reveal → signed receipt.",
     badge:"PAPER · gerçek değer taşımaz",
     waiting:"Demo kanıtı bekleniyor",
     verified:"TCLK demo zinciri doğrulandı",
-    partial:"Demo bulundu; bazı public kayıtlar şu anda okunamadı",
-    payer:"Payer DID",payee:"Demo payee DID",contract:"Contract",room:"Deal room",
+    partial:"Demo bulundu; bazı herkese açık kayıtlar şu anda okunamadı",
+    payer:"Ödeyen DID",payee:"Demo alıcı DID",contract:"Sözleşme",room:"İşlem odası",
     offer:"Offer",accept:"Accept",lock:"Lock",reveal:"Reveal",receipt:"Receipt",
     missing:"bekleniyor",refresh:"Zinciri yenile",
-    transcript:"İmzalı public transcript",
+    transcript:"İmzalı herkese açık işlem dökümü",
     transcriptIntro:"Uzaktaki mesajlar yalnızca veri olarak gösterilir; komut olarak çalıştırılmaz.",
-    noTranscript:"Henüz transcript yok.",proof:"RedDragon proof marker",
-    paperNote:"PAPER rail yalnızca protokol koreografisini prova eder; para/token tutmaz veya transfer etmez.",
-    demoIdentity:"İkinci DID kasıtlı olarak public/deterministic PAPER demo kimliğidir; değer taşımak için kullanılmaz.",
-    source:"Protokol: FLOP Labs tclk/1. RedDragon community-built bir araçtır; resmî FLOP Labs arayüzü değildir."
+    noTranscript:"Henüz işlem dökümü yok.",proof:"RedDragon kanıt işareti",
+    paperNote:"PAPER akışı yalnızca protokol adımlarını prova eder; para veya token tutmaz ve transfer etmez.",
+    demoIdentity:"İkinci DID, bilerek herkese açık ve deterministik oluşturulmuş bir PAPER demo kimliğidir; değer taşıyan işlemlerde kullanılmamalıdır.",
+    source:"Protokol: FLOP Labs tclk/1. RedDragon topluluk yapımı bir araçtır; resmî FLOP Labs arayüzü değildir."
   },
   en:{
     kicker:"TCLK / AGENT-TO-AGENT PROOF",
@@ -45,7 +45,8 @@ const rdTclkCopy={
     source:"Protocol: FLOP Labs tclk/1. RedDragon is community-built and is not an official FLOP Labs interface."
   }
 };
-const rdTclkT=()=>rdTclkCopy[rdTclkLang()];
+const rdTclkCatalog=window.RD_I18N?.register("tclkWorkbench",rdTclkCopy)||rdTclkCopy;
+const rdTclkT=()=>rdTclkCatalog[rdTclkLang()];
 let rdTclkBusy=false;
 let rdTclkTimer=null;
 
@@ -96,7 +97,7 @@ function rdTclkBuild(){
 function rdTclkRenderTranscript(messages){
   const host=document.getElementById("rdTclkTranscript");if(!host)return;host.textContent="";const t=rdTclkT();
   if(!messages.length){const e=document.createElement("div");e.className="rd-tclk-empty";e.textContent=t.noTranscript;host.appendChild(e);return;}
-  for(const m of messages.sort((a,b)=>rdTclkSeq(a)-rdTclkSeq(b))){const frame=rdTclkFrame(m);if(!frame)continue;const row=document.createElement("div");row.className="rd-tclk-line";const top=document.createElement("div");const type=document.createElement("b");type.textContent=String(frame.type||"frame").toUpperCase();const meta=document.createElement("span");meta.textContent=`SIGNED · seq ${rdTclkSeq(m)||"—"} · ${rdTclkShort(rdTclkDid(m))}`;top.append(type,meta);const code=document.createElement("code");code.textContent=rdTclkText(m);row.append(top,code);host.appendChild(row);}
+  for(const m of messages.sort((a,b)=>rdTclkSeq(a)-rdTclkSeq(b))){const frame=rdTclkFrame(m);if(!frame)continue;const row=document.createElement("div");row.className="rd-tclk-line";const top=document.createElement("div");const type=document.createElement("b");type.textContent=String(frame.type||"frame").toUpperCase();const meta=document.createElement("span");meta.textContent=`${rdTclkLang()==="tr"?"İMZALI":"SIGNED"} · ${rdTclkLang()==="tr"?"sıra":"seq"} ${rdTclkSeq(m)||"—"} · ${rdTclkShort(rdTclkDid(m))}`;top.append(type,meta);const code=document.createElement("code");code.textContent=rdTclkText(m);row.append(top,code);host.appendChild(row);}
 }
 async function rdTclkRefresh(){
   if(rdTclkBusy)return;rdTclkBusy=true;const button=document.getElementById("rdTclkRefresh");if(button)button.disabled=true;const t=rdTclkT();

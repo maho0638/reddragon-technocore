@@ -1,0 +1,20 @@
+/* Keep long localized copy and source metadata inside their responsive grid tracks. */
+.topbar,.topbar nav,main,.hero,.hero>*,.why,.why>*,.machine,.machine>*,
+.status-grid,.status-card,.live-center,.live-grid,.live-card,.participation,.guide-grid,
+.guide-grid article,.source-links,.sources,.sources>* { min-width: 0; }
+.hero,.why,.status-grid,.live-grid,.guide-grid,.source-links { grid-template-columns: repeat(1, minmax(0, 1fr)); }
+:is(main,.hero,.why,.machine,.status-card,.live-center,.live-card,.participation,.guide-grid,.sources) :is(p,small,code,span,a,h1,h2,h3) { overflow-wrap: anywhere; }
+.topbar nav { max-width: 100%; }
+@media (max-width: 900px) {
+  .hero,.why { grid-template-columns: minmax(0, 1fr); }
+  .status-grid,.live-grid,.guide-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+}
+@media (max-width: 620px) {
+  main,footer { max-width: 100%; }
+  .status-grid,.live-grid,.guide-grid,.source-links { grid-template-columns: minmax(0,1fr); }
+  .hero h1 { font-size: clamp(36px, 12vw, 48px); }
+  .why,.machine,.sources { padding: clamp(16px,5vw,22px); }
+  .topbar nav { flex-wrap: nowrap; overflow-x: auto; }
+  .topbar nav a { flex: 0 0 auto; min-height: 44px; display: inline-flex; align-items: center; }
+  .lang-pick select,.live-center button { min-height: 44px; }
+}

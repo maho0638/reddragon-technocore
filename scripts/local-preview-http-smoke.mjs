@@ -35,6 +35,20 @@ try {
   assert.match(await flop.text(), /id="flop-live-status"/);
   console.log("PASS local preview serves /flop route");
 
+  for (const path of ["/ui-i18n.js", "/responsive-fixes.css", "/flop-responsive-fixes.css"]) {
+    const response = await fetch(`${base}${path}`);
+    assert.equal(response.status, 200, `${path} missing from local preview`);
+    assert.match(response.headers.get("content-type") || "", path.endsWith(".css") ? /text\/css/ : /javascript/);
+  }
+  const homeHtml = await (await fetch(base)).text();
+  const flopHtml = await (await fetch(`${base}/flop`)).text();
+  assert.match(homeHtml, /ui-i18n\.js/);
+  assert.match(flopHtml, /ui-i18n\.js/);
+  const config = await (await fetch(`${base}/config.js`)).text();
+  assert.match(config, /responsive-fixes\.css/);
+  assert.match(flopHtml, /flop-responsive-fixes\.css/);
+  console.log("PASS local preview serves shared translations and responsive styles on both routes");
+
   const script = await fetch(`${base}/flop-live-status.js`);
   assert.equal(script.status, 200);
   assert.match(script.headers.get("content-type") || "", /javascript/);

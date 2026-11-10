@@ -5,6 +5,11 @@ on:
       - qa/flop-site-browser-20261110
     paths:
       - ".github/workflows/flop-site-browser-audit.yml"
+      - "public/**"
+      - "api/**"
+      - "scripts/*.test.mjs"
+      - "scripts/local-preview-server.mjs"
+      - "package.json"
       - "scripts/browser/site-acceptance.spec.mjs"
       - "scripts/browser/flop-ui.spec.mjs"
   workflow_dispatch:
@@ -15,6 +20,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   smoke:
+    if: github.ref == 'refs/heads/qa/flop-site-browser-20261110'
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
@@ -33,6 +39,10 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Existing source and regression tests
         run: npm test
+      - name: Local HTTP preview security smoke
+        run: npm run test:local-preview
+      - name: Local API and data-integrity smoke
+        run: npm run test:local-http
       - name: Offline mocked desktop and mobile Playwright flows
         run: node --test scripts/browser/flop-ui.spec.mjs
       - name: Live production read-only acceptance and intercepted write flows

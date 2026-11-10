@@ -46,8 +46,9 @@ const RD_FLOP_SPEC_COPY = {
   }
 };
 
+const RD_FLOP_SPEC_CATALOG=window.RD_I18N?.register("flopGuide",RD_FLOP_SPEC_COPY)||RD_FLOP_SPEC_COPY;
 function rdFlopSpecCopy() {
-  return RD_FLOP_SPEC_COPY[rdFlopSpecLang()];
+  return RD_FLOP_SPEC_CATALOG[rdFlopSpecLang()];
 }
 
 function rdFlopSpecTotals(entries) {
