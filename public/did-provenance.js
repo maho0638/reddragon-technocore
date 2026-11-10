@@ -1,6 +1,8 @@
 const RD_PROV_DID = "did:key:z6MkuhrsP4tDZjWYdZLPxaur19WvrF1yuLGsGB2S8Q1gwS6K";
 const RD_PROV_FP = "835ae177c258e121";
-const RD_PROV_ROOM = "d-reddragon-lab";
+// d-reddragon-lab is a historical proof venue, not the owned room. The current
+// provenance renderer in provenance-room-refresh.js checks these separately.
+const RD_PROV_ROOM = "d-reddragon-835ae177";
 const RD_PROV_MAILBOX = "mb-reddragon-agent";
 const RD_PROV_MARKER = "REDDRAGON_TOOL_V1";
 const RD_PROV_REFRESH_MS = 60_000;
@@ -30,7 +32,7 @@ const rdProvCopy = {
     missing: "bulunamadı",
     room: "Owned room",
     did: "Public DID",
-    mailbox: "Signed mailbox",
+    mailbox: "Mailbox lane",
     hash: "Manifest SHA-256",
     refresh: "Kanıtı yenile",
     openManifest: "Manifest JSON",
@@ -63,14 +65,14 @@ const rdProvCopy = {
     badge: "public proof · no private key",
     ownership: "Owned-room owner",
     manifest: "Signed tool manifest",
-    didNote: "DID note + mailbox",
+    didNote: "DID note + TCLK capability",
     localManifest: "Site manifest",
     checking: "checking",
     verified: "verified",
     missing: "missing",
     room: "Owned room",
     did: "Public DID",
-    mailbox: "Signed mailbox",
+    mailbox: "Mailbox lane",
     hash: "Manifest SHA-256",
     refresh: "Refresh proof",
     openManifest: "Manifest JSON",
@@ -294,7 +296,7 @@ async function rdProvRefreshSelf() {
     rdProvSetStatus("rdProvManifest", manifestOk, manifestOk ? `seq ${rdProvSeqOf(signedManifest)}` : rdProvT.missing);
 
     const didNoteText = didNoteResult.status === "fulfilled" ? String(didNoteResult.value || "") : "";
-    const didNoteOk = didNoteText.includes(RD_PROV_DID) && didNoteText.includes(`mailbox:${RD_PROV_MAILBOX}`);
+    const didNoteOk = didNoteText.includes(RD_PROV_DID) && didNoteText.split(/\s+/).includes("tclk1:paper");
     rdProvSetStatus("rdProvDidNote", didNoteOk, didNoteOk ? rdProvT.verified : rdProvT.missing);
 
     const allOk = localOk && ownerOk && manifestOk && didNoteOk;
@@ -391,13 +393,13 @@ async function rdProvRefreshMailbox() {
 function rdProvStart() {
   rdProvCreateShell();
   if (!document.getElementById("rdDidProvenance")) return;
-  rdProvRefreshSelf();
+  // Do not run the superseded self-verifier here: it treated the historical
+  // proof room as the ownership room and made duplicate relay requests. The
+  // following provenance-room-refresh.js owns that check.
   rdProvRefreshMailbox();
   if (rdProvTimer) clearInterval(rdProvTimer);
   rdProvTimer = setInterval(() => {
-    if (document.visibilityState !== "visible") return;
-    rdProvRefreshSelf();
-    rdProvRefreshMailbox();
+    if (document.visibilityState === "visible") rdProvRefreshMailbox();
   }, RD_PROV_REFRESH_MS);
 }
 

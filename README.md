@@ -14,19 +14,21 @@ Independent, community-built FLOP research and agent tooling. RedDragon tracks a
 
 FLOP is moving quickly and its public surfaces can temporarily disagree while the specification evolves. RedDragon deliberately separates the live authoritative specification from stale mirrors or provisional overview copy instead of blending them together.
 
-Current source check, **2026-11-03** (snapshot, not real-time monitoring):
+Current source check, **2026-11-10**. The page and `/api/flop-status` use allowlisted, read-only official-source checks; the JSON file remains a clearly dated snapshot:
 
-- Yellow Paper **v0.5.0 draft** (page updated **2026-09-24**). Its public GitHub mirror was synchronized to **D-0440 on 24 September**: the previous 3.5B supply mismatch in [issue #54](https://github.com/flop-labs/yellowpaper/issues/54) is resolved.
+- Yellow Paper **v0.5.0 draft** (live page says updated **2026-09-24**). GitHub's `yellowpaper.md` content commit is **56410c6 (26 October)**; repository head **2a2cc82 (5 November)** changes CI triage and does not update paper text. The earlier D-0440 3.5B/4.4B mismatch was resolved in September; a newer freshness difference between the live page and GitHub file is now called out.
 - Genesis supply **4.4B FLOP**: **1.2B miner + 1.2B validator + 1.2B agent + 800M reserve**. These are cohort pools, not guaranteed personal rewards. Validator minimum stake is **1.2M FLOP** in the draft.
 - **R8.7–R8.8** specify the Agent genesis grant unlocking **1 FLOP per 3 FLOP** of *finalized eligible payable funded by locked grant principal*, subject to the dispute window and **75% locked-principal spend cap**. **Do not map testnet spending directly onto mainnet unlocked tokens.**
 - **E.38** still leaves testnet conversion scoring, caps, identity aggregation, appeals and residual disposition open; runtime implementation of vesting is partial.
-- Official public **testnet** operator status was **planned / next (unreleased)** on 3 November 2026. The 3 November date was a *working target*, not a confirmed launch. Public genesis, RPC, faucet and agent admission are not verified.
-- **Devnet** is development-only with administrator-reviewed admission and no verified open public operator enrollment; it carries **no reward or airdrop weight**.
+- Official public **testnet** status remains **planned / next (unreleased)** on 10 November 2026. The 3 November date was a *working target*, not a confirmed launch. Do not treat the public devnet endpoints as a testnet launch.
+- **Devnet** runs public development endpoints at `rpc.devnet.flop.network`, `api.flop.network`, and `api.flop.network/v1/models`. The live model catalog can be read without inference. Validator onboarding is administrator-assisted, not open self-service testnet admission; devnet carries **no reward or airdrop weight**.
+- The current explorer lists validator package **0.4.1-devnet.1**, while the validator manual (last updated 6 November) still documents **0.4.0-devnet.1**. Package listing and onboarding are separate: approval, funding, and activation are still required.
+- SDK references (last updated 30 October) list current npm/PyPI package versions and warn that the package registries take precedence if they differ. The official-links page says there is no FLOP token, live claim, presale, or airdrop.
 - Mainnet/TGE remains a **Q1 2027 working target**, subject to readiness and actual testnet schedule.
 - KOL/creator applications: https://flop.finance/apply/kol ; individual compensation is not guaranteed.
 - GPU market monitor: https://gpus.flop.finance/ .
 
-Machine-readable status: [`public/flop-source-status.json`](public/flop-source-status.json).
+Machine-readable snapshot: [`public/flop-source-status.json`](public/flop-source-status.json). Live endpoint: `/api/flop-status`. Source failures are shown as unverified; no endpoint auto-promotes testnet to live without network identity checks.
 
 Verified official sources:
 - https://flop.finance/intro/yellowpaper/
@@ -46,6 +48,9 @@ Verified official sources:
 - Current D-0440 genesis allocation summary
 - E.38 unresolved-airdrop-mechanics warning
 - Testnet readiness status without fabricated endpoints
+- Live source status with bounded read-only checks, explicit stale timestamps, and fail-closed status parsing
+- Separate local activity logs for visitor-supplied public Ed25519 DIDs (manual entries are never shown as chain-verified)
+- Turkish/English status and participation guide
 - Current creator/application and GPU-market links
 - Machine-readable source-status JSON
 - Search/social discovery support through canonical metadata, Open Graph, `robots.txt`, and `sitemap.xml`

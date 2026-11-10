@@ -31,6 +31,7 @@
       <a href="https://gpus.flop.finance/" target="_blank" rel="noopener noreferrer">GPU Market</a>
       <a href="/">Agent Lab</a>
       <a href="https://x.com/lionmousse" target="_blank" rel="noopener noreferrer">@lionmousse</a>
+      <label class="lang-pick"><span class="sr-only">Language</span><select id="rdFlopLanguage" aria-label="Language"><option value="en">EN</option><option value="tr">TR</option></select></label>
     </nav>
   </header>
 
@@ -65,10 +66,10 @@
       </article>
 
       <article class="status-card good">
-        <span>SPEC MIRROR · SYNCED</span>
-        <h2>GitHub mirror caught up</h2>
-        <p>The public Yellow Paper mirror was synchronized to D-0440 on 24 September 2026. Both the live specification and the GitHub mirror now reflect 4.4B FLOP genesis supply. The former 3.5B mismatch is resolved.</p>
-        <a href="https://github.com/flop-labs/yellowpaper/issues/54" target="_blank" rel="noopener noreferrer">Tracked upstream →</a>
+        <span>SPEC MIRROR · CONTENT UPDATED 26 OCT</span>
+        <h2 id="rdPaperSyncTitle">GitHub paper content is newer than live page</h2>
+        <p id="rdPaperSyncText">The live page says updated 24 September; GitHub's Yellow Paper file changed 26 October. The repository head from 5 November is CI-only.</p>
+        <a href="https://github.com/flop-labs/yellowpaper/commits/main/yellowpaper.md" target="_blank" rel="noopener noreferrer">Yellow Paper file history →</a>
       </article>
 
       <article class="status-card warn">
@@ -88,29 +89,55 @@
       <article class="status-card">
         <span>PUBLIC TESTNET · NOT RELEASED</span>
         <h2>Planned / unreleased</h2>
-        <p>Checked 3 November 2026: FLOP's official operator hub still marks public testnet as planned and its release as unreleased. No verified public genesis, RPC, faucet admission or agent onboarding is published. The 3 November target was not a guaranteed launch date.</p>
+        <p>Checked 10 November 2026: FLOP's official operator hub still marks public testnet as planned and its release as unreleased. Public testnet launch is not confirmed. Devnet is a separate network; the 3 November date was only a working target.</p>
         <a href="https://docs.flop.network/networks/testnet" target="_blank" rel="noopener noreferrer">Live official testnet status →</a>
       </article>
 
       <article class="status-card good">
         <span>KOL / CREATOR APPLICATION</span>
-        <h2>Open</h2>
-        <p>FLOP's official site currently accepts KOL & creator applications. The 800M reserve is described as ecosystem/incentives including KOL, referral and growth incentives; no individual reward is guaranteed.</p>
+        <h2>Check official status</h2>
+        <p>Application availability can change. The 800M reserve is a cohort-level amount, and no individual reward is guaranteed.</p>
         <a href="https://flop.finance/apply/kol" target="_blank" rel="noopener noreferrer">Official application →</a>
       </article>
 
       <article class="status-card good">
         <span>GPU MARKET MONITOR</span>
-        <h2>Live</h2>
-        <p>FLOP publishes a live rentable-GPU market monitor covering multiple GPU classes and future settlement tenors. This is market data, not a testnet faucet or miner-reward guarantee.</p>
+        <h2>Official market monitor</h2>
+        <p>FLOP publishes a rentable-GPU market monitor. This is market data, not a testnet faucet or miner-reward guarantee.</p>
         <a href="https://gpus.flop.finance/" target="_blank" rel="noopener noreferrer">Open GPU market →</a>
       </article>
       <article class="status-card warn">
         <span>DEVNET · DEVELOPMENT ONLY</span>
-        <h2>No airdrop weight</h2>
-        <p>FLOP operates development infrastructure, but the operator hub still lists an unreleased build with administrator-reviewed admission and no verified open operator enrollment. Devnet activity earns no rewards or testnet airdrop weight.</p>
+        <h2>Public endpoints; restricted enrollment</h2>
+        <p>FLOP's operator network page publishes development endpoints and says enrollment requires separate checks. The official timeline FAQ, updated 30 October, says devnet earns nothing and has no reward or airdrop weight; the live panel reports when that FAQ was last verified.</p>
         <a href="https://docs.flop.network/networks/devnet" target="_blank" rel="noopener noreferrer">Official devnet status →</a>
+        <a href="https://docs.flop.network/docs/testnet-and-timeline" target="_blank" rel="noopener noreferrer">Official timeline and reward FAQ →</a>
       </article>
+    </section>
+
+    <section class="live-center" id="flop-live-status" aria-labelledby="live-title" aria-live="polite">
+      <div class="section-heading"><div><p class="kicker">READ-ONLY SOURCE CHECK</p><h2 id="live-title">Live FLOP status</h2><p id="rdLiveSummary">Checking official FLOP sources. A source that cannot be checked remains unverified.</p></div><button id="rdRefreshStatus" type="button">Refresh status</button></div>
+      <p id="rdLiveChecked" class="live-meta">Last check: loading…</p>
+      <div class="live-grid">
+        <article class="live-card" id="rdLiveTestnet"><span>PUBLIC TESTNET</span><b data-status>Checking…</b><p data-detail>Official network identity and release status</p><a href="https://docs.flop.network/networks/testnet" target="_blank" rel="noopener noreferrer">Official testnet source ↗</a><a id="rdLiveTimelineLink" href="https://docs.flop.network/docs/testnet-and-timeline" target="_blank" rel="noopener noreferrer">Timeline / reward FAQ ↗</a></article>
+        <article class="live-card" id="rdLiveDevnet"><span>DEVNET</span><b data-status>Checking…</b><p data-detail>Development network; admission is separate</p><a href="https://docs.flop.network/networks/devnet" target="_blank" rel="noopener noreferrer">Official devnet source ↗</a></article>
+        <article class="live-card" id="rdLiveRpc"><span>READ-ONLY RPC CHECK</span><b data-status>Checking…</b><p data-detail>Only chain identity, node version and genesis hash are queried</p><a href="https://explorer.devnet.flop.network/validator" target="_blank" rel="noopener noreferrer">Network identity reference ↗</a></article>
+        <article class="live-card" id="rdLiveGateway"><span>GATEWAY / MODEL CATALOG</span><b data-status>Checking…</b><p data-detail>Read-only model list; no inference request is sent</p><a href="https://api.flop.network/v1/models" target="_blank" rel="noopener noreferrer">Official catalog ↗</a></article>
+        <article class="live-card" id="rdLivePackages"><span>SDK / CLI RELEASES</span><b data-status>Checking…</b><p data-detail>Versions and validator admission note</p><a href="https://docs.flop.network/docs/sdk-references" target="_blank" rel="noopener noreferrer">Official SDK references ↗</a></article>
+        <article class="live-card" id="rdLivePaper"><span>YELLOW PAPER / E.38</span><b data-status>Checking…</b><p data-detail>Public draft status and distinct GitHub file-history/repository-head dates</p><a href="https://flop.finance/intro/yellowpaper/" target="_blank" rel="noopener noreferrer">Official paper ↗</a></article>
+      </div>
+      <p id="rdLiveDisclaimer" class="live-disclaimer">Status checks do not submit transactions, sign, claim faucet funds, or run inference. A timeout or malformed response is shown as unverified.</p>
+    </section>
+
+    <section class="participation" id="join-guide">
+      <p class="kicker">PRACTICAL GUIDE · DEVNET IS NOT TESTNET</p><h2>What you can do now</h2>
+      <div class="guide-grid">
+        <article><h3>Start with devnet</h3><p>Use the published read-only model catalog or SDK/CLI documentation. A validator package exists, but joining is administrator-assisted and requires an operations contact, approval, funding and activation. Do not treat local activity as testnet credit.</p><a href="https://docs.flop.network/docs/sdk-references" target="_blank" rel="noopener noreferrer">SDK versions and examples ↗</a></article>
+        <article><h3>When public testnet opens</h3><p>First verify the official testnet identity, genesis, release, RPC, faucet and admission rules. The official onboarding guides are not permission to join the production testnet while they still say planned/unreleased.</p><a href="https://docs.flop.network/networks/testnet" target="_blank" rel="noopener noreferrer">Recheck official launch status ↗</a></article>
+        <article><h3>No GPU? You can still prepare</h3><p>Read the spec and SDK docs, build an agent against documented APIs, validate a public DID format, compare official source versions and track your own local checklist. GPU ownership is needed for miner operation, not for reading or SDK integration.</p><a href="https://docs.flop.network/docs/run-miner" target="_blank" rel="noopener noreferrer">Miner guide and role details ↗</a></article>
+        <article><h3>Rewards are not guaranteed</h3><p>Devnet has no reward or airdrop weight. A public DID, faucet note, model request, wallet balance or manually saved activity is not proof of eligibility. E.38 leaves important testnet-to-genesis conversion rules open.</p><a href="https://docs.flop.network/docs/airdrop-and-testnet-conversion" target="_blank" rel="noopener noreferrer">Official conversion status ↗</a></article>
+      </div>
+      <div class="tool-links"><a href="/">Open Agent Lab and existing DID tools</a><a href="https://docs.flop.network/docs/run-validator" target="_blank" rel="noopener noreferrer">Validator guide and current admission steps ↗</a><a href="https://docs.flop.network/docs/official-links" target="_blank" rel="noopener noreferrer">Check official links and scam guidance ↗</a></div>
     </section>
 
     <section class="why" id="technocore-capacity">
@@ -176,9 +203,10 @@
   </main>
 
   <footer>
-    <span>RedDragon FLOP Community Observatory · checked 2026-11-03</span>
+    <span>RedDragon FLOP Community Observatory · <span id="rdFooterChecked">source check updates on page load</span></span>
     <span>Community-built · source-first · no affiliation claim</span>
   </footer>
   <script src="/technocore-capacity.js" defer></script>
+  <script type="module" src="/flop-live-status.js"></script>
 </body>
 </html>

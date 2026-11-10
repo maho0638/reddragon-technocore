@@ -7,6 +7,11 @@ on:
       - "public/flop-source-status.json"
       - "public/reddragon-contribution.json"
       - "public/flop-spec-refresh.js"
+      - "api/flop-status.js"
+      - "scripts/flop-status.test.mjs"
+      - "package.json"
+      - "public/flop-did-utils.js"
+      - "public/flop-live-status.js"
       - "public/testnet-toolkit.js"
       - "public/config.js"
       - "public/index.html"
@@ -18,9 +23,16 @@ on:
       - "public/flop-source-status.json"
       - "public/reddragon-contribution.json"
       - "public/flop-spec-refresh.js"
+      - "public/flop-live-status.js"
+      - "public/flop-did-utils.js"
       - "public/testnet-toolkit.js"
+      - "api/flop-status.js"
+      - "scripts/flop-status.test.mjs"
+      - "package.json"
+      - "public/flop.css"
       - "public/config.js"
       - "public/index.html"
+      - "README.md"
       - "scripts/verify-flop-observatory.test.mjs"
       - ".github/workflows/verify-flop-observatory.yml"
 permissions:
@@ -43,7 +55,11 @@ jobs:
         run: |
           node --check public/config.js
           node --check public/flop-spec-refresh.js
+          node --check public/flop-live-status.js
           node --check public/testnet-toolkit.js
+          node --check public/flop-did-utils.js
+          node --check api/flop-status.js
           node --check scripts/verify-flop-observatory.test.mjs
+          node --check scripts/flop-status.test.mjs
       - name: Source and business-rule regression
-        run: node --test scripts/verify-flop-observatory.test.mjs
+        run: npm test

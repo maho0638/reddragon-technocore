@@ -6,7 +6,13 @@
   "scripts": {
     "dev": "vercel dev",
     "start": "vercel dev",
-    "agent": "node scripts/technocore-agent.mjs"
+    "agent": "node scripts/technocore-agent.mjs",
+    "test": "node --test scripts/*.test.mjs",
+    "test:flop": "node --test scripts/flop-status.test.mjs scripts/flop-agent-preflight.test.mjs scripts/verify-flop-observatory.test.mjs",
+    "test:local-http": "node scripts/local-api-http-smoke.mjs",
+    "test:local-preview": "node scripts/local-preview-http-smoke.mjs",
+    "preview:local": "node scripts/local-preview-server.mjs",
+    "test:browser": "node --test scripts/browser/*.spec.mjs"
   },
   "engines": {
     "node": ">=24"

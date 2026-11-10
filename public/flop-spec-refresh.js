@@ -1,5 +1,5 @@
 const RD_FLOP_SPEC_DID = "did:key:z6MkuhrsP4tDZjWYdZLPxaur19WvrF1yuLGsGB2S8Q1gwS6K";
-const RD_FLOP_SPEC_CHECKED = "2026-11-03";
+const RD_FLOP_SPEC_CHECKED = "2026-11-10";
 const RD_FLOP_YELLOW_PAPER = "https://flop.finance/intro/yellowpaper/";
 const RD_FLOP_AGENT = "https://flop.finance/intro/agent/";
 const RD_FLOP_TEASER = "https://flop.finance/teaser/";
@@ -15,30 +15,30 @@ function rdFlopSpecLang() {
 
 const RD_FLOP_SPEC_COPY = {
   "tr": {
-    "intro": "FLOP Yellow Paper v0.5.0 / D-0440 ve resmî ağ durumu üzerinden 3 Kasım 2026 testnet hazırlığını gösterir. Bu statik kontroldür; airdrop miktarı veya uygunluk garantisi değildir.",
+    "intro": "FLOP Yellow Paper v0.5.0 / D-0440 ve resmî ağ kaynakları üzerinden güncel testnet hazırlığını gösterir. Bu kontrol airdrop miktarı veya uygunluk garantisi değildir.",
     "badge": "Yellow Paper v0.5.0 · D-0440 · taslak",
-    "endpoint": "3 Kasım 2026'da resmî operatör sayfası public Testnet'i planned/unreleased gösteriyor; doğrulanmış public faucet, RPC veya ajan kabulü yok. Devnet geliştirme ağıdır ve airdrop puanı kazandırmaz. Mainnet/TGE Q1 2027 hedefi kesin değildir.",
+    "endpoint": "10 Kasım 2026 kontrolünde resmî testnet sayfası hâlâ planned/unreleased. Halka açık testnet başlangıcı doğrulanmadı. Devnet halka açık geliştirme uçları sunuyor ancak validator katılımı yönetici onaylıdır ve ödül/airdrop puanı vermez.",
     "unlockLabel": "Yerel testnet kaydı mainnet kilidi kanıtlamaz",
     "spendTitle": "Mainnet kilitli Agent grant örneği",
     "spendIntro": "Yellow Paper R8.7–R8.8 uyarınca yalnızca mainnet Agent grant'inin kilitli kısmından ödenen, kesinleşmiş ve itiraz penceresi tamamlanmış inference payable'ının her 3 FLOP'u 1 FLOP kilidi açar. Kilitli grant harcaması anaparanın en fazla %75'idir. Testnet işlem kayıtları bu kilidi açmaz.",
     "plan3": "3 · Resmî inference settlement'ını doğrula",
     "plan3d": "Ödül için testnet'te hangi kesinleşmiş harcamanın sayılacağını resmî kurallardan doğrula. Dönüşüm skoru ve kimlik/limit kuralları E.38'de açık; tarayıcı kaydı kanıt değildir.",
-    "source": "3 Kasım 2026 kaynak kontrolü: Yellow Paper v0.5.0 (24 Eylül güncellemesi), D-0440 4.4B FLOP: 1.2B miner, 1.2B validator, 1.2B agent, 800M reserve. GitHub mirror 24 Eylül'de senkronlandı. R8.7–R8.8 grant kilit açma kuralını belirliyor, E.38 dönüşüm puanlaması açık. Public testnet henüz planned/unreleased.",
+    "source": "10 Kasım 2026 kaynak kontrolü: Yellow Paper v0.5.0 taslak. Canlı sayfa 24 Eylül, GitHub içerik dosyası 26 Ekim güncellemesi gösteriyor; GitHub depo başlığı 5 Kasım CI-only. E.38 açık. Public testnet planned/unreleased.",
     "yp": "Yellow Paper",
     "agent": "Agent",
     "teaser": "Teaser",
     "exportFail": "Ledger dışa aktarılamadı."
   },
   "en": {
-    "intro": "FLOP testnet readiness as checked on 3 Nov 2026 against Yellow Paper v0.5.0 / D-0440 and the official network status. This is a static snapshot, not a guaranteed airdrop or eligibility estimate.",
+    "intro": "Current FLOP testnet readiness against Yellow Paper v0.5.0 and official network sources. This is not an airdrop or eligibility estimate.",
     "badge": "Yellow Paper v0.5.0 · D-0440 · draft",
-    "endpoint": "On 3 Nov 2026 the official public Testnet operator page still read planned/unreleased, with no verified public faucet, RPC or agent enrollment. Devnet is development-only and earns no airdrop weight. Mainnet/TGE Q1 2027 is a working target, not a guarantee.",
+    "endpoint": "Checked 10 Nov 2026: the official testnet page remains planned/unreleased. No public testnet launch is confirmed. Devnet lists public development endpoints, but validator admission remains administrator-assisted and earns no reward or airdrop weight.",
     "unlockLabel": "Testnet local records prove no mainnet unlock",
     "spendTitle": "Mainnet locked Agent grant illustration",
     "spendIntro": "Under Yellow Paper R8.7–R8.8, only eligible finalized inference payable sourced from locked principal of a mainnet Agent grant accrues unlock credit: 3 FLOP payable per 1 FLOP unlocked, after the dispute window, with locked spending capped at 75% of principal. Testnet ledger entries do not unlock grants.",
     "plan3": "3 · Verify real inference settlement",
     "plan3d": "Follow officially settled-compute scoring and evidence rules on testnet. E.38 still leaves conversion score, identity and caps open; a browser entry is not proof.",
-    "source": "Source snapshot 3 Nov 2026: Yellow Paper v0.5.0 (updated 24 Sep), D-0440 supply 4.4B FLOP: 1.2B miner, 1.2B validator, 1.2B agent, 800M reserve. GitHub mirror synced 24 Sep. R8.7–R8.8 define grant unlocking; E.38 conversion scoring remains open. Public Testnet still planned/unreleased.",
+    "source": "Source check 10 Nov 2026: Yellow Paper v0.5.0 draft. Live page says updated 24 Sep; GitHub content file updated 26 Oct and repository head on 5 Nov is CI-only. E.38 remains open. Public testnet remains planned/unreleased.",
     "yp": "Yellow Paper",
     "agent": "Agent",
     "teaser": "Teaser",

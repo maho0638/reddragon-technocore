@@ -6,6 +6,11 @@ const FP_RE = /^[0-9a-f]{16}$/;
 const BASE = "https://technocore.chat";
 const MAX_JSON_BYTES = 32 * 1024;
 const READ_STAGGER_ROOMS = ["lobby", "technocore", "flop-network", "kibble", "validators", "gpu-miners"];
+// Best-effort per-instance limits for the public serverless relay. Durable,
+// cross-instance quotas would require shared storage, which this project does not use.
+const RATE_WINDOW_MS = 60_000;
+const RATE_LIMITS = Object.freeze({ read: 60, write: 10 });
+const rateBuckets = new Map();
 
 function cleanSingleLine(text) {
   return String(text || "")
@@ -30,6 +35,46 @@ function harden(res) {
   res.setHeader("cache-control", "no-store");
   res.setHeader("x-content-type-options", "nosniff");
   res.setHeader("referrer-policy", "no-referrer");
+}
+
+function clientKey(req) {
+  // Vercel supplies the client address. Prefer its normalized address header,
+  // then the final platform-added address in the forwarding chain.
+  const real = String(req.headers["x-real-ip"] || "").trim();
+  const forwarded = String(req.headers["x-forwarded-for"] || "").split(",").map((part) => part.trim()).filter(Boolean);
+  const address = real || forwarded.at(-1) || req.socket?.remoteAddress || req.ip || "unknown";
+  return address.slice(0, 96);
+}
+
+function rateLimit(req, res, action) {
+  const category = action === "signedPost" || action === "kvSet" ? "write" : "read";
+  const key = `${clientKey(req)}:${category}`;
+  const now = Date.now();
+  let bucket = rateBuckets.get(key);
+  if (!bucket || now - bucket.startedAt >= RATE_WINDOW_MS) {
+    bucket = { startedAt: now, count: 0 };
+    rateBuckets.set(key, bucket);
+  }
+  bucket.count++;
+
+  // Bound memory if an instance receives many distinct client addresses.
+  if (rateBuckets.size > 5000) {
+    for (const [oldKey, oldBucket] of rateBuckets) {
+      if (now - oldBucket.startedAt >= RATE_WINDOW_MS) rateBuckets.delete(oldKey);
+    }
+    while (rateBuckets.size > 5000) rateBuckets.delete(rateBuckets.keys().next().value);
+  }
+
+  const limit = RATE_LIMITS[category];
+  const remaining = Math.max(0, limit - bucket.count);
+  const resetSeconds = Math.ceil((bucket.startedAt + RATE_WINDOW_MS) / 1000);
+  res.setHeader("x-ratelimit-limit", String(limit));
+  res.setHeader("x-ratelimit-remaining", String(remaining));
+  res.setHeader("x-ratelimit-reset", String(resetSeconds));
+  if (bucket.count <= limit) return false;
+  res.setHeader("retry-after", String(Math.max(1, resetSeconds - Math.ceil(now / 1000))));
+  bad(res, 429, "Relay rate limit exceeded; retry after the current one-minute window");
+  return true;
 }
 
 function bad(res, status, error) {
@@ -147,6 +192,7 @@ export default async function handler(req, res) {
     return bad(res, 415, "application/json required");
   }
   if (!bodySizeOk(req.body)) return bad(res, 413, "Request too large");
+  if (rateLimit(req, res, req.body?.action)) return;
 
   try {
     const { action, room = "lobby", did, sig, nonce, text, since, ns, key, value } = req.body || {};
@@ -232,3 +278,5 @@ export default async function handler(req, res) {
     return bad(res, timeout ? 504 : 502, timeout ? "Technocore timeout" : (e?.message || "Relay error"));
   }
 }
+
+export const __test = { rateBuckets, rateLimit, clientKey, RATE_LIMITS };

@@ -36,15 +36,17 @@ test("public supply and cohort allocations agree with signed manifest", async ()
   assert.equal(s.project.xUrl, "https://x.com/lionmousse");
   assert.equal(m.projectX, s.project.xUrl);
   assert.equal(m.did, did);
-  assert.equal(s.checkedAt, "2026-11-03");
+  assert.equal(s.checkedAt, "2026-11-10");
 });
 
-test("resolved mirror mismatch is not advertised as current", async () => {
+test("newer paper-content drift is distinct from CI-only repository head", async () => {
   const s = await json("public/flop-source-status.json");
   const page = await read("public/flop.html");
-  assert.deepEqual(s.sourceDrift, []);
-  assert.equal(s.resolvedSourceDrift[0].status, "resolved");
-  assert.match(page, /GitHub mirror caught up/);
+  assert.equal(s.sourceDrift[0].status, "open");
+  assert.equal(s.authoritative.githubMirrorContentCommit.date, "2026-10-26");
+  assert.equal(s.authoritative.githubRepositoryHead.date, "2026-11-05");
+  assert.match(s.authoritative.githubRepositoryHead.message, /^ci\(/);
+  assert.match(page, /Yellow Paper file history/);
   assert.doesNotMatch(page, /still shows the older 3\.5B|currently stale versus live/i);
 });
 
@@ -54,10 +56,13 @@ test("testnet remains fail-closed and devnet has no airdrop weight", async () =>
   assert.equal(s.roadmap.officialFaucetEndpointVerifiedLive, false);
   assert.equal(s.roadmap.officialInferenceEndpointVerifiedLive, false);
   assert.equal(s.roadmap.devnetEarnsAirdropWeight, false);
+  assert.equal(s.roadmap.publicDevnetModelCatalog, "https://api.flop.network/v1/models");
+  assert.equal(s.roadmap.validatorPackage, "0.4.1-devnet.1 (explorer page; administrator-assisted access)");
   const page = await read("public/flop.html");
   assert.match(page, /https:\/\/docs\.flop\.network\/networks\/testnet/);
   assert.match(page, /https:\/\/docs\.flop\.network\/networks\/devnet/);
-  assert.match(page, /Devnet activity earns no rewards/i);
+  assert.match(page, /timeline FAQ, updated 30 October, says devnet earns nothing and has no reward or airdrop weight/i);
+  assert.match(page, /https:\/\/docs\.flop\.network\/docs\/testnet-and-timeline/);
 });
 
 test("agent unlock is specified, but local testnet logs do not imply unlocked funds", async () => {
@@ -65,6 +70,7 @@ test("agent unlock is specified, but local testnet logs do not imply unlocked fu
   assert.equal(s.authoritative.airdropMechanics.spendToUnlockRatifiedInYellowPaper, true);
   assert.equal(s.authoritative.airdropMechanics.notATestnetRewardEstimate, true);
   const toolkit = await read("public/testnet-toolkit.js");
+  const didUtils = await read("public/flop-did-utils.js");
   const spec = await read("public/flop-spec-refresh.js");
   assert.match(toolkit, /return \{claimed,spent,unlock:null\}/);
   assert.match(toolkit, /const required=allocation\*0\.75/);
@@ -83,4 +89,51 @@ test("canonical identity and HTML metadata remain unchanged", async () => {
   assert.match(page, /<link rel="canonical" href="https:\/\/reddragon-technocore\.vercel\.app\/flop"/);
   assert.match(cfg, new RegExp(did.replace(/[.*+?^$\{\}()|[\]\\]/g, "\\$&")));
   assert.equal((page.match(/<article class="status-card/g) || []).length, 9);
+});
+
+test("live source checks, bilingual status view and per-DID local log are wired without replacing RedDragon identity", async () => {
+  const page = await read("public/flop.html");
+  const status = await read("api/flop-status.js");
+  const view = await read("public/flop-live-status.js");
+  const toolkit = await read("public/testnet-toolkit.js");
+  const didUtils = await read("public/flop-did-utils.js");
+  const config = await read("public/config.js");
+  assert.match(page, /id="flop-live-status"/);
+  assert.match(status, /AbortController/);
+  assert.match(status, /MAX_BYTES/);
+  assert.match(view, /reddragon-lang/);
+  assert.match(didUtils, /reddragon-flop-testnet-ledger:\$\{did\}/);
+  assert.match(toolkit, /rdIsPublicEd25519Did/);
+  assert.match(didUtils, /bytes\[0\]\s*===\s*0xed\s*&&\s*bytes\[1\]\s*===\s*0x01/);
+  assert.match(toolkit, /not on-chain proof|not chain-verified/i);
+  assert.match(config, /"\/flop-live-status\.js"/);
+  assert.match(toolkit, new RegExp(did.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  assert.doesNotMatch(toolkit, /rdLedgerDid.*value=.?did:key/);
+});
+
+test("DID provenance separates the owned room from historical proof and validates only published note fields", async () => {
+  const manifest = await json("public/reddragon-contribution.json");
+  const legacy = await read("public/did-provenance.js");
+  const current = await read("public/provenance-room-refresh.js");
+  const owned = manifest.ownedRoom;
+  const proof = manifest.manifestProofRoom;
+  assert.equal(owned, "d-reddragon-835ae177");
+  assert.equal(proof, "d-reddragon-lab");
+  assert.match(legacy, new RegExp(`const RD_PROV_ROOM = "${owned}"`));
+  assert.match(current, new RegExp(`const RD_PROV_FIX_ROOM = "${owned}"`));
+  assert.match(current, new RegExp(`const RD_PROV_FIX_PROOF_ROOM = "${proof}"`));
+  assert.ok(current.includes("didNote.split(/\\s+/).includes(RD_PROV_FIX_CAP)"));
+  assert.doesNotMatch(current, /didNote\.includes\(`mailbox:/);
+  const startup = legacy.slice(legacy.indexOf("function rdProvStart()"));
+  assert.doesNotMatch(startup, /rdProvRefreshSelf\(\)/);
+  assert.match(startup, /rdProvRefreshMailbox\(\)/);
+});
+
+test("live status reports the dated testnet conflict and only repeats verified reward/token claims", async () => {
+  const view = await read("public/flop-live-status.js");
+  const api = await read("api/flop-status.js");
+  assert.match(api, /testnetOpenClaim:\s*\/testnet is open\/i/);
+  assert.match(view, /timeline\.state === "verified" && timeline\.testnetOpenClaim/);
+  assert.match(view, /official\.tokenClaim === true \? c\.noToken : c\.tokenChanged/);
+  assert.match(view, /data\.devnet\?\.rewards === "none" && data\.timeline\?\.state === "verified"/);
 });

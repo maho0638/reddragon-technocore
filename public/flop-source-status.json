@@ -1,10 +1,12 @@
 {
   "schema": "reddragon-flop-source-status/v1",
-  "checkedAt": "2026-11-03",
+  "checkedAt": "2026-11-10",
   "project": {
     "name": "RedDragon FLOP Community Observatory",
     "site": "https://reddragon-technocore.vercel.app/flop",
     "repository": "https://github.com/maho0638/reddragon-technocore",
+    "liveStatusApi": "/api/flop-status",
+    "statusMode": "Live read-only checks; this JSON remains the conservative checked snapshot",
     "llms": "https://reddragon-technocore.vercel.app/llms.txt",
     "independentCommunityTool": true,
     "affiliatedWithFlopLabs": false,
@@ -15,6 +17,17 @@
     "source": "FLOP Network Yellow Paper",
     "version": "0.5.0 (draft / implementation spec — iterating)",
     "updated": "2026-09-24",
+    "githubMirrorContentCommit": {
+      "sha": "56410c67b11292e707d32ef32e9c4ff9c02e28c7",
+      "date": "2026-10-26",
+      "message": "docs(yellowpaper): sync 0.5.0 (draft) from flop-core@dfd98a59"
+    },
+    "githubRepositoryHead": {
+      "sha": "2a2cc8218048a2933071bb2f45d75335560e39d8",
+      "date": "2026-11-05",
+      "message": "ci(triage): use the context-aware public classifier (#237)"
+    },
+    "mirrorContentDrift": "The public FLOP page says Updated 2026-09-24; the GitHub yellowpaper.md file changed 2026-10-26. The GitHub repository head on 2026-11-05 is CI-only and is not a paper content update.",
     "url": "https://flop.finance/intro/yellowpaper/",
     "githubMirror": "https://github.com/flop-labs/yellowpaper",
     "decision": "D-0440",
@@ -53,15 +66,33 @@
     "spendToUnlockScenario": "3 FLOP inference spend -> 1 airdropped FLOP unlocked",
     "alignedWithLiveYellowPaperOnGenesisSupply": true
   },
-  "sourceDrift": [],
+  "sourceDrift": [
+    {
+      "id": "live-yellowpaper-vs-github-content-2026-10-26",
+      "status": "open",
+      "description": "The public FLOP Yellow Paper page still labels itself Updated 2026-09-24, while the GitHub yellowpaper.md was updated 2026-10-26 at 56410c6. The GitHub repository head from 2026-11-05 (2a2cc82) is CI-only, so it must not be reported as a later protocol-text change.",
+      "livePage": "https://flop.finance/intro/yellowpaper/",
+      "contentHistory": "https://github.com/flop-labs/yellowpaper/commits/main/yellowpaper.md",
+      "repositoryHead": "https://github.com/flop-labs/yellowpaper/commits/main"
+    }
+  ],
   "roadmap": {
     "testnet": "Q4 2026; 3 November was a working target, not confirmed launch",
     "mainnet": "Q1 2027 target",
     "officialFaucetEndpointVerifiedLive": false,
     "officialInferenceEndpointVerifiedLive": false,
-    "testnetNetworkStatus": "planned / next (unreleased) as of 2026-11-03",
-    "devnetNetworkStatus": "development / next (unreleased), administrator-reviewed admission",
+    "testnetNetworkStatus": "planned / next (unreleased) as of 2026-11-10; launch not confirmed",
+    "devnetNetworkStatus": "public development endpoints are listed; operator admission is administrator-assisted and public self-service testnet onboarding is unavailable",
     "devnetEarnsAirdropWeight": false,
+    "publicDevnetRpc": "wss://rpc.devnet.flop.network",
+    "publicDevnetGateway": "https://api.flop.network",
+    "publicDevnetModelCatalog": "https://api.flop.network/v1/models",
+    "faucetEndpointPublished": "https://faucet.flop.network",
+    "devnetRpcGenesisVerifiedAtSnapshot": false,
+    "sdkVersionsSource": "https://docs.flop.network/docs/sdk-references (last updated 2026-10-30; registry is authoritative if versions differ)",
+    "validatorPackage": "0.4.1-devnet.1 (explorer page; administrator-assisted access)",
+    "validatorManualVersion": "0.4.0-devnet.1 (docs page last updated 2026-11-06)",
+    "validatorVersionConflict": "The current explorer page and validator manual show different package versions. The package listing is newer, but admission remains administrator-assisted.",
     "testnetOperatorUrl": "https://docs.flop.network/networks/testnet",
     "devnetOperatorUrl": "https://docs.flop.network/networks/devnet"
   },
@@ -85,12 +116,12 @@
     "https://docs.flop.network/networks/devnet",
     "https://docs.flop.network/docs/testnet-and-timeline"
   ],
-  "disclaimer": "Independent community status snapshot checked 2026-11-03, not live monitoring. Check linked official network pages for subsequent launches. FLOP Labs controls the actual release, rewards, conversion and eligibility. A DID, faucet token or token balance by itself does not guarantee allocation.",
+  "disclaimer": "Independent community status snapshot checked 2026-11-10. The live status endpoint checks allowlisted official sources; an unreachable or malformed source is reported as unverified. FLOP Labs controls the actual release, rewards, conversion and eligibility. Devnet activity earns no rewards or airdrop weight. A DID, faucet note or balance does not guarantee allocation.",
   "resolvedSourceDrift": [
     {
       "id": "github-mirror-d0440-2026-09-24",
-      "status": "resolved",
-      "description": "GitHub Yellow Paper mirror synchronized to D-0440 on 24 September 2026; public mirror and live spec now both state 4.4B genesis.",
+      "status": "resolved-at-the-time; newer freshness drift tracked in sourceDrift",
+      "description": "The 3.5B vs 4.4B D-0440 mismatch was resolved on 2026-09-24. A later GitHub content update dated 2026-10-26 now differs by freshness from the live page dated 2026-09-24.",
       "upstreamIssue": "https://github.com/flop-labs/yellowpaper/issues/54"
     }
   ]

@@ -83,6 +83,7 @@ window.APP_CONFIG = {
     "/provenance-room-refresh.js",
     "/testnet-toolkit.js",
     "/flop-spec-refresh.js",
+    "/flop-live-status.js",
     "/tclk-workbench.js",
     "/community-positioning.js"
   ];
