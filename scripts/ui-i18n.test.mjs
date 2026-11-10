@@ -59,6 +59,18 @@ test("onboarding and proof-import UI copy uses shared translations in both langu
   assert.ok(proofImport.includes('window.RD_I18N.t("app.proofImportNote")'));
 });
 
+test("X sharing opens a localized compose intent and provenance acceptance targets the live refresh control", () => {
+  for (const lang of ["en", "tr"]) {
+    assert.ok(i18n.t("patch.siteShareDraft", { site: "https://example.test", handle: "@example" }, lang).includes("https://example.test"));
+    assert.ok(i18n.t("app.xShareDraft", { handle: "@example", did: "did:key:z6Mk-test", url: "https://example.test", room: "lobby", seq: "1" }, lang).includes("did:key:z6Mk-test"));
+  }
+  assert.match(enhancements, /window\.RD_I18N\.t\("app\.xShareDraft"/);
+  assert.match(enhancements, /xIntent\(proofShareText\(\)\)/);
+  assert.match(productionBrowserAudit, /__qaExternalIntents/);
+  assert.match(productionBrowserAudit, /#rdDidProvenance[\s\S]*#rdProvFixRefresh/);
+  assert.match(productionBrowserAudit, /Kanıtı yenile/);
+});
+
 test("live-status API failure localizes both status panels without an undefined-language exception", () => {
   assert.match(flopStatus, /catch\s*\{\s*const lang = getLang\(\);\s*const failureCopy = FLOP_STATUS_COPY\[lang\];\s*renderFailure\(lang\);/);
   assert.match(flopStatus, /const t = failureCopy;/);

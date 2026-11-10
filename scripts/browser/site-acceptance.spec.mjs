@@ -179,9 +179,30 @@ test("local identity, validation and signed UI workflows with mocked relay (NO e
     assert.match((await proofDownloadEvent).suggestedFilename(), /reddragon-proof-.*\.json/);testedActions++;
     await page.locator("#copyProof").click();
     assert.match(await page.evaluate(() => navigator.clipboard.readText()), /"did":\s*"did:key:z6Mk/);testedActions++;
+    await page.evaluate(() => {
+      window.__qaExternalIntents = [];
+      window.open = (url) => { window.__qaExternalIntents.push(String(url)); return { opener: null }; };
+    });
     await page.locator("#xShare").click();
-    await page.waitForFunction(() => /X post text copied|X paylaşım metni kopyalandı/.test(document.querySelector("#toast")?.textContent || ""));
-    assert.match(await page.evaluate(() => navigator.clipboard.readText()), /#Technocore #FLOP/);testedActions++;
+    let intentUrls = await page.evaluate(() => window.__qaExternalIntents.splice(0));
+    assert.equal(intentUrls.length, 1, "X share should open one intercepted compose intent");
+    let intent = new URL(intentUrls[0]);
+    assert.equal(intent.origin, "https://x.com");
+    assert.match(intent.pathname, /\/intent\/tweet$/);
+    let shareText = intent.searchParams.get("text") || "";
+    assert.match(shareText, /Built my Technocore agent identity/);
+    assert.match(shareText, /did:key:z6Mk/);
+    assert.match(shareText, /#Technocore #FLOP/);testedActions++;
+    await page.evaluate(() => localStorage.setItem("reddragon-lang", "tr"));
+    await page.locator("#xShare").click();
+    intentUrls = await page.evaluate(() => window.__qaExternalIntents.splice(0));
+    assert.equal(intentUrls.length, 1, "Turkish X share should open one intercepted compose intent");
+    intent = new URL(intentUrls[0]);
+    shareText = intent.searchParams.get("text") || "";
+    assert.match(shareText, /Technocore ajan kimliğimi oluşturdum/);
+    assert.match(shareText, /did:key:z6Mk/);
+    assert.match(shareText, /#Technocore #FLOP/);testedActions++;
+    await page.evaluate(() => localStorage.setItem("reddragon-lang", "en"));
     await page.locator("#copyAutoGuide").click();
     assert.match(await page.evaluate(() => navigator.clipboard.readText()), /TECHNOCORE_PRIVATE_KEY_PKCS8_B64/);testedActions++;
     page.once("dialog",d=>d.accept());
@@ -236,16 +257,24 @@ test("user-specific ledger, calculators and panel controls (desktop and mobile)"
       await page.waitForFunction(() => !document.querySelector("#rdTclkRefresh")?.disabled);
       assert.match(await page.locator("#rdTclkStatus").textContent(),/waiting|partial|verified|bekliyor|kısmi|doğrulandı/i);testedActions++;
 
-      await page.locator("#rdProvRefresh").waitFor({state:"visible"});
-      await activate(page.locator("#rdProvRefresh"),size);
-      await page.waitForFunction(() => !document.querySelector("#rdProvRefresh")?.disabled);
-      assert.match(await page.locator("#rdProvSummary").textContent(),/chain|proof|kanıt|Technocore/i);testedActions++;
-
+      await page.locator("#rdDidProvenance").waitFor({state:"visible"});
       await page.locator("#rdProvFixRefresh").waitFor({state:"visible"});
+      assert.equal(await page.locator("#rdProvRefresh").count(),0,"the legacy refresh is replaced when the provenance card is rebuilt");
+      assert.match(await page.locator("#rdProvFixRefresh").textContent(),/Refresh proof/i);
       await page.waitForFunction(() => !document.querySelector("#rdProvFixRefresh")?.disabled);
       await activate(page.locator("#rdProvFixRefresh"),size);
       await page.waitForFunction(() => !document.querySelector("#rdProvFixRefresh")?.disabled);
       assert.match(await page.locator("#rdProvFixSummary").textContent(),/proof|kanıt|verified|doğrulanamadı/i);testedActions++;
+      await page.evaluate(() => localStorage.setItem("reddragon-lang", "tr"));
+      await page.reload({waitUntil:"domcontentloaded"});
+      await page.locator("#rdDidProvenance").waitFor({state:"visible"});
+      const localizedProvRefresh=page.locator("#rdProvFixRefresh");
+      await localizedProvRefresh.waitFor({state:"visible"});
+      assert.equal((await localizedProvRefresh.textContent()).trim(),"Kanıtı yenile");
+      await page.waitForFunction(() => !document.querySelector("#rdProvFixRefresh")?.disabled);
+      await activate(localizedProvRefresh,size);
+      await page.waitForFunction(() => !document.querySelector("#rdProvFixRefresh")?.disabled);
+      assert.match(await page.locator("#rdProvFixSummary").textContent(),/kanıt|doğrulanamadı/i);testedActions++;
 
       await page.locator("#rdMailboxRefresh").waitFor({state:"visible"});
       await activate(page.locator("#rdMailboxRefresh"),size);

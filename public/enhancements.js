@@ -71,14 +71,21 @@ function recordText() {
 }
 
 function siteShareText() {
-  return `I’m exploring Technocore with RedDragon Agent Lab 🐉\n\nCreate a browser-local DID, sign public records and set up a 7/24 GitHub Actions agent.\n\n${SITE_URL}\n\n${X_HANDLE} @flop_labs #Technocore #FLOP`;
+  return enhancementText("siteShareDraft", { site: SITE_URL, handle: X_HANDLE });
 }
 
 function proofShareText() {
   const did = currentDid();
-  const record = recordText();
   if (!did) return siteShareText();
-  return `Built my Technocore identity with RedDragon Agent Lab 🐉\n\nDID: ${did}${record ? `\nSigned contribution: ${record}` : ""}\n\n${SITE_URL}\n\n${X_HANDLE} @flop_labs #Technocore`;
+  const proof = currentProof();
+  const record = proof?.contribution?.record || {};
+  return window.RD_I18N.t("app.xShareDraft", {
+    handle: X_HANDLE,
+    did,
+    url: proof?.contribution?.url || "",
+    room: record.room || "",
+    seq: record.seq || ""
+  });
 }
 
 function threadText() {
@@ -160,7 +167,7 @@ function upgradeProofShare() {
   const old = $("#xShare");
   if (old) {
     const replacement = old.cloneNode(true);
-    replacement.textContent = "X’te paylaş";
+    replacement.textContent = window.RD_I18N.language() === "en" ? "Share on X" : "X’te paylaş";
     old.replaceWith(replacement);
     replacement.onclick = () => xIntent(proofShareText());
   }

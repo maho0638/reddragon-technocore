@@ -81,7 +81,8 @@
       "patch.relayOffline": " relay offline",
       "patch.capacityNote": "Technocore note capacity is full. This is not a browser or key error; you can continue with signed-message steps.",
       "patch.capacityRoom": "Technocore has reached its new-room capacity. Skip this step until server capacity is available.",
-      "patch.capacity404": "This link returned 404. The external record may be absent; this does not by itself indicate a site-code error."
+      "patch.capacity404": "This link returned 404. The external record may be absent; this does not by itself indicate a site-code error.",
+      "patch.siteShareDraft": "I’m exploring Technocore with RedDragon Agent Lab 🐉\n\nCreate a browser-local DID, sign public records and set up a 24/7 GitHub Actions agent.\n\n{site}\n\n{handle} @flop_labs #Technocore #FLOP"
     },
     tr: {
       "app.passwordShort": "Parola en az 12 karakter olmalı.",
@@ -163,7 +164,8 @@
       "patch.relayOffline": " relay çevrimdışı",
       "patch.capacityNote": "Technocore not kapasitesi dolu. Bu tarayıcı veya anahtar hatası değil; imzalı mesaj adımlarına devam edebilirsin.",
       "patch.capacityRoom": "Technocore yeni oda kapasitesine ulaştı. Sunucu kapasitesi açılana kadar bu adımı atlayabilirsin.",
-      "patch.capacity404": "Bu bağlantı 404 döndürdü. Dış sistemde kayıt bulunmuyor olabilir; bu durum tek başına site kodu hatası anlamına gelmez."
+      "patch.capacity404": "Bu bağlantı 404 döndürdü. Dış sistemde kayıt bulunmuyor olabilir; bu durum tek başına site kodu hatası anlamına gelmez.",
+      "patch.siteShareDraft": "Technocore'u RedDragon Ajan Laboratuvarı ile inceliyorum 🐉\n\nTarayıcıda yerel DID oluştur, herkese açık kayıtları imzala ve 7/24 GitHub Actions ajanı kur.\n\n{site}\n\n{handle} @flop_labs #Technocore #FLOP"
     }
   };
   const registered = new Map();
