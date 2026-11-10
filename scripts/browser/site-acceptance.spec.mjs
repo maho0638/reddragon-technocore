@@ -102,7 +102,14 @@ test("home and FLOP links, menus, languages, refresh, desktop + two mobile width
       await page.locator("#rdLangSwitcher button[data-lang='tr']").click();
       await page.waitForFunction(() => document.documentElement.lang === "tr");testedActions += 2;
       await overflow(page, "home-" + size.name);
-      await page.locator("a[href='/flop']").first().click();
+      const flopLink = page.locator("a[href='/flop']").first();
+      if (await flopLink.isVisible()) {
+        await activate(flopLink, size);
+      } else {
+        const heroFlopLink = page.locator(".hero-actions a[href='/flop']");
+        assert.equal(await heroFlopLink.isVisible(), true, size.name + " must expose a touchable FLOP navigation CTA");
+        await activate(heroFlopLink, size);
+      }
       await page.waitForURL(/\/flop\/?$/);
       await ready(page, "#flop-live-status");testedActions++;
       await inventory(page, "flop-" + size.name);
@@ -173,6 +180,7 @@ test("local identity, validation and signed UI workflows with mocked relay (NO e
     await page.locator("#copyProof").click();
     assert.match(await page.evaluate(() => navigator.clipboard.readText()), /"did":\s*"did:key:z6Mk/);testedActions++;
     await page.locator("#xShare").click();
+    await page.waitForFunction(() => /X post text copied|X paylaşım metni kopyalandı/.test(document.querySelector("#toast")?.textContent || ""));
     assert.match(await page.evaluate(() => navigator.clipboard.readText()), /#Technocore #FLOP/);testedActions++;
     await page.locator("#copyAutoGuide").click();
     assert.match(await page.evaluate(() => navigator.clipboard.readText()), /TECHNOCORE_PRIVATE_KEY_PKCS8_B64/);testedActions++;
