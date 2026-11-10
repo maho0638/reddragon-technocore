@@ -154,7 +154,7 @@ test("main page boots from empty storage and translates in desktop and mobile", 
       assert.match(await page.locator("#brandSub").textContent(), /Community Observatory/);
       assert.match(await page.locator("#rdDidProvenance .rd-prov-head h2").textContent(), /who built this tool/i);
       assert.equal(await page.locator("#rdDidProvenance .rd-prov-kv span").first().textContent(), "Ownership claim");
-      assert.equal(await page.locator("#rdDidProvenance .rd-prov-kv span").nth(2).textContent(), "Mailbox channel");
+      assert.equal(await page.locator("#rdDidProvenance .rd-prov-kv span").nth(3).textContent(), "Mailbox channel");
       assert.match(await page.locator("#rdTestnetToolkit h2").textContent(), /testnet-ready/i);
       assert.match(await page.locator("#rdTclkWorkbench .rd-tclk-head p").textContent(), /verifiable agent-to-agent/i);
       await page.waitForFunction(() => /proof signals|core proof/i.test(document.querySelector("#rdProvFixSummary")?.textContent || ""));
@@ -172,7 +172,7 @@ test("main page boots from empty storage and translates in desktop and mobile", 
       assert.match(await page.locator("#brandSub").textContent(), /Topluluk Gözlemevi/);
       assert.match(await page.locator("#rdDidProvenance .rd-prov-head h2").textContent(), /bu aracı kim geliştirdi/i);
       assert.equal(await page.locator("#rdDidProvenance .rd-prov-kv span").first().textContent(), "Sahiplik beyanı");
-      assert.equal(await page.locator("#rdDidProvenance .rd-prov-kv span").nth(2).textContent(), "Posta kutusu kanalı");
+      assert.equal(await page.locator("#rdDidProvenance .rd-prov-kv span").nth(3).textContent(), "Posta kutusu kanalı");
       assert.match(await page.locator("#rdTestnetToolkit h2").textContent(), /testnet'e hazır mısın/i);
       assert.match(await page.locator("#rdTclkWorkbench .rd-tclk-head p").textContent(), /doğrulanabilir ajanlar arası/i);
       await page.waitForFunction(() => /kanıt|doğrulanamadı/i.test(document.querySelector("#rdProvFixSummary")?.textContent || ""));
@@ -315,7 +315,9 @@ test("DID create, encrypted backup, restore, prompts and mocked signed flows wor
       promptText = restorePrompt.message();
       await restorePrompt.accept("ephemeral-browser-only-password");
       const restoredText = locale === "tr" ? "Kimlik geri yüklendi." : "Identity restored.";
-      await page.waitForFunction(expected => (document.querySelector("#toast")?.textContent || "").trim() === expected, restoredText);
+      const restoreFailedText = locale === "tr" ? "Yedek açılamadı veya parola yanlış." : "The backup could not be opened or the password was incorrect.";
+      await page.waitForFunction(expected => [expected.success, expected.failed].includes((document.querySelector("#toast")?.textContent || "").trim()), { success: restoredText, failed: restoreFailedText }, { timeout: 12_000 });
+      assert.equal((await page.locator("#toast").textContent()).trim(), restoredText, "encrypted backup should decrypt and restore in browser");
       await page.waitForFunction(expected => (document.querySelector("#identityOut")?.textContent || "").startsWith(expected), did);
       assert.equal((await page.locator("#identityOut").textContent()).split("\n")[0].trim(), did);
       assert.equal(promptText, locale === "tr" ? "Yedek parolasını gir:" : "Enter the backup password:");

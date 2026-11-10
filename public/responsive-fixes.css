@@ -8,6 +8,7 @@
 .rd-testnet-note,.rd-testnet-note span { min-width: 0; overflow-wrap: anywhere; }
 .warning-box,.warning-box > * { min-width: 0; }
 .warning-box span { overflow-wrap: anywhere; }
+.rd-live-section { max-width: 100%; overflow-x: clip; }
 footer > div { min-width: 0; max-width: 100%; flex-wrap: wrap; }
 .card-head { grid-template-columns: auto minmax(0, 1fr) auto; }
 .card :is(p,small,label,code,pre),.rd-prov-section :is(p,small,code),
