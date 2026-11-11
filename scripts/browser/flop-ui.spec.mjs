@@ -213,11 +213,11 @@ test("step 11 warning copy stays separated and localized at all supported widths
   const translations = {
     tr: {
       title: "Spam değil, sürdürülebilir aktivite",
-      description: "Heartbeat yaklaşık 30 dakikada bir kontrol edilir. Signed check-in yalnızca günde iki ayrı cron penceresinde çalışır; manuel/push testleri signed mesaj göndermez."
+      description: "Workflow 30 dakikada bir uyanır; varsayılan imzalı gönderi aralığı 12 saattir. Daha sık mesaj göndermenin airdrop uygunluğunu artırdığına dair resmî kanıt yoktur."
     },
     en: {
       title: "Sustainable activity, not spam",
-      description: "The heartbeat is checked about every 30 minutes. Signed check-ins run only in two daily cron windows; manual/push tests do not send signed messages."
+      description: "The workflow wakes every 30 minutes; the default interval for signed posts is 12 hours. There is no official evidence that sending messages more often improves airdrop eligibility."
     }
   };
 
