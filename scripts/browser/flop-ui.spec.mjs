@@ -55,9 +55,9 @@ async function newPage(viewport, preferredLocale) {
   await context.addInitScript((locale) => {
     if (!sessionStorage.getItem("__rdBrowserSmokeInitialized")) {
       localStorage.clear();
+      if (locale === "tr" || locale === "en") localStorage.setItem("reddragon-lang", locale);
       sessionStorage.setItem("__rdBrowserSmokeInitialized", "1");
     }
-    if (locale === "tr" || locale === "en") localStorage.setItem("reddragon-lang", locale);
   }, preferredLocale);
   await context.route("**/api/flop-status", (route) => route.fulfill({
     status: 200, contentType: "application/json", body: JSON.stringify(statusFixture)
@@ -205,6 +205,74 @@ test("main page boots from empty storage and translates in desktop and mobile", 
       assert.equal((await page.locator("#toast").textContent()).trim(), "Parola en az 12 karakter olmalı.");
       await assertNoHorizontalOverflow(page);
       assert.deepEqual(errors, [], `${viewport.name} page errors`);
+    } finally { await context.close(); }
+  }
+});
+
+test("step 11 warning copy stays separated and localized at all supported widths", async () => {
+  const translations = {
+    tr: {
+      title: "Spam değil, sürdürülebilir aktivite",
+      description: "Workflow 30 dakikada bir uyanır; varsayılan imzalı gönderi aralığı 12 saattir. Daha sık mesaj göndermenin airdrop uygunluğunu artırdığına dair resmî kanıt yoktur."
+    },
+    en: {
+      title: "Sustainable activity, not spam",
+      description: "The workflow wakes every 30 minutes; the default interval for signed posts is 12 hours. There is no official evidence that sending messages more often improves airdrop eligibility."
+    }
+  };
+
+  for (const viewport of viewports) {
+    const { context, page } = await newPage(viewport, "tr");
+    try {
+      await page.goto(`${baseURL}/`);
+      const warning = page.locator('[data-step="11"] > .warning-box');
+      const heading = warning.locator("b");
+      const description = warning.locator("span");
+      await heading.waitFor({ state: "visible" });
+
+      for (const locale of ["tr", "en"]) {
+        if (await page.locator("html").getAttribute("lang") !== locale) {
+          await Promise.all([
+            page.waitForNavigation({ waitUntil: "load" }),
+            page.locator('#rdLangSwitcher button[data-lang="' + locale + '"]').click()
+          ]);
+        }
+        const observed = await page.evaluate(() => ({
+          htmlLang: document.documentElement.lang,
+          storedLang: localStorage.getItem("reddragon-lang"),
+          title: document.querySelector('[data-step="11"] > .warning-box b')?.textContent?.trim() ?? null,
+          description: document.querySelector('[data-step="11"] > .warning-box span')?.textContent?.trim() ?? null
+        }));
+        console.log("step11 locale " + viewport.name + "/" + locale + ": " + JSON.stringify(observed));
+        assert.equal(observed.htmlLang, locale, viewport.name + "/" + locale + " html.lang");
+        assert.equal(observed.storedLang, locale, viewport.name + "/" + locale + " localStorage");
+        assert.equal(observed.title, translations[locale].title, viewport.name + "/" + locale + " title");
+        assert.equal(observed.description, translations[locale].description, viewport.name + "/" + locale + " description");
+
+        const geometry = await warning.evaluate((box) => {
+          const title = box.querySelector("b");
+          const copy = box.querySelector("span");
+          const boxRect = box.getBoundingClientRect();
+          const titleRect = title.getBoundingClientRect();
+          const copyRect = copy.getBoundingClientRect();
+          return {
+            box: { left: boxRect.left, right: boxRect.right, top: boxRect.top, bottom: boxRect.bottom },
+            title: { left: titleRect.left, right: titleRect.right, top: titleRect.top, bottom: titleRect.bottom },
+            copy: { left: copyRect.left, right: copyRect.right, top: copyRect.top, bottom: copyRect.bottom },
+            titleDisplay: getComputedStyle(title).display,
+            copyDisplay: getComputedStyle(copy).display,
+            scrollWidth: box.scrollWidth,
+            clientWidth: box.clientWidth
+          };
+        });
+        assert.equal(geometry.titleDisplay, "block", `${viewport.name}/${locale} title uses its own row`);
+        assert.equal(geometry.copyDisplay, "block", `${viewport.name}/${locale} description uses its own row`);
+        assert.ok(geometry.title.bottom < geometry.copy.top, `${viewport.name}/${locale} title and description overlap: ${JSON.stringify(geometry)}`);
+        assert.ok(geometry.title.left >= geometry.box.left && geometry.title.right <= geometry.box.right, `${viewport.name}/${locale} title escapes warning box: ${JSON.stringify(geometry)}`);
+        assert.ok(geometry.copy.left >= geometry.box.left && geometry.copy.right <= geometry.box.right, `${viewport.name}/${locale} description escapes warning box: ${JSON.stringify(geometry)}`);
+        assert.ok(geometry.scrollWidth <= geometry.clientWidth, `${viewport.name}/${locale} warning box overflows: ${JSON.stringify(geometry)}`);
+      }
+      await assertNoHorizontalOverflow(page);
     } finally { await context.close(); }
   }
 });
