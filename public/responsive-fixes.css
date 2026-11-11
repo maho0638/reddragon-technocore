@@ -9,6 +9,10 @@
 .rd-testnet-note,.rd-testnet-note span { min-width: 0; overflow-wrap: anywhere; }
 .warning-box,.warning-box > * { min-width: 0; }
 .warning-box span { overflow-wrap: anywhere; }
+/* Step 11 has a long warning title; stack it so the flex row cannot crowd or overlap the copy. */
+.automation-card > .warning-box { display: block; max-width: 100%; }
+.automation-card > .warning-box b { display: block; max-width: 100%; margin-bottom: 6px; white-space: normal; line-height: 1.35; overflow-wrap: anywhere; }
+.automation-card > .warning-box span { display: block; max-width: 100%; line-height: 1.5; overflow-wrap: anywhere; }
 .rd-live-section,.shell { min-width: 0; max-width: 100%; box-sizing: border-box; }
 /* Keep scrollable room rails inside the app viewport; their own touch scroll remains enabled. */
 .shell { overflow-x: clip; }

@@ -209,6 +209,67 @@ test("main page boots from empty storage and translates in desktop and mobile", 
   }
 });
 
+test("step 11 warning copy stays separated and localized at all supported widths", async () => {
+  const translations = {
+    tr: {
+      title: "Spam değil, sürdürülebilir aktivite",
+      description: "Heartbeat yaklaşık 30 dakikada bir kontrol edilir. Signed check-in yalnızca günde iki ayrı cron penceresinde çalışır; manuel/push testleri signed mesaj göndermez."
+    },
+    en: {
+      title: "Sustainable activity, not spam",
+      description: "The heartbeat is checked about every 30 minutes. Signed check-ins run only in two daily cron windows; manual/push tests do not send signed messages."
+    }
+  };
+
+  for (const viewport of viewports) {
+    const { context, page } = await newPage(viewport, "tr");
+    try {
+      await page.goto(`${baseURL}/`);
+      const warning = page.locator('[data-step="11"] > .warning-box');
+      const heading = warning.locator("b");
+      const description = warning.locator("span");
+      await heading.waitFor({ state: "visible" });
+
+      for (const locale of ["tr", "en"]) {
+        if (locale === "en") await page.locator('#rdLangSwitcher button[data-lang="en"]').click();
+        else if (await page.locator("html").getAttribute("lang") !== "tr") {
+          await page.locator('#rdLangSwitcher button[data-lang="tr"]').click();
+        }
+        await page.waitForFunction((expected) =>
+          document.querySelector('[data-step="11"] > .warning-box b')?.textContent === expected,
+          translations[locale].title
+        );
+        assert.equal((await heading.textContent()).trim(), translations[locale].title, `${viewport.name}/${locale} title`);
+        assert.equal((await description.textContent()).trim(), translations[locale].description, `${viewport.name}/${locale} description`);
+
+        const geometry = await warning.evaluate((box) => {
+          const title = box.querySelector("b");
+          const copy = box.querySelector("span");
+          const boxRect = box.getBoundingClientRect();
+          const titleRect = title.getBoundingClientRect();
+          const copyRect = copy.getBoundingClientRect();
+          return {
+            box: { left: boxRect.left, right: boxRect.right, top: boxRect.top, bottom: boxRect.bottom },
+            title: { left: titleRect.left, right: titleRect.right, top: titleRect.top, bottom: titleRect.bottom },
+            copy: { left: copyRect.left, right: copyRect.right, top: copyRect.top, bottom: copyRect.bottom },
+            titleDisplay: getComputedStyle(title).display,
+            copyDisplay: getComputedStyle(copy).display,
+            scrollWidth: box.scrollWidth,
+            clientWidth: box.clientWidth
+          };
+        });
+        assert.equal(geometry.titleDisplay, "block", `${viewport.name}/${locale} title uses its own row`);
+        assert.equal(geometry.copyDisplay, "block", `${viewport.name}/${locale} description uses its own row`);
+        assert.ok(geometry.title.bottom < geometry.copy.top, `${viewport.name}/${locale} title and description overlap: ${JSON.stringify(geometry)}`);
+        assert.ok(geometry.title.left >= geometry.box.left && geometry.title.right <= geometry.box.right, `${viewport.name}/${locale} title escapes warning box: ${JSON.stringify(geometry)}`);
+        assert.ok(geometry.copy.left >= geometry.box.left && geometry.copy.right <= geometry.box.right, `${viewport.name}/${locale} description escapes warning box: ${JSON.stringify(geometry)}`);
+        assert.ok(geometry.scrollWidth <= geometry.clientWidth, `${viewport.name}/${locale} warning box overflows: ${JSON.stringify(geometry)}`);
+      }
+      await assertNoHorizontalOverflow(page);
+    } finally { await context.close(); }
+  }
+});
+
 test("main page keeps local activity isolated by public DID on all viewports", async () => {
   for (const viewport of viewports) {
     const { context, page } = await newPage(viewport);
