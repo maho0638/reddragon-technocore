@@ -62,7 +62,7 @@ jobs:
             node --test scripts/browser/flop-ui.spec.mjs
           fi
       - name: Post-release production read-only acceptance and intercepted write flows
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_production_acceptance }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && inputs.run_production_acceptance) || (github.event_name == 'push' && contains(github.event.head_commit.message, '[production-audit]')) }}
         run: node --test scripts/browser/site-acceptance.spec.mjs
         env:
           NODE_OPTIONS: --no-warnings
