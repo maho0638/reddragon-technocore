@@ -55,9 +55,9 @@ async function newPage(viewport, preferredLocale) {
   await context.addInitScript((locale) => {
     if (!sessionStorage.getItem("__rdBrowserSmokeInitialized")) {
       localStorage.clear();
+      if (locale === "tr" || locale === "en") localStorage.setItem("reddragon-lang", locale);
       sessionStorage.setItem("__rdBrowserSmokeInitialized", "1");
     }
-    if (locale === "tr" || locale === "en") localStorage.setItem("reddragon-lang", locale);
   }, preferredLocale);
   await context.route("**/api/flop-status", (route) => route.fulfill({
     status: 200, contentType: "application/json", body: JSON.stringify(statusFixture)
@@ -231,16 +231,23 @@ test("step 11 warning copy stays separated and localized at all supported widths
       await heading.waitFor({ state: "visible" });
 
       for (const locale of ["tr", "en"]) {
-        if (locale === "en") await page.locator('#rdLangSwitcher button[data-lang="en"]').click();
-        else if (await page.locator("html").getAttribute("lang") !== "tr") {
-          await page.locator('#rdLangSwitcher button[data-lang="tr"]').click();
+        if (await page.locator("html").getAttribute("lang") !== locale) {
+          await Promise.all([
+            page.waitForNavigation({ waitUntil: "load" }),
+            page.locator('#rdLangSwitcher button[data-lang="' + locale + '"]').click()
+          ]);
         }
-        await page.waitForFunction((expected) =>
-          document.querySelector('[data-step="11"] > .warning-box b')?.textContent === expected,
-          translations[locale].title
-        );
-        assert.equal((await heading.textContent()).trim(), translations[locale].title, `${viewport.name}/${locale} title`);
-        assert.equal((await description.textContent()).trim(), translations[locale].description, `${viewport.name}/${locale} description`);
+        const observed = await page.evaluate(() => ({
+          htmlLang: document.documentElement.lang,
+          storedLang: localStorage.getItem("reddragon-lang"),
+          title: document.querySelector('[data-step="11"] > .warning-box b')?.textContent?.trim() ?? null,
+          description: document.querySelector('[data-step="11"] > .warning-box span')?.textContent?.trim() ?? null
+        }));
+        console.log("step11 locale " + viewport.name + "/" + locale + ": " + JSON.stringify(observed));
+        assert.equal(observed.htmlLang, locale, viewport.name + "/" + locale + " html.lang");
+        assert.equal(observed.storedLang, locale, viewport.name + "/" + locale + " localStorage");
+        assert.equal(observed.title, translations[locale].title, viewport.name + "/" + locale + " title");
+        assert.equal(observed.description, translations[locale].description, viewport.name + "/" + locale + " description");
 
         const geometry = await warning.evaluate((box) => {
           const title = box.querySelector("b");
