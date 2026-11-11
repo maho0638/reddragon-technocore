@@ -42,7 +42,7 @@ jobs:
       - name: Install pinned browser test runtime (temporary runner only)
         run: npm install --no-save --no-package-lock playwright@1.65.0
       - name: Install Chromium in runner
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install chromium
       - name: Existing source and regression tests
         if: ${{ github.event_name == 'workflow_dispatch' || !contains(github.event.head_commit.message, '[candidate-only]') }}
         run: npm test
