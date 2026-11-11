@@ -9,6 +9,7 @@ on:
       - "api/**"
       - "scripts/*.test.mjs"
       - "scripts/local-preview-server.mjs"
+      - "scripts/local-preview-http-smoke.mjs"
       - "package.json"
       - "scripts/browser/site-acceptance.spec.mjs"
       - "scripts/browser/flop-ui.spec.mjs"
