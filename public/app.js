@@ -70,7 +70,32 @@ async function createIdentity(){
     $("#identityOut").textContent=`${state.did}\n${ui("app.fingerprint")}: ${state.fingerprint}`; markDone(1);toast(ui("app.identityCreated"));
   }catch(e){console.error(e);toast(ui("app.cryptoUnsupported"));}
 }
-async function restore(file){ try{ const j=JSON.parse(await file.text()); const pass=prompt(ui("app.restorePassword")); if(!pass)return; const salt=fromB64u(j.saltB64u),iv=fromB64u(j.ivB64u),raw=fromB64u(j.publicKeyRawB64u),cipher=fromB64u(j.ciphertextB64u); const aes=await deriveKey(pass,salt); const pkcs8=new Uint8Array(await crypto.subtle.decrypt({name:"AES-GCM",iv},aes,cipher)); await importIdentity(pkcs8,raw);state.backup=j;$("#identityOut").textContent=`${state.did}\n${ui("app.fingerprint")}: ${state.fingerprint}`;markDone(1);toast(ui("app.identityRestored")); }catch(e){console.error(e);toast(ui("app.restoreFailed"));} }
+async function restore(file) {
+  try {
+    const j = JSON.parse(await file.text());
+    const pass = prompt(ui("app.restorePassword"));
+    if (!pass) return;
+    if (j?.format !== "reddragon-technocore-identity") throw new Error("Unsupported backup format");
+    const salt = fromB64u(j.saltB64u), iv = fromB64u(j.ivB64u);
+    const raw = fromB64u(j.publicKeyRawB64u), cipher = fromB64u(j.ciphertextB64u);
+    if (salt.length !== 16 || iv.length !== 12 || raw.length !== 32) throw new Error("Invalid backup fields");
+    const aes = await deriveKey(pass, salt);
+    const pkcs8 = new Uint8Array(await crypto.subtle.decrypt({name:"AES-GCM",iv},aes,cipher));
+    // The public key in the JSON is unencrypted. Verify it matches the decrypted private key
+    // BEFORE mutating identity state or accepting the DID/fingerprint.
+    const privateKey = await crypto.subtle.importKey("pkcs8",pkcs8,{name:"Ed25519"},true,["sign"]);
+    const publicFromPrivate = (await crypto.subtle.exportKey("jwk", privateKey)).x;
+    if (!publicFromPrivate || publicFromPrivate !== b64u(raw)) throw new Error("Backup keypair mismatch");
+    const restoredDid = makeDid(raw);
+    const restoredFp = hex((await sha256(enc.encode(restoredDid))).slice(0,8));
+    if ((j.did && j.did !== restoredDid) || (j.fingerprint && j.fingerprint !== restoredFp)) throw new Error("Backup identity mismatch");
+    await importIdentity(pkcs8, raw);
+    state.backup = j;
+    $("#identityOut").textContent = `${state.did}\n${ui("app.fingerprint")}: ${state.fingerprint}`;
+    markDone(1);
+    toast(ui("app.identityRestored"));
+  } catch (e) { console.error(e); toast(ui("app.restoreFailed")); }
+}
 function download(name,obj){ const a=document.createElement("a");const url=URL.createObjectURL(new Blob([JSON.stringify(obj,null,2)],{type:"application/json"}));a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000); }
 async function sign(room,text){ text=clean(text);const nonce=String(Date.now());const payload=enc.encode(`${room}|${nonce}|${text}`);const sig=new Uint8Array(await crypto.subtle.sign({name:"Ed25519"},state.privateKey,payload));return{did:state.did,sig:b64u(sig),nonce,text}; }
 async function relay(body){ const r=await fetch("/api/relay",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)});const txt=await r.text();if(!r.ok)throw new Error(txt);try{return JSON.parse(txt)}catch{return txt} }
