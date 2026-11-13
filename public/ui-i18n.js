@@ -206,6 +206,13 @@
     }
     return { keys: keys.length, catalogs: registered.size, locales: ["tr", "en"] };
   };
-  window.RD_I18N = Object.freeze({ t, audit, language: lang, dictionaries, register, get: (namespace, locale = lang()) => registered.get(namespace)?.[locale] });
+  const setLanguage = (locale) => {
+    const value = locale === "tr" ? "tr" : "en";
+    try { localStorage.setItem("reddragon-lang", value); } catch {}
+    if (document.documentElement) document.documentElement.lang = value;
+    window.dispatchEvent(new CustomEvent("rd:languagechange", { detail: { lang: value } }));
+    return value;
+  };
+  window.RD_I18N = Object.freeze({ t, audit, language: lang, setLanguage, dictionaries, register, get: (namespace, locale = lang()) => registered.get(namespace)?.[locale] });
   audit();
 })();

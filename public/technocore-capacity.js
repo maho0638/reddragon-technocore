@@ -2,7 +2,7 @@ const rdCapacity = {
   rooms: null,
   config: null,
   lastUpdated: null,
-  error: ""
+  error: null
 };
 
 async function rdCapacityRelay(action) {
@@ -33,9 +33,16 @@ function rdCapacityLang() {
   try { return localStorage.getItem("reddragon-lang") === "tr" ? "tr" : "en"; } catch { return "en"; }
 }
 
-function rdFmt(value) {
+function rdFmt(value, lang = rdCapacityLang()) {
   const n = rdNum(value);
-  return n == null ? "—" : new Intl.NumberFormat(rdCapacityLang() === "tr" ? "tr-TR" : "en-US").format(n);
+  return n == null ? "—" : new Intl.NumberFormat(lang === "tr" ? "tr-TR" : "en-US").format(n);
+}
+
+function rdCapacityError(error, lang) {
+  if (!error) return "";
+  if (error.timeout) return lang === "tr" ? "İstek zaman aşımına uğradı." : "The request timed out.";
+  if (error.status) return lang === "tr" ? `Canlı kaynak HTTP ${error.status} yanıtı verdi.` : `The live source returned HTTP ${error.status}.`;
+  return lang === "tr" ? "Canlı Technocore verisi alınamadı." : "Could not load live Technocore data.";
 }
 
 function rdPct(num, den) {
@@ -49,8 +56,9 @@ function rdSet(id, text) {
   if (el) el.textContent = text;
 }
 
-function rdRenderCapacity() {
-  const tr = rdCapacityLang() === "tr";
+function rdRenderCapacity(locale = rdCapacityLang()) {
+  const lang = locale === "tr" ? "tr" : "en";
+  const tr = lang === "tr";
   const rooms = rdCapacity.rooms || {};
   const config = rdCapacity.config || {};
   const notes = rooms.notes || {};
@@ -62,17 +70,17 @@ function rdRenderCapacity() {
   const noteCap = rdNum(notes.capacity ?? config.max_notes_total ?? config.notes?.capacity ?? config.MAX_NOTES_TOTAL);
   const windowedMessages = rdNum(engagement.windowed_messages);
 
-  rdSet("rdTcRooms", listed == null ? "—" : rdFmt(listed));
-  rdSet("rdTcRoomCap", roomCap == null ? (tr ? "sınır —" : "cap —") : `${tr ? "sınır" : "cap"} ${rdFmt(roomCap)} · ${tr ? "listelenen doluluk" : "listed occupancy"} ${rdPct(listed, roomCap)}`);
-  rdSet("rdTcNotes", noteTotal == null ? "—" : rdFmt(noteTotal));
-  rdSet("rdTcNoteCap", noteCap == null ? (tr ? "sınır —" : "cap —") : `${tr ? "sınır" : "cap"} ${rdFmt(noteCap)} · ${rdPct(noteTotal, noteCap)}`);
-  rdSet("rdTcWindow", windowedMessages == null ? "—" : rdFmt(windowedMessages));
+  rdSet("rdTcRooms", listed == null ? "—" : rdFmt(listed, lang));
+  rdSet("rdTcRoomCap", roomCap == null ? (tr ? "sınır —" : "cap —") : `${tr ? "sınır" : "cap"} ${rdFmt(roomCap, lang)} · ${tr ? "listelenen doluluk" : "listed occupancy"} ${rdPct(listed, roomCap)}`);
+  rdSet("rdTcNotes", noteTotal == null ? "—" : rdFmt(noteTotal, lang));
+  rdSet("rdTcNoteCap", noteCap == null ? (tr ? "sınır —" : "cap —") : `${tr ? "sınır" : "cap"} ${rdFmt(noteCap, lang)} · ${rdPct(noteTotal, noteCap)}`);
+  rdSet("rdTcWindow", windowedMessages == null ? "—" : rdFmt(windowedMessages, lang));
   rdSet("rdTcUpdated", rdCapacity.lastUpdated ? new Date(rdCapacity.lastUpdated).toLocaleString(tr ? "tr-TR" : "en-US") : "—");
 
   const status = document.getElementById("rdTcStatus");
   if (status) {
     status.textContent = rdCapacity.error
-      ? `${tr ? "Canlı okuma aksadı" : "Live read degraded"}: ${rdCapacity.error}`
+      ? `${tr ? "Canlı okuma aksadı" : "Live read degraded"}: ${rdCapacityError(rdCapacity.error, lang)}`
       : (tr ? "Canlı okuma tamam · yalnızca herkese açık Technocore üst verileri" : "Live read OK · public Technocore metadata only");
     status.className = rdCapacity.error ? "notice" : "notice";
   }
@@ -86,10 +94,11 @@ async function rdRefreshCapacity() {
     ]);
     rdCapacity.rooms = rooms;
     rdCapacity.config = config;
-    rdCapacity.error = "";
+    rdCapacity.error = null;
     rdCapacity.lastUpdated = Date.now();
   } catch (error) {
-    rdCapacity.error = String(error?.message || error || "read failed");
+    const status = Number(String(error?.message || "").match(/\bHTTP (\d{3})\b/)?.[1]);
+    rdCapacity.error = { status: Number.isFinite(status) && status > 0 ? status : 0, timeout: error?.name === "AbortError" || error?.name === "TimeoutError" };
     rdCapacity.lastUpdated = Date.now();
   }
   rdRenderCapacity();
@@ -100,4 +109,4 @@ document.addEventListener("DOMContentLoaded", () => {
   rdRefreshCapacity();
   setInterval(rdRefreshCapacity, 60_000);
 });
-document.getElementById("rdFlopLanguage")?.addEventListener("change", () => rdRenderCapacity());
+window.addEventListener("rd:languagechange", (event) => rdRenderCapacity(event.detail?.lang));

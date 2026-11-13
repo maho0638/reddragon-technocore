@@ -9,9 +9,11 @@ const flopStatus = await readFile(new URL("../public/flop-live-status.js", impor
 const patches = await readFile(new URL("../public/patches.js", import.meta.url), "utf8");
 const enhancements = await readFile(new URL("../public/enhancements.js", import.meta.url), "utf8");
 const languageStable = await readFile(new URL("../public/language-stable.js", import.meta.url), "utf8");
+const config = await readFile(new URL("../public/config.js", import.meta.url), "utf8");
 const proofImport = await readFile(new URL("../public/proof-import.js", import.meta.url), "utf8");
 const liveObservatory = await readFile(new URL("../public/live-observatory.js", import.meta.url), "utf8");
 const capacity = await readFile(new URL("../public/technocore-capacity.js", import.meta.url), "utf8");
+const languageBootstrap = await readFile(new URL("../public/language-bootstrap.js", import.meta.url), "utf8");
 const indexHtml = await readFile(new URL("../public/index.html", import.meta.url), "utf8");
 const flopHtml = await readFile(new URL("../public/flop.html", import.meta.url), "utf8");
 const browserWorkflow = await readFile(new URL("../.github/workflows/flop-site-browser-audit.yml", import.meta.url), "utf8");
@@ -102,6 +104,42 @@ test("X sharing opens a localized compose intent and provenance acceptance targe
 test("live-status API failure localizes both status panels without an undefined-language exception", () => {
   assert.match(flopStatus, /catch\s*\{\s*const lang = getLang\(\);\s*const failureCopy = FLOP_STATUS_COPY\[lang\];\s*renderFailure\(lang\);/);
   assert.match(flopStatus, /const t = failureCopy;/);
+});
+
+test("language preference is committed before one shared event updates status and capacity panels", () => {
+  assert.match(source, /const setLanguage = \(locale\) =>[\s\S]*localStorage\.setItem\("reddragon-lang", value\)[\s\S]*dispatchEvent\(new CustomEvent\("rd:languagechange"/);
+  assert.match(capacity, /window\.addEventListener\("rd:languagechange", \(event\) => rdRenderCapacity\(event\.detail\?\.lang\)\)/);
+  assert.doesNotMatch(capacity, /addEventListener\(['"]change['"], \(\) => rdRenderCapacity/);
+  assert.match(capacity, /Live read OK · public Technocore metadata only/);
+  assert.match(capacity, /Canlı okuma tamam · yalnızca herkese açık Technocore üst verileri/);
+  assert.match(capacity, /rdCapacityError\(rdCapacity\.error, lang\)/);
+  assert.match(flopStatus, /window\.RD_I18N\.setLanguage\(value\)/);
+});
+
+test("shared language setter stores preference and html lang before dispatch", () => {
+  const values = new Map();
+  const order = [];
+  const root = { lang: "en" };
+  const window = { dispatchEvent(event) { order.push([values.get("reddragon-lang"), root.lang, event.detail.lang]); } };
+  class CustomEvent { constructor(type, init) { this.type = type; this.detail = init.detail; } }
+  const localStorage = { getItem: key => values.get(key) || null, setItem: (key, value) => values.set(key, value) };
+  vm.runInNewContext(source, { window, document: { documentElement: root }, localStorage, navigator: { language: "en-US" }, CustomEvent });
+  assert.equal(window.RD_I18N.setLanguage("tr"), "tr");
+  assert.deepEqual(order, [["tr", "tr", "tr"]]);
+});
+
+test("both pages select and render the saved language before add-on loading", () => {
+  for (const html of [indexHtml, flopHtml]) {
+    assert.match(html, /<script src="\/language-bootstrap\.js"><\/script>/);
+    assert.ok(html.indexOf("/language-bootstrap.js") < html.indexOf("<\/head>"));
+  }
+  assert.match(languageBootstrap, /document\.documentElement\.lang = lang/);
+  assert.match(indexHtml, /<script src="\/language-stable\.js"><\/script>/);
+  assert.doesNotMatch(config, /"\/language-stable\.js"/);
+  assert.doesNotMatch(languageStable, /\[350, 1900, 3200\]/);
+  assert.match(languageStable, /window\.addEventListener\("rd:languagechange"/);
+  assert.match(config, /window\.dispatchEvent\(new Event\("rd:addonsready"\)\)/);
+  assert.match(languageStable, /window\.addEventListener\("rd:addonsready"/);
 });
 
 test("browser workflow can run only on the QA branch with read-only repository permissions", () => {

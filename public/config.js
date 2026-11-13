@@ -77,7 +77,6 @@ window.APP_CONFIG = {
     "/final-fixes.js",
     "/progress-scope-fix.js",
     "/live-observatory.js",
-    "/language-stable.js",
     "/agent-field.js",
     "/did-provenance.js",
     "/provenance-room-refresh.js",
@@ -90,7 +89,10 @@ window.APP_CONFIG = {
 
   let index = 0;
   const loadNext = () => {
-    if (index >= sources.length) return;
+    if (index >= sources.length) {
+      window.dispatchEvent(new Event("rd:addonsready"));
+      return;
+    }
     const src = sources[index++];
     const script = document.createElement("script");
     script.type = "module";

@@ -60,7 +60,8 @@ function buildSwitcher() {
       button.addEventListener("click", () => {
         const next = button.dataset.lang;
         if (next !== "tr" && next !== "en") return;
-        try { localStorage.setItem(LANG_KEY, next); } catch {}
+        if (window.RD_I18N?.setLanguage) window.RD_I18N.setLanguage(next);
+        else { try { localStorage.setItem(LANG_KEY, next); } catch {} }
         location.reload();
       });
     });
@@ -411,13 +412,10 @@ function applyStableLanguage() {
 function boot() {
   applyStableLanguage();
   translateDynamicEN();
-  [350, 1900, 3200].forEach((ms) => setTimeout(() => {
-    applyStableLanguage();
-    translateDynamicEN();
-  }, ms));
   document.addEventListener("click", scheduleBoundedRefresh, true);
   document.addEventListener("change", scheduleBoundedRefresh, true);
 }
 
-if (document.readyState === "complete") boot();
-else window.addEventListener("load", boot, { once: true });
+window.addEventListener("rd:languagechange", () => { applyStableLanguage(); translateDynamicEN(); });
+window.addEventListener("rd:addonsready", () => { applyStableLanguage(); translateDynamicEN(); });
+boot();

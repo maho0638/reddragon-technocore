@@ -359,6 +359,52 @@ test("/flop Turkish and English copy, fail-closed status, and responsive layout"
   }
 });
 
+test("language changes render all panels consistently across reloads and in-flight status refreshes", async () => {
+  const { context, page } = await newPage(viewports[2], "tr");
+  try {
+    await page.goto(`${baseURL}/`);
+    await page.locator('#rdLangSwitcher button[data-lang="en"]').click();
+    await page.locator('.hero-actions .ghost-link').filter({ hasText: "Open FLOP Observatory" }).waitFor({ state: "visible" });
+    assert.equal(await page.locator("html").getAttribute("lang"), "en");
+    assert.equal(await page.evaluate(() => localStorage.getItem("reddragon-lang")), "en");
+    await page.locator('#rdLangSwitcher button[data-lang="tr"]').click();
+    await page.locator('.hero-actions .ghost-link').filter({ hasText: "FLOP Gözlemevini Aç" }).waitFor({ state: "visible" });
+    assert.equal(await page.locator("html").getAttribute("lang"), "tr");
+    await page.reload();
+    assert.equal(await page.locator("html").getAttribute("lang"), "tr", "saved Turkish preference applies on first page boot");
+
+    let releaseStatus;
+    const statusGate = new Promise(resolve => { releaseStatus = resolve; });
+    await context.unroute("**/api/flop-status");
+    await context.route("**/api/flop-status", async route => {
+      await statusGate;
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(statusFixture) });
+    });
+    await context.unroute("**/api/relay");
+    await context.route("**/api/relay", route => route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ error: "simulated failure" }) }));
+    await page.goto(`${baseURL}/flop`);
+    const language = page.locator("#rdFlopLanguage");
+    assert.equal(await page.locator("html").getAttribute("lang"), "tr");
+    await language.selectOption("en");
+    assert.equal(await page.evaluate(() => localStorage.getItem("reddragon-lang")), "en");
+    await expectCapacityMessage(page, "en", "The live source returned HTTP 503.");
+    releaseStatus();
+    await page.waitForFunction(() => document.querySelector("#rdLiveTestnet [data-status]")?.textContent.includes("Planned / unreleased"));
+    assert.equal(await page.locator("html").getAttribute("lang"), "en", "late live data uses current locale");
+    await language.selectOption("tr");
+    await expectCapacityMessage(page, "tr", "Canlı kaynak HTTP 503 yanıtı verdi.");
+    await page.reload();
+    assert.equal(await language.inputValue(), "tr", "the final choice persists across reload");
+    await expectCapacityMessage(page, "tr", "Canlı kaynak HTTP 503 yanıtı verdi.");
+  } finally { await context.close(); }
+});
+
+async function expectCapacityMessage(page, lang, phrase) {
+  await page.waitForFunction(({ lang, phrase }) => document.documentElement.lang === lang && document.getElementById("rdTcStatus")?.textContent.includes(phrase), { lang, phrase });
+  const text = await page.locator("#rdTcStatus").textContent();
+  assert.match(text, new RegExp(lang === "tr" ? "Canlı okuma aksadı" : "Live read degraded"));
+}
+
 
 test("/flop keeps source failures unverified and localized", async () => {
   const { context, page } = await newPage(viewports[2]);

@@ -55,7 +55,8 @@ const getLang = () => {
 let liveSourceFailure = false;
 const setLang = (lang) => {
   const value = lang === "tr" ? "tr" : "en";
-  try { localStorage.setItem("reddragon-lang", value); } catch {}
+  if (window.RD_I18N?.setLanguage) window.RD_I18N.setLanguage(value);
+  else { try { localStorage.setItem("reddragon-lang", value); } catch {} }
   renderStatic(value);
   if (window.__rdFlopStatus) renderStatus(window.__rdFlopStatus, value);
   else if (liveSourceFailure) renderFailure(value);
