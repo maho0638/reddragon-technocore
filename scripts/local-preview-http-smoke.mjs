@@ -35,19 +35,32 @@ try {
   assert.match(await flop.text(), /id="flop-live-status"/);
   console.log("PASS local preview serves /flop route");
 
+  const assetResponses = new Map();
   for (const path of ["/ui-i18n.js", "/responsive-fixes.css", "/flop-responsive-fixes.css"]) {
     const response = await fetch(`${base}${path}`);
+    assetResponses.set(path, response);
     assert.equal(response.status, 200, `${path} missing from local preview`);
     assert.match(response.headers.get("content-type") || "", path.endsWith(".css") ? /text\/css/ : /javascript/);
   }
   const homeHtml = await (await fetch(base)).text();
-  const flopHtml = await (await fetch(`${base}/flop`)).text();
+  const flopHtml = await (await fetch(base + "/flop")).text();
   assert.match(homeHtml, /ui-i18n\.js/);
   assert.match(flopHtml, /ui-i18n\.js/);
-  const config = await (await fetch(`${base}/config.js`)).text();
-  assert.match(config, /responsive-fixes\.css/);
+  const head = homeHtml.match(/<head\b[^>]*>([\s\S]*?)<\/head>/i)?.[1] || "";
+  const styleIndex = homeHtml.indexOf('href="/styles.css"');
+  const responsiveIndex = homeHtml.indexOf('href="/responsive-fixes.css"');
+  const configIndex = homeHtml.indexOf('src="/config.js"');
+  const responsiveLinks = [...homeHtml.matchAll(/<link\b[^>]*href=["']\/responsive-fixes\.css["'][^>]*>/g)];
+  assert.equal(responsiveLinks.length, 1, "responsive-fixes.css must be included exactly once");
+  assert.ok(head.includes('href="/responsive-fixes.css"'), "responsive-fixes.css must load directly in <head>");
+  assert.ok(styleIndex >= 0 && responsiveIndex > styleIndex && configIndex > responsiveIndex, "base CSS, responsive CSS, then config.js must appear in document order");
+  const config = await (await fetch(base + "/config.js")).text();
+  assert.doesNotMatch(config, /responsive-fixes\.css/, "config.js must not inject a duplicate responsive stylesheet");
+  const responsiveCss = assetResponses.get("/responsive-fixes.css");
+  assert.equal(responsiveCss?.status, 200, "responsive-fixes.css must return HTTP 200");
+  assert.match(responsiveCss?.headers.get("content-type") || "", /text\/css/, "responsive-fixes.css must use CSS MIME type");
   assert.match(flopHtml, /flop-responsive-fixes\.css/);
-  console.log("PASS local preview serves shared translations and responsive styles on both routes");
+  console.log("PASS local preview serves the render-blocking responsive stylesheet once with CSS MIME");
 
   const script = await fetch(`${base}/flop-live-status.js`);
   assert.equal(script.status, 200);

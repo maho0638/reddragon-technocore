@@ -47,6 +47,52 @@ async function overflow(page, name) {
   });
   assert.ok(x.scroll <= x.inner + 1, name + ": horizontal overflow / DOM offenders " + JSON.stringify(x));
 }
+async function assertResponsiveHome(page, size, expectedLanguage) {
+  await page.locator("#heroDragon").evaluate(img => img.decode());
+  const layout = await page.evaluate(() => {
+    const rect = element => {
+      const r = element?.getBoundingClientRect();
+      return r && { left: r.left, right: r.right, top: r.top, bottom: r.bottom, width: r.width, height: r.height };
+    };
+    const root = document.documentElement;
+    const hero = document.querySelector(".hero");
+    const art = document.querySelector(".hero-art");
+    const image = document.querySelector("#heroDragon");
+    const warning = document.querySelector("[data-step='11'] .warning-box");
+    const title = warning?.querySelector("b");
+    const copy = warning?.querySelector("span");
+    const responsiveLink = [...document.querySelectorAll("head link[rel='stylesheet']")]
+      .find(link => new URL(link.href).pathname === "/responsive-fixes.css");
+    return {
+      lang: root.lang,
+      viewport: { clientWidth: root.clientWidth, scrollWidth: root.scrollWidth, innerWidth },
+      responsiveCss: { inHead: !!responsiveLink, loaded: !!responsiveLink?.sheet },
+      hero: {
+        container: rect(hero),
+        gridColumns: getComputedStyle(hero).gridTemplateColumns,
+        art: { ...rect(art), cssWidth: getComputedStyle(art).width },
+        image: { ...rect(image), cssWidth: getComputedStyle(image).width }
+      },
+      warning: { box: rect(warning), title: rect(title), copy: rect(copy), titleText: title?.textContent.trim() }
+    };
+  });
+  assert.equal(layout.lang, expectedLanguage, size.name + " expected " + expectedLanguage);
+  assert.match(layout.warning.titleText, expectedLanguage === "en" ? /Sustainable activity, not spam/ : /İstenmeyen ileti değil, sürdürülebilir etkinlik/, size.name + "/" + expectedLanguage + " step 11 title localization");
+  assert.ok(layout.responsiveCss.inHead && layout.responsiveCss.loaded, size.name + "/" + expectedLanguage + " responsive CSS must be render-blocking and loaded");
+  assert.ok(layout.hero.art.width <= layout.hero.container.width + 1, size.name + "/" + expectedLanguage + " hero art exceeds its grid track: " + JSON.stringify(layout));
+  assert.ok(layout.hero.image.width <= layout.hero.art.width + 1, size.name + "/" + expectedLanguage + " heroDragon exceeds hero-art: " + JSON.stringify(layout));
+  assert.ok(layout.hero.image.left >= layout.hero.art.left - 1 && layout.hero.image.right <= layout.hero.art.right + 1, size.name + "/" + expectedLanguage + " heroDragon escapes hero-art: " + JSON.stringify(layout));
+  assert.ok(layout.viewport.scrollWidth <= layout.viewport.clientWidth + 1, size.name + "/" + expectedLanguage + " page horizontal overflow: " + JSON.stringify(layout));
+  assert.ok(layout.warning.title.bottom <= layout.warning.copy.top + 1, size.name + "/" + expectedLanguage + " step 11 title/copy overlap: " + JSON.stringify(layout));
+  for (const part of [layout.warning.title, layout.warning.copy]) {
+    assert.ok(part.left >= layout.warning.box.left - 1 && part.right <= layout.warning.box.right + 1 && part.top >= layout.warning.box.top - 1 && part.bottom <= layout.warning.box.bottom + 1, size.name + "/" + expectedLanguage + " step 11 text escapes warning box: " + JSON.stringify(layout));
+  }
+  console.log("[QA] production geometry " + size.name + "/" + expectedLanguage + ": " + JSON.stringify(layout));
+}
+async function acceptDialogDuring(page, action, promptText) {
+  const dialogHandled = page.waitForEvent("dialog", { timeout: 15000 }).then(dialog => dialog.accept(promptText));
+  await Promise.all([action(), dialogHandled]);
+}
 async function inventory(page, name) {
   const items = await page.locator("button, a[href], select, input:not([type=hidden]), textarea").evaluateAll(nodes => nodes.filter(n => n.getClientRects().length).map(n => ({tag: n.tagName, id: n.id, text: (n.textContent || "").trim().slice(0, 45), href: n.tagName === "A" ? n.getAttribute("href") : null })));
   visibleControls += items.length;
@@ -99,9 +145,13 @@ test("home and FLOP links, menus, languages, refresh, desktop + two mobile width
       await ready(page, "#rdLangSwitcher");
       await page.locator("#rdLangSwitcher button[data-lang='en']").click();
       await page.waitForFunction(() => document.documentElement.lang === "en");
+      await assertResponsiveHome(page, size, "en");
+      await overflow(page, "home-" + size.name + "-en");
       await page.locator("#rdLangSwitcher button[data-lang='tr']").click();
-      await page.waitForFunction(() => document.documentElement.lang === "tr");testedActions += 2;
-      await overflow(page, "home-" + size.name);
+      await page.waitForFunction(() => document.documentElement.lang === "tr");
+      await assertResponsiveHome(page, size, "tr");
+      await overflow(page, "home-" + size.name + "-tr");
+      testedActions += 2;
       const flopLink = page.locator("a[href='/flop']").first();
       if (await flopLink.isVisible()) {
         await activate(flopLink, size);
@@ -150,8 +200,7 @@ test("local identity, validation and signed UI workflows with mocked relay (NO e
     const backup = await backupEvent;
     assert.match(backup.suggestedFilename(), /reddragon-technocore-.*\.json/);testedActions++;
     const backupPath = await backup.path();
-    page.once("dialog", dialog => dialog.accept("ephemeral-ui-audit-only-password"));
-    await page.locator("#restoreInput").setInputFiles(backupPath);
+    await acceptDialogDuring(page, () => page.locator("#restoreInput").setInputFiles(backupPath), "ephemeral-ui-audit-only-password");
     await page.waitForFunction(() => (document.querySelector("#identityOut")?.textContent || "").includes("did:key:z6Mk"));
     assert.equal((await page.locator("#identityOut").textContent()).split("\n")[0].trim(), generatedDid, "encrypted backup restores the same public DID");testedActions++;
     await page.locator("#copyDidBtn").click();
@@ -205,8 +254,7 @@ test("local identity, validation and signed UI workflows with mocked relay (NO e
     await page.evaluate(() => localStorage.setItem("reddragon-lang", "en"));
     await page.locator("#copyAutoGuide").click();
     assert.match(await page.evaluate(() => navigator.clipboard.readText()), /TECHNOCORE_PRIVATE_KEY_PKCS8_B64/);testedActions++;
-    page.once("dialog",d=>d.accept());
-    await page.locator("#resetBtn").click();
+    await acceptDialogDuring(page, () => page.locator("#resetBtn").click());
     await page.waitForLoadState("domcontentloaded");
     assert.equal(await page.locator("#publishDidBtn").isDisabled(),true);testedActions++;
     assert.deepEqual(errors,[],"DID workflow browser exceptions");
@@ -248,8 +296,7 @@ test("user-specific ledger, calculators and panel controls (desktop and mobile)"
       await activate(page.locator("#rdExportLedger"),size);
       const file=await download;
       assert.match(file.suggestedFilename(),/ledger|flop/i);testedActions++;
-      page.once("dialog",d=>d.accept());
-      await activate(page.locator("#rdClearLedger"),size);
+      await acceptDialogDuring(page, () => activate(page.locator("#rdClearLedger"),size));
       assert.doesNotMatch(await page.locator("#rdLedgerRows").textContent(),/audit-local-a/);testedActions++;
       await page.locator("#rdTclkRefresh").waitFor({state:"visible"});
       await page.waitForFunction(() => !document.querySelector("#rdTclkRefresh")?.disabled);

@@ -18,16 +18,16 @@ function placeholder(sel, value) { const el = $(sel); if (el && el.placeholder !
 
 const cardTR = {
   1:["Anahtar oluştur · DID oluştur","Tarayıcıda Ed25519 anahtar çifti üret ve did:key:z6Mk… kimliğini oluştur."],
-  2:["DID + anahtarı kaydet · güvenli yedek","Private key'i AES-256-GCM ile şifrelenmiş JSON yedeği olarak indir. Public DID ayrı gösterilir."],
-  3:["DID notunu yayınla","Public DID'yi Technocore DID registry notuna yayınla. Private key gönderilmez."],
+  2:["DID ve anahtarı kaydet · güvenli yedek","Özel anahtarı AES-256-GCM ile şifrelenmiş JSON yedeği olarak indir. Açık DID ayrı gösterilir."],
+  3:["DID notunu yayınla","Açık DID'yi Technocore DID kayıt notuna yayınla. Özel anahtar gönderilmez."],
   4:["İmzalı merhaba gönder","İlk doğrulanabilir mesajını DID anahtarınla imzalayıp /r/lobby odasına gönder."],
-  5:["Lobby'de kendini tanıt","Daha açıklayıcı tanışma mesajını aynı DID ile imzala."],
-  6:["Kendi public odanı aç","Kendi public odanı oluştur; ilk imzalı mesaj odanın oluşmasını sağlar. İstersen oda konusu da yaz."],
-  7:["Private oda aç","p- ile başlayan tahmin edilemez bir oda adı üret. Bu şifreleme değildir; gizlilik oda adının gizli kalmasına dayanır."],
-  8:["Profil adını biçimlendir","RedDragon profil metadata'sını public community note olarak yayınla. DID registry değerini değiştirmez."],
-  9:["Faydalı bir katkı oluştur","Rehber, video, grafik, araştırma, çeviri veya araç gibi gerçek bir public katkı yayınla ve linkini aynı DID ile kaydet."],
-  10:["Public proof + X paylaşımı","Public DID, sequence kayıtları, oda ve katkı linkini tek kanıt paketinde topla. Private key dahil edilmez."],
-  11:["7/24 otonom ajan · GitHub Actions","Bilgisayar kapalıyken GitHub Actions ajanı Technocore'u belirli aralıklarla okuyabilir ve kurala göre imzalı check-in gönderebilir."]
+  5:["Lobi'de kendini tanıt","Daha açıklayıcı tanışma mesajını aynı DID ile imzala."],
+  6:["Kendi herkese açık odanı aç","Kendi herkese açık odanı oluştur; ilk imzalı mesaj odanın oluşmasını sağlar. İstersen oda konusunu da yaz."],
+  7:["Özel oda aç","p- ile başlayan tahmin edilmesi güç bir oda adı üret. Bu şifreleme değildir; gizlilik oda adının gizli kalmasına dayanır."],
+  8:["Profil adını biçimlendir","RedDragon profil üst verisini herkese açık topluluk notu olarak yayınla. DID kayıt değerini değiştirmez."],
+  9:["Faydalı bir katkı oluştur","Rehber, video, grafik, araştırma, çeviri veya araç gibi gerçek bir herkese açık katkı yayınla ve bağlantısını aynı DID ile kaydet."],
+  10:["Herkese açık kanıt + X paylaşımı","Açık DID'yi, sıra kayıtlarını, oda ve katkı bağlantısını tek kanıt paketinde topla. Özel anahtar eklenmez."],
+  11:["7/24 otonom ajan · GitHub Actions","Bilgisayar kapalıyken GitHub Actions ajanı Technocore'u belirli aralıklarla okuyabilir ve kurala göre imzalı yoklama gönderebilir."]
 };
 
 const cardEN = {
@@ -141,18 +141,19 @@ function translateCore(en) {
     text("#progressRing span", "complete");
   } else {
     html(".hero-copy h1", "Agent kimliğini kur.<br><em>İzini doğrulanabilir bırak.</em>");
-    text(".hero-copy > p", "Tek panelden DID üret, yedeğini al, Technocore onboarding turunu tamamla, faydalı katkını aynı DID ile kaydet ve istersen GitHub Actions üzerinde 7/24 ajanını çalıştır.");
+    text(".hero-copy > p", "Tek panelden DID oluştur, yedeğini al, Technocore kurulum turunu tamamla, faydalı katkını aynı DID ile kaydet ve istersen GitHub Actions üzerinde 7/24 ajanını çalıştır.");
     text('.hero-actions [data-jump="1"]', "Kimliğimi oluştur");
     text(".hero-actions .ghost-link", "Tur adımlarını gör");
     text(".art-overlay span", "PUBLIC KİMLİK");
-    text(".art-overlay small", "Private key yalnızca GitHub Secrets için açıkça kopyalarsan cihazdan çıkar");
+    text(".art-overlay small", "Özel anahtar yalnızca GitHub gizli bilgilerine eklemek için açıkça kopyalarsan cihazdan çıkar");
     text(".tour-head .eyebrow", "KURULUM TURU");
     text(".tour-head h2", "Her şeyi tek tek tamamla");
-    text(".tour-head p", "Yeşil adımlar tamamlandı demektir. Private key, seed veya başka gizli verileri X'e, Technocore odalarına ya da public GitHub dosyalarına yazma.");
+    text(".tour-head p", "Yeşil adımlar tamamlandı demektir. Özel anahtarı, cüzdan kurtarma ifadesini veya başka gizli bilgileri X'e, Technocore odalarına ya da herkese açık GitHub dosyalarına yazma.");
     text("#progressRing span", "tamamlandı");
   }
 
   const owner = $(".ownerline small");
+  text(".ownerline b", en ? "RedDragon FLOP Community Tool" : "RedDragon FLOP Topluluk Aracı");
   if (owner) owner.innerHTML = en
     ? `Maintained by <a href="${cfg.xUrl || "https://x.com/lionmousse"}" target="_blank" rel="noreferrer">${cfg.xHandle || "@lionmousse"}</a>`
     : `Proje hesabı: <a href="${cfg.xUrl || "https://x.com/lionmousse"}" target="_blank" rel="noreferrer">${cfg.xHandle || "@lionmousse"}</a>`;
@@ -160,7 +161,7 @@ function translateCore(en) {
   const signalTitles = en ? ["CORE SIGNAL","SECURITY","NO GUARANTEE"] : ["ANA SİNYAL","GÜVENLİK","GARANTİ YOK"];
   const signalText = en
     ? ["Unique DID + useful Technocore contribution.","Do not use a wallet seed. This identity uses a separate Ed25519 key.","Only FLOP Labs can confirm any airdrop amount or claim criteria."]
-    : ["Benzersiz DID + faydalı Technocore katkısı.","Wallet seed kullanma. Bu kimlik ayrı bir Ed25519 anahtarı kullanır.","Airdrop miktarı ve claim kriterlerini yalnızca FLOP Labs kesinleştirebilir."];
+    : ["Benzersiz DID + faydalı Technocore katkısı.","Cüzdan kurtarma ifadesini kullanma. Bu kimlik ayrı bir Ed25519 anahtarı kullanır.","Airdrop miktarını ve talep koşullarını yalnızca FLOP Labs kesinleştirebilir."];
   $$(".signalbar > div").forEach((box, i) => {
     const b = box.querySelector("b");
     const span = box.querySelector("span");
@@ -194,7 +195,7 @@ function translateCore(en) {
   text("#createBtn", en ? "Create new DID" : "Yeni DID oluştur");
   setFileLabel(en ? "Restore from backup" : "Yedekten geri yükle");
   text("#backupBtn", en ? "Download encrypted identity backup" : "Şifreli kimlik yedeğini indir");
-  text("#copyDidBtn", en ? "Copy public DID" : "Public DID'yi kopyala");
+  text("#copyDidBtn", en ? "Copy public DID" : "Açık DID'yi kopyala");
   text('[data-step="2"] .danger-text', en ? "This file + password controls the identity. Do not confuse it with a wallet seed phrase and never send it to anyone." : "Bu dosya + parola kimliğini kontrol eder. Wallet seed phrase ile karıştırma ve kimseye gönderme.");
   text("#publishDidBtn", en ? "Publish DID note" : "DID notunu yayınla");
   text("#helloBtn", en ? "Send signed hello" : "İmzalı merhaba gönder");
@@ -202,18 +203,21 @@ function translateCore(en) {
   placeholder("#xhandle", en ? "X username" : "X kullanıcı adı");
   text("#introBtn", en ? "Send lobby introduction" : "Lobby tanışmasını gönder");
   placeholder("#roomTopic", en ? "Room topic" : "Oda konusu");
-  text("#openRoomBtn", en ? "Open my public room" : "Public odamı aç");
-  text("#privateRoomBtn", en ? "Create private room" : "Private oda oluştur");
+  text("#openRoomBtn", en ? "Open my public room" : "Herkese açık odamı aç");
+  text("#privateRoomBtn", en ? "Create private room" : "Özel oda oluştur");
   text("#copyPrivateBtn", en ? "Copy room name" : "Oda adını kopyala");
   placeholder("#displayName", en ? "Display name" : "Görünen ad");
   text("#styleBtn", en ? "Publish profile style" : "Profil stilini yayınla");
   placeholder("#ctitle", en ? "Contribution title" : "Katkı başlığı");
   placeholder("#csummary", en ? "Who does it help, and how? One clear sentence." : "Kime ne fayda sağlıyor? Tek, net cümle.");
   text("#contribBtn", en ? "Save contribution as a signed record" : "Katkıyı imzalı kayıt olarak kaydet");
-  placeholder("#proofText", en ? "Proof will appear here..." : "Proof burada oluşacak...");
-  text("#copyProof", en ? "Copy proof" : "Proof'u kopyala");
-  text("#downloadProof", en ? "Download Proof JSON" : "Proof JSON indir");
+  placeholder("#proofText", en ? "Proof will appear here..." : "Kanıt burada oluşacak...");
+  text("#copyProof", en ? "Copy proof" : "Kanıtı kopyala");
+  text("#downloadProof", en ? "Download Proof JSON" : "Kanıt JSON'unu indir");
   text("#xShare", en ? "Share on X" : "X'te paylaş");
+  text('[data-step="11"] .automation-grid > div:first-child h3', en ? "Repository Secrets" : "Depo gizli bilgileri");
+  text('[data-step="11"] .automation-grid > div:nth-child(2) h3', en ? "Repository Variables" : "Depo değişkenleri");
+  text("#copyKeySecret", en ? "Copy private key" : "Özel anahtarı kopyala");
   text('[data-step="11"] .warning-box b', window.RD_I18N.t("app.agentSustainable"));
   text('[data-step="11"] .warning-box span', window.RD_I18N.t("app.agentCadence"));
   text('[data-step="11"] .automation-grid .hint', window.RD_I18N.t("app.privateKeyHint"));
@@ -231,14 +235,14 @@ function translateVault(en) {
   const labels = $$(".vault .metric small");
   const values = en
     ? ["PUBLIC DID","FINGERPRINT","DID NOTE","LOBBY SEQ","PUBLIC ROOM","CONTRIBUTION"]
-    : ["PUBLIC DID","PARMAK İZİ","DID NOTU","LOBBY SEQ","PUBLIC ODA","KATKI"];
+    : ["AÇIK DID","PARMAK İZİ","DID NOTU","LOBİ SIRASI","AÇIK ODA","KATKI"];
   labels.forEach((el, i) => { if (values[i]) el.textContent = values[i]; });
   const security = $(".security");
   if (security) {
     const b = security.querySelector("b");
     const span = security.querySelector("span");
     if (b) b.textContent = en ? "Private key" : "Özel anahtar (private key)";
-    if (span) span.textContent = en ? "Not shown on screen; kept only in session memory." : "Normal ekranda gösterilmez; yalnızca session belleğinde tutulur.";
+    if (span) span.textContent = en ? "Not shown on screen; kept only in session memory." : "Normal ekranda gösterilmez; yalnızca oturum belleğinde tutulur.";
   }
   repairProfileCard(en);
   text("#resetBtn", en ? "Reset session" : "Oturumu sıfırla");
@@ -257,7 +261,7 @@ function translateEnhancements(en) {
   text("#rdSharePanel p", en
     ? `The X button opens the composer for the X account currently signed in to this browser. The project account is mentioned as ${cfg.xHandle || "@lionmousse"}. For Medium, copy the draft and publish it from your own account.`
     : `X butonu bu tarayıcıda açık olan X hesabının paylaşım ekranını açar. Metinde ${cfg.xHandle || "@lionmousse"} geçtiği için proje hesabı mention alır. Medium için taslağı kopyalayıp kendi hesabında yayınlayabilirsin.`);
-  text("#rdProofX", en ? "𝕏 Share DID + proof" : "𝕏 DID + proof paylaş");
+  text("#rdProofX", en ? "𝕏 Share DID + proof" : "𝕏 DID + kanıt paylaş");
   text("#rdThreadCopy", en ? "Copy 3-post thread" : "3 gönderilik diziyi kopyala");
   text("#rdMediumCopy", en ? "Copy Medium draft" : "Medium taslağını kopyala");
   const mediumNew = $("#rdSharePanel a");
@@ -275,7 +279,7 @@ function translateEnhancements(en) {
     if (fork) fork.textContent = en ? "1 · Fork repository" : "1 · Repoyu Forkla";
   }
   text("#rdCopyPrivate", en ? "2 · Copy private key" : "2 · Private key'i kopyala");
-  text("#rdOpenSecrets", en ? "3 · Open Secrets page" : "3 · Secret sayfasını aç");
+  text("#rdOpenSecrets", en ? "3 · Open Secrets page" : "3 · Gizli bilgiler sayfasını aç");
   text("#rdOpenActions", en ? "4 · Open / test Actions" : "4 · Actions'ı aç / test et");
   text("#copyAutoGuide", en ? "Copy quick setup checklist" : "Hızlı kurulum listesini kopyala");
   text("#repoBtn", en ? "Open GitHub repository" : "GitHub repo'yu aç");
@@ -287,13 +291,13 @@ function translateEnhancements(en) {
     const buttons = proof.querySelectorAll("button");
     const input = proof.querySelector("input[type='text']");
     const note = proof.querySelector(".rd-proof-import-note");
-    if (title) title.textContent = en ? "Restore public proof" : "Public proof'u geri yükle";
+    if (title) title.textContent = en ? "Restore public proof" : "Herkese açık kanıtı geri yükle";
     if (desc) desc.textContent = en
       ? " New proofs include the Ed25519 signature, so they can be verified locally even after the Technocore ring buffer removes the old message. Legacy v1 proofs can only be verified while the original record is still available on Technocore."
-      : " Yeni proof'lar Ed25519 imzasını da içerir; Technocore ring buffer eski mesajı silse bile imza yerel olarak doğrulanabilir. Eski v1 proof'lar yalnızca kayıt hâlâ Technocore'da duruyorsa doğrulanabilir.";
-    if (buttons[0]) buttons[0].textContent = en ? "Import Public Proof JSON" : "Public Proof JSON içe aktar";
-    if (buttons[1]) buttons[1].textContent = en ? "Check by sequence" : "Seq ile kontrol et";
-    if (input) input.placeholder = en ? "Known sequence for legacy proof" : "Eski proof için bilinen seq";
+      : " Yeni kanıtlar Ed25519 imzasını da içerir; Technocore kayıt halkası eski mesajı silse bile imza yerel olarak doğrulanabilir. Eski v1 kanıtları yalnızca kayıt hâlâ Technocore'da duruyorsa doğrulanabilir.";
+    if (buttons[0]) buttons[0].textContent = en ? "Import Public Proof JSON" : "Herkese Açık Kanıt JSON'unu içe aktar";
+    if (buttons[1]) buttons[1].textContent = en ? "Check by sequence" : "Sıra numarasıyla kontrol et";
+    if (input) input.placeholder = en ? "Known sequence for legacy proof" : "Eski kanıt için bilinen sıra numarası";
     if (note) note.textContent = window.RD_I18N.t("app.proofImportNote");
   }
 }
@@ -301,30 +305,30 @@ function translateEnhancements(en) {
 function translateLiveStatic(en) {
   const live = $("#rdLiveObservatory");
   if (!live) return;
-  text("#live-observatory .eyebrow", en ? "TECHNOCORE PUBLIC SIGNAL" : "TECHNOCORE PUBLIC AKIŞI");
+  text("#live-observatory .eyebrow", en ? "TECHNOCORE PUBLIC SIGNAL" : "TECHNOCORE AÇIK SİNYALİ");
   text("#rdLiveTitle", en ? "Live Agent Observatory" : "Canlı Ajan Gözlemevi");
   const intro = $("#rdLiveTitle")?.parentElement?.querySelector("p");
   if (intro) intro.textContent = en
     ? "Watch recent activity across public Technocore rooms, verified DID signals, and the RedDragon agent heartbeat from one screen."
-    : "Public Technocore odalarındaki son aktiviteyi, doğrulanmış DID sinyallerini ve RedDragon ajan heartbeat durumunu tek ekranda izle.";
-  text(".rd-live-public-note", en ? "Public data only · no private rooms, secrets, or private keys" : "Yalnızca public veri · private oda, secret veya private key yok");
+    : "Technocore'un herkese açık odalarındaki son etkinliği, doğrulanmış DID sinyallerini ve RedDragon ajanının nabız durumunu tek ekranda izle.";
+  text(".rd-live-public-note", en ? "Public data only · no private rooms, secrets, or private keys" : "Yalnızca herkese açık veriler · gizli oda, sır veya özel anahtar yok");
   text("#rdLiveRefresh", en ? "Refresh now" : "Şimdi yenile");
   const metricLabels = $$(".rd-live-metric > span");
   const labels = en ? ["ROOMS","RECENT MESSAGES","UNIQUE AGENTS","SIGNED AGENTS","REDDRAGON","LAST REFRESH"] : ["ODALAR","SON MESAJLAR","BENZERSİZ AJAN","İMZALI AJAN","REDDRAGON","SON YENİLEME"];
   metricLabels.forEach((el, i) => { if (labels[i]) el.textContent = labels[i]; });
   const panels = $$(".rd-live-panel-head h3");
-  if (panels[0]) panels[0].textContent = en ? "Recent public activity" : "Son public aktivite";
+  if (panels[0]) panels[0].textContent = en ? "Recent public activity" : "Son herkese açık etkinlik";
   if (panels[1]) panels[1].textContent = en ? "Agent view" : "Ajan görünümü";
   const foot = $(".rd-live-footnote");
   if (foot) foot.textContent = en
     ? "Message text is third-party public data; it is never executed as instructions or converted into clickable links here."
-    : "Mesaj metinleri üçüncü taraf public verisidir; burada komut olarak çalıştırılmaz ve tıklanabilir linke dönüştürülmez.";
+    : "Mesaj metinleri üçüncü tarafların herkese açık verileridir; burada komut olarak çalıştırılmaz ve tıklanabilir bağlantıya dönüştürülmez.";
 }
 
 const exactEN = new Map([
-  ["Bekliyor","Pending"],["Tamam","Done"],["Opsiyonel","Optional"],["tamamlandı","complete"],
+  ["Bekliyor","Pending"],["Tamam","Done"],["Opsiyonel","Optional"],["İsteğe bağlı","Optional"],["tamamlandı","complete"],
   ["Henüz kimlik oluşturulmadı.","No identity created yet."],["Önce DID oluştur.","Create or restore a DID first."],["DID gerekli.","DID required."],
-  ["Henüz private room yok.","No private room yet."],["Katkı bilgilerini doldur.","Fill in the contribution details."],["DID ve katkı linki gerekli.","DID and contribution URL required."],
+  ["Henüz private room yok.","No private room yet."],["Henüz özel oda yok.","No private room yet."],["Katkı bilgilerini doldur.","Fill in the contribution details."],["DID ve katkı linki gerekli.","DID and contribution URL required."],
   ["Yayınlanıyor...","Publishing..."],["İmzalanıyor...","Signing..."],["Gönderiliyor...","Sending..."],["Oda açılıyor...","Opening room..."],["Private room oluşturuluyor...","Creating private room..."],
   ["DID oluşturuldu","DID created"],["Kimlik geri yüklendi","Identity restored"],["Şifreli yedek indirildi","Encrypted backup downloaded"],["Public DID kopyalandı","Public DID copied"],
   ["DID note yayınlandı","DID note published"],["Signed hello kaydedildi","Signed hello saved"],["Lobby tanışması kaydedildi","Lobby introduction saved"],["Public room açıldı","Public room opened"],["Private room oluşturuldu","Private room created"],["Private room adı kopyalandı","Private room name copied"],["Profil metadata yayınlandı","Profile metadata published"],["Katkı kaydedildi","Contribution saved"],

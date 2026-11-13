@@ -212,8 +212,8 @@ test("main page boots from empty storage and translates in desktop and mobile", 
 test("step 11 warning copy stays separated and localized at all supported widths", async () => {
   const translations = {
     tr: {
-      title: "Spam değil, sürdürülebilir aktivite",
-      description: "Workflow 30 dakikada bir uyanır; varsayılan imzalı gönderi aralığı 12 saattir. Daha sık mesaj göndermenin airdrop uygunluğunu artırdığına dair resmî kanıt yoktur."
+      title: "İstenmeyen ileti değil, sürdürülebilir etkinlik",
+      description: "Otomasyon 30 dakikada bir çalışır; imzalı gönderiler için varsayılan aralık 12 saattir. Daha sık mesaj göndermenin airdrop uygunluğunu artırdığına dair resmî kanıt yoktur."
     },
     en: {
       title: "Sustainable activity, not spam",
@@ -248,6 +248,13 @@ test("step 11 warning copy stays separated and localized at all supported widths
         assert.equal(observed.storedLang, locale, viewport.name + "/" + locale + " localStorage");
         assert.equal(observed.title, translations[locale].title, viewport.name + "/" + locale + " title");
         assert.equal(observed.description, translations[locale].description, viewport.name + "/" + locale + " description");
+        assert.equal((await page.locator(".ownerline b").textContent()).trim(), locale === "tr" ? "RedDragon FLOP Topluluk Aracı" : "RedDragon FLOP Community Tool");
+        assert.equal((await page.locator('[data-step="11"] .automation-grid > div:nth-child(2) h3').textContent()).trim(), locale === "tr" ? "Depo değişkenleri" : "Repository Variables");
+        assert.equal((await page.locator("#rdLiveNav").textContent()).trim(), locale === "tr" ? "Canlı" : "Live");
+        assert.equal((await page.locator("#rdLiveTitle").textContent()).trim(), locale === "tr" ? "Canlı Ajan Gözlemevi" : "Live Agent Observatory");
+        const localizedLiveCopy = (await page.locator("#rdLiveObservatory .eyebrow, #rdLiveTitle, #rdLiveTitle + p, .rd-live-public-note, .rd-live-metric, .rd-live-panel-head h3, .rd-live-footnote, .rd-live-empty, .rd-live-presence, .rd-live-presence + small").allTextContents()).join(" ").toLowerCase();
+        if (locale === "tr") assert.doesNotMatch(localizedLiveCopy, /\b(?:signed agent|active|idle|stale|heartbeat|public activity|agent view|public data|private room|buffer|polling)\b/i);
+        else assert.doesNotMatch(localizedLiveCopy, /[çğıöşüİ]/i);
 
         const geometry = await warning.evaluate((box) => {
           const title = box.querySelector("b");
@@ -331,12 +338,16 @@ test("/flop Turkish and English copy, fail-closed status, and responsive layout"
       await language.selectOption("tr");
       assert.equal(await page.locator("html").getAttribute("lang"), "tr");
       assert.equal(await page.locator("#live-title").textContent(), "Canlı FLOP durumu");
+      assert.equal(await page.locator(".lang-pick .sr-only").textContent(), "Arayüz dili");
+      assert.equal(await page.locator("footer > span:last-child").textContent(), "Topluluk çalışması · kaynak odaklı · resmî bağlantı iddiası yok");
       await assertVisibleCopyLocale(page, "tr", `${viewport.name}/flop`);
       await page.reload();
       assert.equal(await language.inputValue(), "tr", "Turkish choice should survive reload");
       await language.selectOption("en");
       assert.equal(await page.locator("html").getAttribute("lang"), "en");
       assert.equal(await page.locator("#live-title").textContent(), "Live FLOP status");
+      assert.equal(await page.locator(".lang-pick .sr-only").textContent(), "Language");
+      assert.equal(await page.locator("footer > span:last-child").textContent(), "Community-built · source-first · no affiliation claim");
       await page.reload();
       assert.equal(await language.inputValue(), "en", "English choice should survive reload");
       assert.match(await page.locator("#rdLiveTestnet [data-status]").textContent(), /planned|unreleased/i);

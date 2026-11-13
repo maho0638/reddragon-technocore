@@ -29,9 +29,13 @@ function rdNum(value) {
   return Number.isFinite(n) ? n : null;
 }
 
+function rdCapacityLang() {
+  try { return localStorage.getItem("reddragon-lang") === "tr" ? "tr" : "en"; } catch { return "en"; }
+}
+
 function rdFmt(value) {
   const n = rdNum(value);
-  return n == null ? "—" : new Intl.NumberFormat("en-US").format(n);
+  return n == null ? "—" : new Intl.NumberFormat(rdCapacityLang() === "tr" ? "tr-TR" : "en-US").format(n);
 }
 
 function rdPct(num, den) {
@@ -46,6 +50,7 @@ function rdSet(id, text) {
 }
 
 function rdRenderCapacity() {
+  const tr = rdCapacityLang() === "tr";
   const rooms = rdCapacity.rooms || {};
   const config = rdCapacity.config || {};
   const notes = rooms.notes || {};
@@ -58,17 +63,17 @@ function rdRenderCapacity() {
   const windowedMessages = rdNum(engagement.windowed_messages);
 
   rdSet("rdTcRooms", listed == null ? "—" : rdFmt(listed));
-  rdSet("rdTcRoomCap", roomCap == null ? "cap —" : `cap ${rdFmt(roomCap)} · listed occupancy ${rdPct(listed, roomCap)}`);
+  rdSet("rdTcRoomCap", roomCap == null ? (tr ? "sınır —" : "cap —") : `${tr ? "sınır" : "cap"} ${rdFmt(roomCap)} · ${tr ? "listelenen doluluk" : "listed occupancy"} ${rdPct(listed, roomCap)}`);
   rdSet("rdTcNotes", noteTotal == null ? "—" : rdFmt(noteTotal));
-  rdSet("rdTcNoteCap", noteCap == null ? "cap —" : `cap ${rdFmt(noteCap)} · ${rdPct(noteTotal, noteCap)}`);
+  rdSet("rdTcNoteCap", noteCap == null ? (tr ? "sınır —" : "cap —") : `${tr ? "sınır" : "cap"} ${rdFmt(noteCap)} · ${rdPct(noteTotal, noteCap)}`);
   rdSet("rdTcWindow", windowedMessages == null ? "—" : rdFmt(windowedMessages));
-  rdSet("rdTcUpdated", rdCapacity.lastUpdated ? new Date(rdCapacity.lastUpdated).toLocaleString() : "—");
+  rdSet("rdTcUpdated", rdCapacity.lastUpdated ? new Date(rdCapacity.lastUpdated).toLocaleString(tr ? "tr-TR" : "en-US") : "—");
 
   const status = document.getElementById("rdTcStatus");
   if (status) {
     status.textContent = rdCapacity.error
-      ? `Live read degraded: ${rdCapacity.error}`
-      : "Live read OK · public Technocore metadata only";
+      ? `${tr ? "Canlı okuma aksadı" : "Live read degraded"}: ${rdCapacity.error}`
+      : (tr ? "Canlı okuma tamam · yalnızca herkese açık Technocore üst verileri" : "Live read OK · public Technocore metadata only");
     status.className = rdCapacity.error ? "notice" : "notice";
   }
 }
@@ -95,3 +100,4 @@ document.addEventListener("DOMContentLoaded", () => {
   rdRefreshCapacity();
   setInterval(rdRefreshCapacity, 60_000);
 });
+document.getElementById("rdFlopLanguage")?.addEventListener("change", () => rdRenderCapacity());

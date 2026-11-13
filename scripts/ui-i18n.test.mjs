@@ -10,6 +10,10 @@ const patches = await readFile(new URL("../public/patches.js", import.meta.url),
 const enhancements = await readFile(new URL("../public/enhancements.js", import.meta.url), "utf8");
 const languageStable = await readFile(new URL("../public/language-stable.js", import.meta.url), "utf8");
 const proofImport = await readFile(new URL("../public/proof-import.js", import.meta.url), "utf8");
+const liveObservatory = await readFile(new URL("../public/live-observatory.js", import.meta.url), "utf8");
+const capacity = await readFile(new URL("../public/technocore-capacity.js", import.meta.url), "utf8");
+const indexHtml = await readFile(new URL("../public/index.html", import.meta.url), "utf8");
+const flopHtml = await readFile(new URL("../public/flop.html", import.meta.url), "utf8");
 const browserWorkflow = await readFile(new URL("../.github/workflows/flop-site-browser-audit.yml", import.meta.url), "utf8");
 const productionBrowserAudit = await readFile(new URL("./browser/site-acceptance.spec.mjs", import.meta.url), "utf8");
 const context = { window: {}, localStorage: { getItem: () => "en" }, navigator: { language: "en-US" } };
@@ -57,6 +61,30 @@ test("onboarding and proof-import UI copy uses shared translations in both langu
   }
   for (const key of ["agentSustainable", "agentCadence", "privateKeyHint"]) assert.ok(languageStable.includes(`app.${key}`));
   assert.ok(proofImport.includes('window.RD_I18N.t("app.proofImportNote")'));
+});
+
+test("TR/EN visible labels and dynamic live copy use the selected locale", () => {
+  const exactEntries = languageStable.match(/const exactEN = new Map\((\[[\s\S]*?\])\);/)?.[1];
+  assert.ok(exactEntries, "dynamic English translation table must exist");
+  const exactEN = vm.runInNewContext(`new Map(${exactEntries})`);
+  assert.equal(exactEN.get("İsteğe bağlı"), "Optional");
+  assert.equal(exactEN.get("Henüz özel oda yok."), "No private room yet.");
+  const liveTr = liveObservatory.slice(liveObservatory.indexOf("  tr: {"), liveObservatory.indexOf("  en: {"));
+  const liveEn = liveObservatory.slice(liveObservatory.indexOf("  en: {"), liveObservatory.indexOf("const rdLiveT"));
+  const keys = copy => [...copy.matchAll(/^\s+([A-Za-z][\w]*):/gm)].map(match => match[1]).filter(key => key !== "tr" && key !== "en").sort();
+  assert.deepEqual(keys(liveTr), keys(liveEn), "every live-observatory label must have TR and EN entries");
+  for (const phrase of ["nav: \"Canlı\"", "title: \"Canlı Ajan Gözlemevi\"", "signed: \"İmzalı ajan\"", "heartbeat: \"nabız\"", "active: \"etkin\"", "idle: \"beklemede\"", "stale: \"güncelliğini yitirmiş\"", "activity: \"Son herkese açık etkinlik\""]) assert.ok(liveTr.includes(phrase), `missing Turkish live label ${phrase}`);
+  for (const key of ["buffer", "publicLabel", "polling", "publicNick", "messageCount", "redAgent"]) assert.ok(new RegExp(`\\b${key}:`).test(liveTr) && new RegExp(`\\b${key}:`).test(liveEn), `missing TR/EN live translation ${key}`);
+  assert.match(liveObservatory, /small>\$\{rdEscape\(rdLiveT\.buffer\)\}/);
+  assert.match(liveObservatory, /small>\$\{rdEscape\(rdLiveT\.polling\)\}/);
+  assert.match(languageStable, /\.ownerline b[\s\S]*RedDragon FLOP Topluluk Aracı/);
+  assert.match(languageStable, /Repository Variables[\s\S]*Depo değişkenleri/);
+  assert.match(capacity, /rdCapacityLang\(\)/);
+  assert.match(capacity, /Canlı okuma tamam · yalnızca herkese açık Technocore üst verileri/);
+  assert.match(flopHtml, /id="rdFlopLanguage"/);
+  assert.match(flopStatus, /setAttribute\("aria-label", lang === "tr" \? "Arayüz dili" : "Language"\)/);
+  assert.match(flopStatus, /Topluluk çalışması · kaynak odaklı · resmî bağlantı iddiası yok/);
+  assert.match(languageStable, /localStorage\.setItem\(LANG_KEY, next\)[\s\S]*location\.reload\(\)/);
 });
 
 test("X sharing opens a localized compose intent and provenance acceptance targets the live refresh control", () => {

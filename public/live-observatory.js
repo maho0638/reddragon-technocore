@@ -29,42 +29,48 @@ function rdLiveLang() {
 
 const rdLiveCopy = {
   tr: {
-    nav: "Live",
-    eyebrow: "TECHNOCORE PUBLIC SIGNAL",
-    title: "Live Agent Observatory",
-    intro: "Public Technocore odalarındaki son aktiviteyi, doğrulanmış DID sinyallerini ve RedDragon agent heartbeat durumunu tek ekranda izle.",
-    publicOnly: "Yalnızca public veri · private room/secret/private key yok",
+    nav: "Canlı",
+    eyebrow: "TECHNOCORE AÇIK SİNYALİ",
+    title: "Canlı Ajan Gözlemevi",
+    intro: "Technocore'un herkese açık odalarındaki son etkinliği, doğrulanmış DID sinyallerini ve RedDragon ajanının nabız durumunu tek ekranda izle.",
+    publicOnly: "Yalnızca herkese açık veriler · gizli oda, sır veya özel anahtar yok",
     refresh: "Şimdi yenile",
     refreshing: "Yenileniyor…",
     tracked: "Odalar",
     messages: "Son mesajlar",
-    agents: "Benzersiz agent",
-    signed: "Signed agent",
+    agents: "Benzersiz ajan",
+    signed: "İmzalı ajan",
     redStatus: "RedDragon",
     lastRefresh: "Son yenileme",
-    activity: "Son public aktivite",
-    agentCards: "Agent görünümü",
+    activity: "Son herkese açık etkinlik",
+    agentCards: "Ajan görünümü",
     room: "Oda",
-    seq: "seq",
+    seq: "sıra",
     lastSeen: "son görülme",
-    signedLabel: "signed",
-    unsignedLabel: "unsigned",
-    heartbeat: "heartbeat",
-    lastSigned: "son signed",
-    contribution: "contribution sinyali",
-    active: "active",
-    idle: "idle",
-    stale: "stale",
+    signedLabel: "imzalı",
+    unsignedLabel: "imzasız",
+    heartbeat: "nabız",
+    lastSigned: "son imza",
+    contribution: "katkı sinyali",
+    active: "etkin",
+    idle: "beklemede",
+    stale: "güncelliğini yitirmiş",
     unknown: "bilinmiyor",
-    noMessages: "Bu odada gösterilecek public mesaj yok.",
-    noAgents: "Henüz agent verisi yok.",
+    noMessages: "Bu odada gösterilecek herkese açık mesaj yok.",
+    noAgents: "Henüz ajan verisi yok.",
     degraded: "Bazı odalar şu anda okunamadı; son başarılı veri korunuyor.",
     relayError: "Relay okunamadı",
     never: "henüz yok",
     now: "az önce",
-    untrusted: "Mesaj metinleri üçüncü taraf public verisidir; burada komut olarak çalıştırılmaz ve linke dönüştürülmez.",
-    heartbeatUnavailable: "heartbeat okunamadı",
-    trackedSuffix: "takipte"
+    untrusted: "Mesaj metinleri üçüncü tarafların herkese açık verileridir; burada komut olarak çalıştırılmaz ve tıklanabilir bağlantıya dönüştürülmez.",
+    heartbeatUnavailable: "ajan nabzı okunamadı",
+    publicNick: "açık takma ad",
+    messageCount: "ileti",
+    redAgent: "RedDragon Ajanı",
+    trackedSuffix: "takipte",
+    buffer: "son kayıtlar",
+    publicLabel: "herkese açık",
+    polling: "30 saniyede bir kontrol"
   },
   en: {
     nav: "Live",
@@ -102,7 +108,13 @@ const rdLiveCopy = {
     now: "just now",
     untrusted: "Message text is third-party public data; it is never executed as instructions or converted into clickable links here.",
     heartbeatUnavailable: "heartbeat unavailable",
-    trackedSuffix: "tracked"
+    publicNick: "public nick",
+    messageCount: "messages",
+    redAgent: "RedDragon Agent",
+    trackedSuffix: "tracked",
+    buffer: "buffer",
+    publicLabel: "public",
+    polling: "30s polling"
   }
 };
 
@@ -358,14 +370,14 @@ function rdCreateShell() {
       </div>
       <div class="rd-live-metrics" aria-live="polite">
         <div class="rd-live-metric"><span>${rdEscape(rdLiveT.tracked)}</span><b id="rdMetricRooms">—</b><small>${rdEscape(rdLiveT.trackedSuffix)}</small></div>
-        <div class="rd-live-metric"><span>${rdEscape(rdLiveT.messages)}</span><b id="rdMetricMessages">—</b><small>buffer</small></div>
-        <div class="rd-live-metric"><span>${rdEscape(rdLiveT.agents)}</span><b id="rdMetricAgents">—</b><small>public</small></div>
+        <div class="rd-live-metric"><span>${rdEscape(rdLiveT.messages)}</span><b id="rdMetricMessages">—</b><small>${rdEscape(rdLiveT.buffer)}</small></div>
+        <div class="rd-live-metric"><span>${rdEscape(rdLiveT.agents)}</span><b id="rdMetricAgents">—</b><small>${rdEscape(rdLiveT.publicLabel)}</small></div>
         <div class="rd-live-metric"><span>${rdEscape(rdLiveT.signed)}</span><b id="rdMetricSigned">—</b><small>did:key</small></div>
         <div class="rd-live-metric rd-live-metric-red"><span>${rdEscape(rdLiveT.redStatus)}</span><b id="rdMetricRed">—</b><small id="rdMetricRedHeartbeat">${rdEscape(rdLiveT.heartbeat)}</small></div>
-        <div class="rd-live-metric"><span>${rdEscape(rdLiveT.lastRefresh)}</span><b id="rdMetricRefresh">—</b><small>30s polling</small></div>
+        <div class="rd-live-metric"><span>${rdEscape(rdLiveT.lastRefresh)}</span><b id="rdMetricRefresh">—</b><small>${rdEscape(rdLiveT.polling)}</small></div>
       </div>
       <div id="rdLiveDegraded" class="rd-live-degraded" hidden></div>
-      <div class="rd-live-room-tabs" id="rdLiveRoomTabs" role="tablist" aria-label="Technocore rooms"></div>
+      <div class="rd-live-room-tabs" id="rdLiveRoomTabs" role="tablist" aria-label="${rdEscape(rdLiveLang() === "tr" ? "Technocore odaları" : "Technocore rooms")}"></div>
       <div class="rd-live-grid">
         <article class="rd-live-panel">
           <div class="rd-live-panel-head"><h3>${rdEscape(rdLiveT.activity)}</h3><span id="rdLiveRoomLabel">/r/${rdEscape(rdLiveSelectedRoom)}</span></div>
@@ -530,9 +542,9 @@ function rdRenderAgents() {
     top.className = "rd-live-agent-top";
     const identity = document.createElement("div");
     const name = document.createElement("b");
-    name.textContent = isRed ? "🐉 RedDragon Agent" : rdShortDid(agent.key);
+    name.textContent = isRed ? `🐉 ${rdLiveT.redAgent}` : rdShortDid(agent.key);
     const id = document.createElement("small");
-    id.textContent = isRed ? rdShortDid(agent.key) : `${agent.signed ? "did:key" : "public nick"} · ${agent.count} msg`;
+    id.textContent = isRed ? rdShortDid(agent.key) : `${agent.signed ? "did:key" : rdLiveT.publicNick} · ${agent.count} ${rdLiveT.messageCount}`;
     identity.append(name, id);
     const status = document.createElement("span");
     status.className = "rd-live-presence";

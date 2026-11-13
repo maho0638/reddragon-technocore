@@ -57,7 +57,7 @@ window.APP_CONFIG = {
 // Public onboarding state may be kept locally per DID. Private key material is never persisted here.
 // Add-on files are intentionally isolated from the core key/signing implementation.
 (() => {
-  for (const href of ["/enhancements.css", "/live-observatory.css", "/language-stable.css", "/agent-field.css", "/did-provenance.css", "/testnet-toolkit.css", "/tclk-workbench.css", "/responsive-fixes.css"]) {
+  for (const href of ["/enhancements.css", "/live-observatory.css", "/language-stable.css", "/agent-field.css", "/did-provenance.css", "/testnet-toolkit.css", "/tclk-workbench.css"]) {
     const css = document.createElement("link");
     css.rel = "stylesheet";
     css.href = href;

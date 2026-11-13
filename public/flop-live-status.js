@@ -25,14 +25,14 @@ const COPY = {
   tr: {
     refresh: "Durumu yenile", checking: "Kontrol ediliyor…", failed: "Doğrulanamadı · kaynak erişilemiyor", checked: "Son başarılı durum kontrolü", stale: "Önbellekteki durum · eski olabilir", summary: "Resmî kaynaklar ve yalnızca okunur kontroller. Başarısız kontroller doğrulanamadı olarak kalır.",
     testnetNotLive: "Planlandı / yayımlanmadı", testnetUnverified: "Doğrulanamadı", testnetManual: "Yayın bilgisi var · ağ kimliği ayrıca doğrulanmalı", testnetDetail: "Halka açık testnet başlangıcı doğrulanmadı. Devnet ayrı bir geliştirme ağıdır.", timelineConflict: "Tarihli resmî kaynaklarda çelişki var: {date} tarihli zaman çizelgesi {target} gününü çalışma hedefi olarak veriyor ve testnet'in açık olduğunu da söylüyor. Ağ durumu sayfası hâlâ planlandı/yayımlanmadı diyor; başlangıç doğrulanmadı.",
-    devnetPublic: "Halka açık geliştirme uçları listeleniyor", enrollment: "Operatör başvurusu yönetici desteğiyle yürütülüyor; herkese açık, self-servis başvuru yok.", devnetError: "Resmî devnet kaynağı kontrol edilemedi.", rpcError: "Salt okunur RPC kontrolü tamamlanamadı.", gatewayError: "Resmî model kataloğu kontrol edilemedi.", packageError: "Resmî paket referansları kontrol edilemedi.", enrollmentUnverified: "Katılım durumu doğrulanamadı", devnetUnverified: "Doğrulanamadı", devnetDetail: "Halka açık uçlar listeleniyor; operatör katılımı yönetici desteği gerektiriyor.", devnetNoRewards: "{date} tarihli resmî zaman çizelgesi SSS'si devnet'in ödül ve airdrop puanı vermediğini söylüyor.", devnetRewardUnverified: "Resmî zaman çizelgesi SSS'sindeki ödül bilgisi şu anda kontrol edilemedi.",
-    rpcMatched: "Beklenen genesis eşleşti", rpcUnverified: "Doğrulanamadı · RPC erişilemiyor veya kimlik uyuşmuyor", rpcDetail: "RPC ancak resmî devnet genesis değeriyle eşleşirse doğrulanmış sayılır.",
-    gatewayOk: "Model kataloğu yanıt verdi", gatewayBad: "Doğrulanamadı · katalog erişilemiyor", gatewayDetail: "Inference veya ücretli istek gönderilmez.",
+    devnetPublic: "Halka açık geliştirme ağı uçları listeleniyor", enrollment: "Operatör başvurusu yönetici desteğiyle yürütülüyor; herkesin kendi başına başvurabileceği bir yöntem yok.", devnetError: "Resmî geliştirme ağı kaynağı kontrol edilemedi.", rpcError: "Salt okunur RPC kontrolü tamamlanamadı.", gatewayError: "Resmî model kataloğu kontrol edilemedi.", packageError: "Resmî paket referansları kontrol edilemedi.", enrollmentUnverified: "Katılım durumu doğrulanamadı", devnetUnverified: "Doğrulanamadı", devnetDetail: "Halka açık uçlar listeleniyor; operatör katılımı yönetici desteği gerektiriyor.", devnetNoRewards: "{date} tarihli resmî zaman çizelgesi SSS'si geliştirme ağının ödül veya airdrop puanı vermediğini söylüyor.", devnetRewardUnverified: "Resmî zaman çizelgesi SSS'sindeki ödül bilgisi şu anda kontrol edilemedi.",
+    rpcMatched: "Beklenen başlangıç özeti eşleşti", rpcUnverified: "Doğrulanamadı · RPC erişilemiyor veya ağ kimliği uyuşmuyor", rpcDetail: "RPC ancak resmî geliştirme ağı başlangıç özetiyle eşleşirse doğrulanmış sayılır.",
+    gatewayOk: "Model kataloğu yanıt verdi", gatewayBad: "Doğrulanamadı · katalog erişilemiyor", gatewayDetail: "Model çalıştırma veya ücretli istek gönderilmez.",
     packagesOk: "Resmî paket referansları", packagesBad: "Doğrulanamadı · belgelere erişilemiyor",
     paper: "Yellow Paper v0.5.0 · taslak · E.38 açık", paperDrift: "Canlı sayfa ve GitHub kopyası farklı; dosya geçmişi depo CI etkinliğinden ayrı gösteriliyor.", paperMatch: "GitHub içerik geçmişi ve depo başlığı ayrı ayrı kontrol edildi.",
     noToken: "Resmî bağlantılar sayfasında canlı FLOP tokenı, claim veya airdrop olmadığı belirtiliyor.", tokenUnverified: "Resmî token ve claim durumu kontrol edilemedi.", tokenChanged: "Resmî bağlantılar sayfasındaki token/claim ifadesi değişmiş; yeniden incelenmeli.",
     sdk: "SDK sürümleri", validator: "Validator paketi", manual: "Validator kılavuzu", admission: "Katılım", none: "listelenmiyor",
-    intro: "Geliştiriciler ve ajanlar için herkese açık gözlemevi. Resmî bilgileri taslaklardan ve belirsizliklerden ayırır; her önemli bilgiye kaynağını ekler.", title: "FLOP'u tahmin yürütmeden takip et.", kicker: "BAĞIMSIZ TOPLULUK ARACI · KAYNAK ODAKLI · AIRDROP GARANTİSİ YOK", official: "Resmî Yellow Paper'ı oku", lab: "Doğrulanabilir Ajan Laboratuvarı'nı aç",
+    intro: "Geliştiriciler ve ajanlar için herkese açık gözlemevi. Resmî bilgileri taslaklardan ve belirsizliklerden ayırır; önemli bilgilerin yanına kaynağını ekler.", title: "FLOP'u tahmin yürütmeden takip et.", kicker: "BAĞIMSIZ TOPLULUK ARACI · KAYNAK ODAKLI · AIRDROP GARANTİSİ YOK", official: "Resmî Yellow Paper'ı oku", lab: "Doğrulanabilir Ajan Laboratuvarı'nı aç",
     card: [
       ["RESMÎ TEKNİK TANIM", "Yellow Paper v0.5.0 (taslak)", "Normatif uygulama tanımı taslak durumunda ve değişmeye devam ediyor.", "Resmî kaynak →"],
       ["GENESIS ARZI · TASLAK", "4,4 milyar FLOP", "Taslakta miner, validator ve ajan gruplarına 1,2'şer milyar, ayrıca 800 milyon rezerv yazıyor. Bunlar kişisel ödül değildir.", "§9 / Ek A →"],
@@ -42,7 +42,7 @@ const COPY = {
       ["HALKA AÇIK TESTNET", "Planlandı / yayımlanmadı", "Kaynak kontrolünde halka açık testnet başlangıcı doğrulanmadı. Devnet ile testnet'i karıştırma.", "Resmî testnet durumu →"],
       ["İÇERİK ÜRETİCİ BAŞVURUSU", "Resmî durumu kontrol et", "Başvuru durumu değişebilir. Kişisel ödeme garantisi yoktur.", "Resmî başvuru →"],
       ["GPU PİYASASI", "Resmî piyasa izleyicisi", "Piyasa bilgisi faucet, testnet hizmeti veya ödül garantisi değildir.", "GPU piyasasını aç →"],
-      ["DEVNET · GELİŞTİRME AĞI", "Halka açık uçlar; kısıtlı katılım", "Resmî ağ belgeleri uçları listeliyor; tarihli zaman çizelgesi SSS'si aşağıda ve ödül ifadesi canlı kontrol zamanı ile raporlanıyor.", "Resmî devnet durumu →"]
+      ["DEVNET · GELİŞTİRME AĞI", "Halka açık uçlar; kısıtlı katılım", "Resmî ağ belgeleri uçları listeliyor; tarihli zaman çizelgesi SSS'si aşağıda ve ödül bilgisi son kontrol zamanı ile raporlanıyor.", "Resmî geliştirme ağı durumu →"]
     ]
   }
 };
@@ -70,7 +70,8 @@ function renderStatic(lang) {
   if (!document.getElementById("flop-live-status")) return;
   const c = FLOP_STATUS_COPY[lang];
   document.documentElement.lang = lang;
-  const select = document.getElementById("rdFlopLanguage"); if (select) select.value = lang;
+  const select = document.getElementById("rdFlopLanguage"); if (select) { select.value = lang; select.setAttribute("aria-label", lang === "tr" ? "Arayüz dili" : "Language"); }
+  const languageLabel = document.querySelector(".lang-pick .sr-only"); if (languageLabel) languageLabel.textContent = lang === "tr" ? "Arayüz dili" : "Language";
   put(document, ".hero h1", c.title); put(document, ".hero .lead", c.intro); put(document, ".hero .kicker", c.kicker);
   const actions = document.querySelectorAll(".hero .actions a"); if (actions[0]) actions[0].textContent = c.official; if (actions[1]) actions[1].textContent = c.lab;
   const nav = document.querySelectorAll(".topbar nav a");
@@ -106,23 +107,26 @@ function renderStatic(lang) {
     section.querySelector(".kicker").textContent = lang === "tr" ? "PRATİK REHBER · DEVNET TESTNET DEĞİLDİR" : "PRACTICAL GUIDE · DEVNET IS NOT TESTNET";
     section.querySelector("h2").textContent = lang === "tr" ? "Şu anda neler yapabilirsin?" : "What you can do now";
     const trCards = [
-      ["Devnet ile başla", "Yayımlanan salt okunur model kataloğunu veya SDK/CLI belgelerini kullan. Validator paketi mevcut olsa da katılım için FLOP operasyon irtibatı, onay, fonlama ve aktivasyon gerekir. Yerel etkinliği testnet puanı sayma."],
-      ["Halka açık testnet açıldığında", "Önce resmî testnet kimliğini, genesis değerini, sürümü, RPC'yi, faucet'i ve katılım kurallarını doğrula. Belgeler planned/unreleased diyorsa testnet'e katılım izni var sayma."],
-      ["GPU yok mu? Hazırlık yapabilirsin", "Teknik tanımı ve SDK belgelerini oku, belgelenmiş API'lere ajan bağla, herkese açık DID biçimini doğrula ve kaynak sürümlerini karşılaştır. GPU yalnızca miner çalıştırma rolü için gerekir."],
-      ["Ödül garantisi yok", "Devnet ödül veya airdrop puanı kazandırmaz. DID, faucet notu, model isteği, cüzdan bakiyesi veya elle kaydedilmiş etkinlik uygunluk kanıtı değildir. E.38 dönüşüm kurallarının bir kısmı açık bırakılmıştır."]
+      ["Devnet ile başla", "Yayımlanan salt okunur model kataloğunu veya SDK/CLI belgelerini kullan. Doğrulayıcı paketi mevcut olsa da katılım için FLOP operasyon irtibatı, onay, fonlama ve etkinleştirme gerekir. Yerel etkinliği testnet puanı sayma."],
+      ["Halka açık testnet açıldığında", "Önce resmî testnet kimliğini, genesis değerini, sürümü, RPC'yi, token dağıtım ucunu ve katılım kurallarını doğrula. Belgelerde ‘planlandı / yayımlanmadı’ yazıyorsa testnet'e katılım izni var sayma."],
+      ["GPU yok mu? Hazırlık yapabilirsin", "Teknik tanımı ve SDK belgelerini oku, belgelenmiş API'lere ajan bağla, herkese açık DID biçimini doğrula ve kaynak sürümlerini karşılaştır. GPU yalnızca madenci çalıştırmak için gerekir."],
+      ["Ödül garantisi yok", "Devnet ödül veya airdrop puanı kazandırmaz. DID, token dağıtım notu, model isteği, cüzdan bakiyesi veya elle kaydedilmiş etkinlik uygunluk kanıtı değildir. E.38 dönüşüm kurallarının bir kısmı açık bırakılmıştır."]
     ];
     section.querySelectorAll(".guide-grid article").forEach((article, i) => { if (lang === "tr" && trCards[i]) { put(article, "h3", trCards[i][0]); put(article, "p", trCards[i][1]); } else if (lang === "en") { const en = [["Start with devnet", "Use the published read-only model catalog or SDK/CLI documentation. A validator package exists, but joining is administrator-assisted and requires an operations contact, approval, funding and activation. Do not treat local activity as testnet credit."], ["When public testnet opens", "First verify the official testnet identity, genesis, release, RPC, faucet and admission rules. The official onboarding guides are not permission to join the production testnet while they still say planned/unreleased."], ["No GPU? You can still prepare", "Read the spec and SDK docs, build an agent against documented APIs, validate a public DID format, compare official source versions and track your own local checklist. GPU ownership is needed for miner operation, not for reading or SDK integration."], ["Rewards are not guaranteed", "Devnet has no reward or airdrop weight. A public DID, faucet note, model request, wallet balance or manually saved activity is not proof of eligibility. E.38 leaves important testnet-to-genesis conversion rules open."]]; put(article, "h3", en[i][0]); put(article, "p", en[i][1]); } });
-    const guideLinks = section.querySelectorAll(".guide-grid article a"); const labels = lang === "tr" ? ["SDK sürümleri ve örnekler ↗", "Resmî testnet başlangıç durumu ↗", "Miner rehberi ve roller ↗", "Resmî dönüşüm durumu ↗"] : ["SDK versions and examples ↗", "Recheck official launch status ↗", "Miner guide and role details ↗", "Official conversion status ↗"]; guideLinks.forEach((a,i)=>{if(labels[i])a.textContent=labels[i];});
-    const toolLinks = section.querySelectorAll(".tool-links a"); const toolLabels = lang === "tr" ? ["Ajan Laboratuvarı ve DID araçları", "Validator kılavuzu ve katılım adımları ↗", "Resmî bağlantılar ve dolandırıcılık uyarıları ↗"] : ["Open Agent Lab and existing DID tools", "Validator guide and current admission steps ↗", "Check official links and scam guidance ↗"]; toolLinks.forEach((a,i)=>{if(toolLabels[i])a.textContent=toolLabels[i];});
+    const guideLinks = section.querySelectorAll(".guide-grid article a"); const labels = lang === "tr" ? ["SDK sürümleri ve örnekler ↗", "Resmî testnet başlangıç durumu ↗", "Madenci rehberi ve roller ↗", "Resmî dönüşüm durumu ↗"] : ["SDK versions and examples ↗", "Recheck official launch status ↗", "Miner guide and role details ↗", "Official conversion status ↗"]; guideLinks.forEach((a,i)=>{if(labels[i])a.textContent=labels[i];});
+    const toolLinks = section.querySelectorAll(".tool-links a"); const toolLabels = lang === "tr" ? ["Ajan Laboratuvarı ve DID araçları", "Doğrulayıcı kılavuzu ve katılım adımları ↗", "Resmî bağlantılar ve dolandırıcılık uyarıları ↗"] : ["Open Agent Lab and existing DID tools", "Validator guide and current admission steps ↗", "Check official links and scam guidance ↗"]; toolLinks.forEach((a,i)=>{if(toolLabels[i])a.textContent=toolLabels[i];});
   }
   const live = document.getElementById("flop-live-status");
   if (live) {
     put(live, ".section-heading .kicker", lang === "tr" ? "SALT OKUNUR KAYNAK KONTROLÜ" : "READ-ONLY SOURCE CHECK");
     put(live, "#live-title", lang === "tr" ? "Canlı FLOP durumu" : "Live FLOP status");
     put(live, "#rdLiveSummary", c.summary); put(live, "#rdRefreshStatus", c.refresh);
-    put(live, "#rdLiveDisclaimer", lang === "tr" ? "Kontroller işlem göndermez, imza atmaz, faucet claim'i yapmaz veya inference çalıştırmaz. Zaman aşımı ya da bozuk yanıt doğrulanamadı olarak gösterilir." : "Status checks do not submit transactions, sign, claim faucet funds, or run inference. A timeout or malformed response is shown as unverified.");
+    put(live, "#rdLiveDisclaimer", lang === "tr" ? "Kontroller işlem göndermez, imza atmaz, token dağıtımından talepte bulunmaz veya model çalıştırmaz. Zaman aşımı ya da bozuk yanıt doğrulanamadı olarak gösterilir." : "Status checks do not submit transactions, sign, claim faucet funds, or run inference. A timeout or malformed response is shown as unverified.");
   }
-  const footer = document.getElementById("rdFooterChecked"); if (footer && !window.__rdFlopStatus) footer.textContent = lang === "tr" ? "kontrol yükleniyor" : "status check loading";
+  const footer = document.getElementById("rdFooterChecked"); if (footer && !window.__rdFlopStatus) footer.textContent = lang === "tr" ? "kaynak kontrolü sayfa açılınca güncellenir" : "source check updates on page load";
+  const footerTagline = document.querySelector("footer > span:last-child"); if (footerTagline) footerTagline.textContent = lang === "tr" ? "Topluluk çalışması · kaynak odaklı · resmî bağlantı iddiası yok" : "Community-built · source-first · no affiliation claim";
+  const footerContext = document.querySelector("footer > span:first-child");
+  if (footerContext?.firstChild?.nodeType === Node.TEXT_NODE) footerContext.firstChild.nodeValue = lang === "tr" ? "RedDragon FLOP Topluluk Gözlemevi · " : "RedDragon FLOP Community Observatory · ";
 }
 
 function renderStatus(data, lang = getLang()) {
@@ -167,15 +171,15 @@ function renderStatus(data, lang = getLang()) {
   const content = yp.githubContentCommit;
   const head = yp.githubRepositoryHead;
   const diff = content && head && content.sha !== head.sha;
-  const paperDetail = diff ? `${c.paperDrift} Content ${fmtTime(content.date, lang)} · repo ${fmtTime(head.date, lang)} (${head.message || ""})` : c.paperMatch;
+  const paperDetail = diff ? `${c.paperDrift} ${lang === "tr" ? "İçerik" : "Content"} ${fmtTime(content.date, lang)} · ${lang === "tr" ? "depo" : "repo"} ${fmtTime(head.date, lang)} (${head.message || ""})` : c.paperMatch;
   show("rdLivePaper", c.paper, `${paperDetail} · ${lang === "tr" ? "Canlı sayfa" : "Live page"} ${yp.livePageUpdated || c.none}. ${c.devnetNoRewards ? (data.devnet?.rewards === "none" && data.timeline?.state === "verified" ? c.devnetNoRewards.replace("{date}", data.timeline.updated || c.none) : c.devnetRewardUnverified) : ""} ${tokenText}`, "warn");
   const checkedAt = data.checkedAt || data.cachedAt;
   const old = data.stale || !checkedAt || Date.now() - Date.parse(checkedAt) > 24 * 60 * 60 * 1000;
   put(document, "#rdLiveChecked", `${old ? c.stale : c.checked}: ${fmtTime(checkedAt, lang)}${data.cachedAt ? ` · ${lang === "tr" ? "önbellek" : "cache"} ${fmtTime(data.cachedAt, lang)}` : ""}`);
   const footer = document.getElementById("rdFooterChecked"); if (footer) footer.textContent = `${lang === "tr" ? "kontrol" : "checked"} ${fmtTime(checkedAt, lang)}`;
   const paperTitle = document.getElementById("rdPaperSyncTitle"); const paperText = document.getElementById("rdPaperSyncText");
-  if (paperTitle) paperTitle.textContent = diff ? (lang === "tr" ? "GitHub içerik güncellemesi canlı sayfadan yeni" : "GitHub paper content is newer than live page") : (lang === "tr" ? "Depo başlığı CI-only olabilir" : "Latest repository commit may be CI-only");
-  if (paperText) paperText.textContent = diff ? `${lang === "tr" ? "Canlı FLOP sayfası" : "Live FLOP page"}: ${yp.livePageUpdated || (lang === "tr" ? "doğrulanamadı" : "unverified")}. ${lang === "tr" ? "GitHub makale dosyası" : "GitHub paper file"}: ${content?.date || "unverified"}. ${lang === "tr" ? "Depo başlığı" : "Repository head"}: ${head?.date || "unverified"} · ${head?.message || ""}.` : c.paperMatch;
+  if (paperTitle) paperTitle.textContent = diff ? (lang === "tr" ? "GitHub içerik güncellemesi canlı sayfadan yeni" : "GitHub paper content is newer than live page") : (lang === "tr" ? "Depo başlığı yalnızca CI çalışması olabilir" : "Latest repository commit may be CI-only");
+  if (paperText) paperText.textContent = diff ? `${lang === "tr" ? "Canlı FLOP sayfası" : "Live FLOP page"}: ${yp.livePageUpdated || (lang === "tr" ? "doğrulanamadı" : "unverified")}. ${lang === "tr" ? "GitHub makale dosyası" : "GitHub paper file"}: ${content?.date || (lang === "tr" ? "doğrulanamadı" : "unverified")}. ${lang === "tr" ? "Depo başlığı" : "Repository head"}: ${head?.date || (lang === "tr" ? "doğrulanamadı" : "unverified")} · ${head?.message || ""}.` : c.paperMatch;
   const didStatus = document.getElementById("rdTestnetToolkit");
   if (didStatus) {
     const statusCols = Array.from(didStatus.querySelectorAll(".rd-testnet-status > div"));
