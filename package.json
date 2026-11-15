@@ -12,9 +12,10 @@
     "test:local-http": "node scripts/local-api-http-smoke.mjs",
     "test:local-preview": "node scripts/local-preview-http-smoke.mjs",
     "preview:local": "node scripts/local-preview-server.mjs",
-    "test:browser": "node --test scripts/browser/*.spec.mjs"
+    "test:browser": "node --test scripts/browser/site-acceptance.spec.mjs scripts/browser/flop-ui.spec.mjs",
+    "test:browser:production": "node --test scripts/browser/production-smoke.spec.mjs"
   },
   "engines": {
-    "node": ">=24"
+    "node": "24.x"
   }
 }

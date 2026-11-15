@@ -489,7 +489,7 @@ test("DID create, encrypted backup, restore, prompts and mocked signed flows wor
   }
 });
 
-test("candidate X share opens a localized compose intent without external writes", { timeout: 90000 }, async () => {
+test("candidate X share copies localized text without opening X or writing externally", { timeout: 90000 }, async () => {
   for (const locale of ["en", "tr"]) {
     const { context, page } = await newPage(viewports[0], locale);
     const errors = [];
@@ -512,23 +512,21 @@ test("candidate X share opens a localized compose intent without external writes
       assert.equal(await shareButton.isEnabled(), true, "a recorded contribution enables X sharing");
       assert.equal((await shareButton.textContent()).trim(), locale === "tr" ? "X'te paylaş" : "Share on X");
 
-      await page.evaluate(() => {
-        window.__qaExternalIntents = [];
-        window.open = url => { window.__qaExternalIntents.push(String(url)); return { opener: null }; };
-      });
+      const unexpectedPopups = [];
+      const pageCountBeforeShare = context.pages().length;
+      page.on("popup", popup => unexpectedPopups.push(popup));
       await shareButton.click();
-      const urls = await page.evaluate(() => window.__qaExternalIntents.splice(0));
-      assert.equal(urls.length, 1, `${locale} should open one intercepted X compose intent`);
-      const intent = new URL(urls[0]);
-      assert.equal(intent.origin, "https://x.com");
-      assert.equal(intent.pathname, "/intent/tweet");
-      const text = intent.searchParams.get("text") || "";
-      assert.match(text, locale === "tr"
-        ? /Technocore ajan kimliğimi oluşturdum ve faydalı bir katkı yayımladım/
-        : /Built my Technocore agent identity and published a useful contribution/);
+      const expectedStart = locale === "tr"
+        ? "Technocore ajan kimliğimi oluşturdum ve faydalı bir katkı yayımladım"
+        : "Built my Technocore agent identity and published a useful contribution";
+      await page.waitForFunction(async expected => (await navigator.clipboard.readText()).includes(expected), expectedStart);
+      const text = await page.evaluate(() => navigator.clipboard.readText());
+      assert.ok(text.includes(expectedStart), `${locale} clipboard share has the correct localized intro`);
       assert.ok(text.includes(did), `${locale} share contains the public DID`);
       assert.ok(text.includes("https://example.test/red-dragon-contribution"), `${locale} share contains the contribution URL`);
       assert.match(text, /#Technocore #FLOP/);
+      assert.deepEqual(unexpectedPopups, [], `${locale} clipboard share must not open a popup`);
+      assert.equal(context.pages().length, pageCountBeforeShare, `${locale} clipboard share must not create a new page`);
       assert.deepEqual(errors, [], `${locale} X share should not throw a browser exception`);
     } finally { await context.close(); }
   }

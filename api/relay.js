@@ -1,8 +1,13 @@
+import { createHash, createPublicKey, verify as verifySignature } from "node:crypto";
+import { isPublicEd25519Did } from "../public/flop-did-utils.js";
+
 const NAME_RE = /^[a-z0-9][a-z0-9_-]{0,47}$/;
-const DID_RE = /^did:key:z6Mk[1-9A-HJ-NP-Za-km-z]+$/;
-const SIG_RE = /^[A-Za-z0-9_-]{86}$/;
+const SIG_RE = /^[A-Za-z0-9_-]{85}[AQgw]$/;
 const NONCE_RE = /^\d{1,19}$/;
 const FP_RE = /^[0-9a-f]{16}$/;
+// Only the namespaces used by this client may be written through its public relay.
+// This is a surface reduction, NOT authenticated ownership protection for topics/profiles.
+const WRITABLE_KV_NAMESPACES = new Set(["did", "topic", "profile"]);
 const BASE = "https://technocore.chat";
 const MAX_JSON_BYTES = 32 * 1024;
 const READ_STAGGER_ROOMS = ["lobby", "technocore", "flop-network", "kibble", "validators", "gpu-miners"];
@@ -14,7 +19,7 @@ const rateBuckets = new Map();
 
 function cleanSingleLine(text) {
   return String(text || "")
-    .replace(/[\u0000-\u001F\u007F-\u009F\u200B-\u200F\u202A-\u202E\u2060\u2066-\u2069]/g, " ")
+    .replace(/[\p{Cc}\p{Cf}\p{Cs}\p{Co}\p{Zl}\p{Zp}]/gu, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -185,10 +190,42 @@ function didNotePath(ns, key) {
   return { ns, key, legacy: false };
 }
 
+function decodeDidPublicKey(did) {
+  if (!isPublicEd25519Did(did)) return null;
+  const alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+  let value = 0n;
+  for (const char of did.slice("did:key:z".length)) {
+    const digit = alphabet.indexOf(char);
+    if (digit < 0) return null;
+    value = value * 58n + BigInt(digit);
+  }
+  const bytes = [];
+  while (value > 0n) { bytes.unshift(Number(value & 255n)); value >>= 8n; }
+  const encoded = did.slice("did:key:z".length);
+  for (const char of encoded) { if (char !== "1") break; bytes.unshift(0); }
+  if (bytes.length !== 34 || bytes[0] !== 0xed || bytes[1] !== 0x01) return null;
+  return Buffer.from(bytes.slice(2));
+}
+
+function verifySignedMessage(room, did, sig, nonce, text) {
+  try {
+    const raw = decodeDidPublicKey(did);
+    if (!raw || !SIG_RE.test(sig)) return false;
+    const signature = Buffer.from(sig, "base64url");
+    if (signature.length !== 64 || signature.toString("base64url") !== sig) return false;
+    const spkiPrefix = Buffer.from("302a300506032b6570032100", "hex");
+    const key = createPublicKey({ key: Buffer.concat([spkiPrefix, raw]), format: "der", type: "spki" });
+    return verifySignature(null, Buffer.from(`${room}|${nonce}|${text}`, "utf8"), key, signature);
+  } catch {
+    return false;
+  }
+}
+
 export default async function handler(req, res) {
   harden(res);
   if (req.method !== "POST") return bad(res, 405, "POST only");
-  if (!String(req.headers["content-type"] || "").toLowerCase().includes("application/json")) {
+  const contentType = String(req.headers["content-type"] || "").split(";", 1)[0].trim().toLowerCase();
+  if (contentType !== "application/json") {
     return bad(res, 415, "application/json required");
   }
   if (!bodySizeOk(req.body)) return bad(res, 413, "Request too large");
@@ -218,7 +255,7 @@ export default async function handler(req, res) {
     }
 
     if (action === "read") {
-      if (!NAME_RE.test(room)) return bad(res, 400, "Invalid room");
+      if (typeof room !== "string" || !NAME_RE.test(room)) return bad(res, 400, "Invalid room");
       if (since != null && !/^\d{1,19}$/.test(String(since))) return bad(res, 400, "Invalid since cursor");
       const q = new URLSearchParams({ format: "json", limit: "50" });
       if (since != null && since !== "") q.set("since", String(since));
@@ -230,12 +267,14 @@ export default async function handler(req, res) {
     }
 
     if (action === "signedPost") {
-      if (!NAME_RE.test(room)) return bad(res, 400, "Invalid room");
+      if (typeof room !== "string" || !NAME_RE.test(room)) return bad(res, 400, "Invalid room");
+      if (typeof did !== "string" || !isPublicEd25519Did(did)) return bad(res, 400, "Invalid Ed25519 did:key");
+      if (typeof sig !== "string" || !SIG_RE.test(sig)) return bad(res, 400, "Invalid signature");
+      if (typeof nonce !== "string" || !NONCE_RE.test(nonce)) return bad(res, 400, "Invalid nonce");
+      if (typeof text !== "string") return bad(res, 400, "Message must be a string");
       const clean = cleanSingleLine(text);
-      if (!DID_RE.test(String(did || ""))) return bad(res, 400, "Invalid Ed25519 did:key");
-      if (!SIG_RE.test(String(sig || ""))) return bad(res, 400, "Invalid signature");
-      if (!NONCE_RE.test(String(nonce || ""))) return bad(res, 400, "Invalid nonce");
       if (!clean || clean.length > 4096) return bad(res, 400, "Message must be 1-4096 chars");
+      if (!verifySignedMessage(room, did, sig, nonce, clean)) return bad(res, 400, "Signature does not match DID and message");
       // Never retry signed writes here: a Technocore signed nonce is single-use.
       const r = await upstream(`${BASE}/r/${encodeURIComponent(room)}?format=json`, {
         method: "POST",
@@ -246,11 +285,21 @@ export default async function handler(req, res) {
     }
 
     if (action === "kvSet") {
-      const path = didNotePath(String(ns || ""), String(key || ""));
+      if (typeof ns !== "string" || typeof key !== "string") return bad(res, 400, "Namespace and key must be strings");
+      if (typeof value !== "string") return bad(res, 400, "Value must be a string");
+      const writeNs = ns;
+      const writeKey = key;
+      const path = didNotePath(writeNs, writeKey);
       if (!NAME_RE.test(path.ns)) return bad(res, 400, "Invalid namespace");
       if (!NAME_RE.test(path.key)) return bad(res, 400, "Invalid key");
+      if (!WRITABLE_KV_NAMESPACES.has(writeNs)) return bad(res, 403, "KV namespace is not writable through this relay");
       const v = cleanSingleLine(value);
       if (!v || v.length > 8192) return bad(res, 400, "Value must be 1-8192 chars");
+      if (writeNs === "did") {
+        if (!FP_RE.test(writeKey) || !isPublicEd25519Did(v)) return bad(res, 400, "Invalid DID note");
+        const fingerprint = createHash("sha256").update(v, "utf8").digest("hex").slice(0, 16);
+        if (writeKey !== fingerprint) return bad(res, 400, "DID fingerprint mismatch");
+      }
       const r = await upstream(`${BASE}/kv/${encodeURIComponent(path.ns)}/${encodeURIComponent(path.key)}/set/${encodeURIComponent(v)}`, {
         headers: { accept: "text/plain,application/json" }
       });
@@ -258,7 +307,8 @@ export default async function handler(req, res) {
     }
 
     if (action === "kvGet") {
-      const path = didNotePath(String(ns || ""), String(key || ""));
+      if (typeof ns !== "string" || typeof key !== "string") return bad(res, 400, "Namespace and key must be strings");
+      const path = didNotePath(ns, key);
       if (!NAME_RE.test(path.ns)) return bad(res, 400, "Invalid namespace");
       if (!NAME_RE.test(path.key)) return bad(res, 400, "Invalid key");
       let r = await upstreamRead(`${BASE}/kv/${encodeURIComponent(path.ns)}/${encodeURIComponent(path.key)}`, {

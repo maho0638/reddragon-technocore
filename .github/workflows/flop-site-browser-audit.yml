@@ -1,68 +1,52 @@
-name: FLOP full-site browser acceptance audit
+name: FLOP local Chromium E2E — checkpoint 9bbc626
 on:
-  push:
-    branches:
-      - qa/flop-site-browser-20261110
-    paths:
-      - ".github/workflows/flop-site-browser-audit.yml"
-      - "public/**"
-      - "api/**"
-      - "scripts/*.test.mjs"
-      - "scripts/local-preview-server.mjs"
-      - "package.json"
-      - "scripts/browser/site-acceptance.spec.mjs"
-      - "scripts/browser/flop-ui.spec.mjs"
   workflow_dispatch:
     inputs:
       run_production_acceptance:
-        description: Run read-only live-site acceptance after production deployment
+        description: "Safety lock: keep false; true skips this local-only test job"
         required: false
         type: boolean
         default: false
 permissions:
   contents: read
 concurrency:
-  group: flop-site-browser-audit-${{ github.ref }}
-  cancel-in-progress: true
+  group: flop-e2e-9bbc626
+  cancel-in-progress: false
 jobs:
-  smoke:
-    if: github.ref == 'refs/heads/qa/flop-site-browser-20261110'
+  local-browser-e2e:
+    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/qa/flop-e2e-9bbc626' && inputs.run_production_acceptance == false }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 30
     steps:
       - name: Checkout (no persisted credentials)
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
-      - name: Setup Node 24
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - name: Set up Node.js 24
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: "24"
           package-manager-cache: false
-      - name: Install pinned browser test runtime (temporary runner only)
-        run: npm install --no-save --no-package-lock playwright@1.65.0
-      - name: Install Chromium in runner
-        run: npx playwright install --with-deps chromium
-      - name: Existing source and regression tests
-        if: ${{ github.event_name == 'workflow_dispatch' || !contains(github.event.head_commit.message, '[candidate-only]') }}
-        run: npm test
-      - name: Local HTTP preview security smoke
-        if: ${{ github.event_name == 'workflow_dispatch' || !contains(github.event.head_commit.message, '[candidate-only]') }}
-        run: npm run test:local-preview
-      - name: Local API and data-integrity smoke
-        if: ${{ github.event_name == 'workflow_dispatch' || !contains(github.event.head_commit.message, '[candidate-only]') }}
-        run: npm run test:local-http
-      - name: Offline mocked desktop and mobile Playwright flows
-        env:
-          FOCUSED_CANDIDATE: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[candidate-only]') }}
+      - name: Verify source files match the authorized local checkpoint
         run: |
-          if [[ "$FOCUSED_CANDIDATE" == "true" ]]; then
-            node --test --test-name-pattern="candidate X share opens a localized compose intent" scripts/browser/flop-ui.spec.mjs
-          else
-            node --test scripts/browser/flop-ui.spec.mjs
-          fi
-      - name: Post-release production read-only acceptance and intercepted write flows
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_production_acceptance }}
-        run: node --test scripts/browser/site-acceptance.spec.mjs
-        env:
-          NODE_OPTIONS: --no-warnings
+          echo "AUTHORIZED_LOCAL_CHECKPOINT=9bbc626d846cc03b85d0ee39aeb5500b66e682de"
+          sha256sum --check <<'SHA256'
+          9a63745452c91f7098d31d5652c3d304aa3ba6c77bb0ca97b5d8945dcbd6b52b  api/relay.js
+          2ae20c75b0c84cf2ca1fc13d36faf69226b85bc3faf2c4c6267ca479dade2a3a  package.json
+          ae51cdb4d9b7b701ed966bad919030dd75c3a6ddfda017da92f41d2e178222ef  public/app.js
+          309685656518a234bfce46d3e24253426d37f45f56a22ecea00fe705da2e9201  public/ui-i18n.js
+          c24c27922e4926d95d0c035155a9b9eddcef64a67805aa13d613a80a2c91d93d  scripts/browser/flop-ui.spec.mjs
+          8b5cbda6bbc08e7339df154945ff7d5e9759124927768c2102c559fdeaa118b2  scripts/browser/production-smoke.spec.mjs
+          e7f9b1ea2d4acbe15ee69875e3fc1ccb5ef910148e3ed4c24109d92b3ac7c65a  scripts/browser/site-acceptance.spec.mjs
+          ec120c22ae9bfbc7dba93ca0fce819bf7c32174752f79831bb54f6453ab3e56a  scripts/did-backup-restore.test.mjs
+          65baa5c8ba9724db46e25d82890bc020b6ef892db9312a373b4b5369244cd814  scripts/relay-security-audit.test.mjs
+          SHA256
+          echo "CHECKPOINT_SOURCE_HASHES=PASS"
+      - name: Install pinned Playwright package
+        run: npm install --no-save --no-package-lock --no-audit --no-fund playwright@1.65.1
+      - name: Install Chromium for this ephemeral runner
+        run: npx playwright install --with-deps chromium
+      - name: Verify local preview denies relay writes
+        run: npm run test:local-preview
+      - name: Run local-only Chromium E2E (mock relay, synthetic DID)
+        run: npm run test:browser

@@ -1,11 +1,11 @@
-// Live site acceptance audit: external writes are intercepted, no real signing or posting.
+// Local preview acceptance audit: external writes are intercepted, no real posting.
 // Browser-only DID generation uses an ephemeral test identity; no keys are uploaded or logged.
 import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
 import { before, after, test } from "node:test";
 const require = createRequire(import.meta.url);
 const { chromium } = require("playwright");
-const ORIGIN = "https://reddragon-technocore.vercel.app";
 const DIDS = [
   "did:key:z6MkuhrsP4tDZjWYdZLPxaur19WvrF1yuLGsGB2S8Q1gwS6K",
   "did:key:z6MkqEhk421dSv8pEnDvWVPatEMegY2RgXU2ksDw5pbUbU48"
@@ -17,10 +17,43 @@ const sizes = [
   { name: "small-mobile", width: 320, height: 740, mobile: true }
 ];
 let browser;
+let previewServer;
+let LOCAL_ORIGIN;
 let visibleControls = 0;
 let testedActions = 0;
-before(async () => { browser = await chromium.launch({ headless: true }); });
-after(async () => { await browser?.close(); console.log("[QA] visible controls enumerated across pages: " + visibleControls + "; explicit action checks: " + testedActions + ". Inventory is NOT proof that every external action succeeded."); });
+let serverStdout = "";
+let serverStderr = "";
+before(async () => {
+  const port = 43_000 + Math.floor(Math.random() * 1_000);
+  LOCAL_ORIGIN = `http://127.0.0.1:${port}`;
+  previewServer = spawn(process.execPath, ["scripts/local-preview-server.mjs"], {
+    cwd: process.cwd(), env: { ...process.env, PORT: String(port) }, stdio: ["ignore", "pipe", "pipe"]
+  });
+  previewServer.stdout.setEncoding("utf8").on("data", part => { serverStdout += part; });
+  previewServer.stderr.setEncoding("utf8").on("data", part => { serverStderr += part; });
+  const deadline = Date.now() + 8_000;
+  let localReady = false;
+  while (Date.now() < deadline) {
+    if (previewServer.exitCode !== null) throw new Error(`Local preview exited: ${serverStderr || serverStdout}`);
+    try {
+      if ((await fetch(LOCAL_ORIGIN, { signal: AbortSignal.timeout(500) })).ok) { localReady = true; break; }
+    } catch {}
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  if (!localReady) throw new Error(`Local preview did not become ready: ${serverStderr || serverStdout}`);
+  browser = await chromium.launch({ headless: true });
+});
+after(async () => {
+  await browser?.close();
+  if (previewServer && previewServer.exitCode === null) {
+    previewServer.kill("SIGTERM");
+    await new Promise(resolve => {
+      previewServer.once("exit", resolve);
+      setTimeout(resolve, 2_000).unref();
+    });
+  }
+  console.log("[QA] local E2E controls: " + visibleControls + "; explicit checks: " + testedActions + ". Writes are mocked.");
+});
 async function pageFor(size) {
   const context = await browser.newContext({ viewport: { width: size.width, height: size.height }, locale: "en-US", isMobile: size.mobile, hasTouch: size.mobile, permissions: ["clipboard-read", "clipboard-write"], acceptDownloads: true });
   // Only test data; no persistent test identities or real relay writes.
@@ -87,7 +120,7 @@ async function assertResponsiveHome(page, size, expectedLanguage) {
   for (const part of [layout.warning.title, layout.warning.copy]) {
     assert.ok(part.left >= layout.warning.box.left - 1 && part.right <= layout.warning.box.right + 1 && part.top >= layout.warning.box.top - 1 && part.bottom <= layout.warning.box.bottom + 1, size.name + "/" + expectedLanguage + " step 11 text escapes warning box: " + JSON.stringify(layout));
   }
-  console.log("[QA] production geometry " + size.name + "/" + expectedLanguage + ": " + JSON.stringify(layout));
+  console.log("[QA] local preview geometry " + size.name + "/" + expectedLanguage + ": " + JSON.stringify(layout));
 }
 async function acceptDialogDuring(page, action, promptText) {
   const dialogHandled = page.waitForEvent("dialog", { timeout: 15000 }).then(dialog => dialog.accept(promptText));
@@ -100,31 +133,12 @@ async function inventory(page, name) {
   assert.deepEqual(items.filter(x => x.tag === "A" && (!x.href || /^(javascript|data):/i.test(x.href))), [], name + " unsafe/empty links");
 }
 async function ready(page, selector) { await page.locator(selector).first().waitFor({ state: "visible", timeout: 30000 }); }
-test("public production HTTP/JSON read-only health", { timeout: 90000 }, async () => {
-  for (const path of ["/", "/flop", "/flop-source-status.json", "/api/flop-status", "/assets/reddragon.jpg"]) {
-    const r = await fetch(ORIGIN + path, { signal: AbortSignal.timeout(30000), redirect: "manual" });
-    assert.equal(r.status, 200, path + " returned HTTP " + r.status);
-    if (path === "/api/flop-status") {
-      const j = await r.json();
-      assert.equal(j.schema, "reddragon-flop-live-status/v1");
-      assert.notEqual(j.testnet?.state, "live", "unconfirmed testnet must not be shown live");
-      console.log("[QA] API says testnet: " + j.testnet?.state + ", checked: " + j.checkedAt);
-    } else if (path === "/flop-source-status.json") {
-      const j = await r.json();
-      assert.equal(j.project?.independentCommunityTool, true);
-      assert.equal(j.project?.affiliatedWithFlopLabs, false);
-    } else await r.arrayBuffer();
-    console.log("[QA] HTTP 200 " + path); testedActions++;
-  }
-  const relayGet = await fetch(ORIGIN + "/api/relay", { method: "GET", signal: AbortSignal.timeout(15000) });
-  assert.equal(relayGet.status, 405, "relay GET not denied");testedActions++;
-});
 test("home and FLOP links, menus, languages, refresh, desktop + two mobile widths", { timeout: 180000 }, async () => {
   for (const size of sizes) {
     const { context, page } = await pageFor(size);
     const errors = []; page.on("pageerror", e => errors.push(e.message));
     try {
-      await page.goto(ORIGIN + "/", { waitUntil: "domcontentloaded" });
+      await page.goto(LOCAL_ORIGIN + "/", { waitUntil: "domcontentloaded" });
       await ready(page, "#steps .step-chip");
       await ready(page, "#rdTestnetToolkit");
       await ready(page, "#rdTclkWorkbench");
@@ -172,7 +186,7 @@ test("home and FLOP links, menus, languages, refresh, desktop + two mobile width
       assert.ok((await page.locator("#rdLiveSummary").textContent()).trim().length > 0, "refresh should leave a visible source summary");testedActions++;
       await overflow(page, "flop-" + size.name);
       await page.locator("a[href='/']").first().click();
-      await page.waitForURL(ORIGIN + "/");testedActions++;
+      await page.waitForURL(LOCAL_ORIGIN + "/");testedActions++;
       assert.deepEqual(errors, [], size.name + " JS exceptions");
       console.log("[QA] PASS navigation and responsive layout " + size.name);
     } finally { await context.close(); }
@@ -182,7 +196,7 @@ test("local identity, validation and signed UI workflows with mocked relay (NO e
   const { context, page } = await pageFor(sizes[0]);
   const errors=[];page.on("pageerror",e=>errors.push(e.message));
   try {
-    await page.goto(ORIGIN + "/", { waitUntil: "domcontentloaded" });
+    await page.goto(LOCAL_ORIGIN + "/", { waitUntil: "domcontentloaded" });
     await ready(page, "#createBtn");
     assert.equal(await page.locator("#publishDidBtn").isDisabled(), true);
     await page.locator("#pass1").fill("short");
@@ -228,30 +242,29 @@ test("local identity, validation and signed UI workflows with mocked relay (NO e
     assert.match((await proofDownloadEvent).suggestedFilename(), /reddragon-proof-.*\.json/);testedActions++;
     await page.locator("#copyProof").click();
     assert.match(await page.evaluate(() => navigator.clipboard.readText()), /"did":\s*"did:key:z6Mk/);testedActions++;
-    await page.evaluate(() => {
-      window.__qaExternalIntents = [];
-      window.open = (url) => { window.__qaExternalIntents.push(String(url)); return { opener: null }; };
-    });
+    await page.locator("#rdLangSwitcher button[data-lang='en']").click();
+    await page.waitForFunction(() => document.documentElement.lang === "en");
+    const unexpectedPopups = [];
+    page.on("popup", popup => unexpectedPopups.push(popup));
+    const pageCountBeforeShare = context.pages().length;
     await page.locator("#xShare").click();
-    let intentUrls = await page.evaluate(() => window.__qaExternalIntents.splice(0));
-    assert.equal(intentUrls.length, 1, "X share should open one intercepted compose intent");
-    let intent = new URL(intentUrls[0]);
-    assert.equal(intent.origin, "https://x.com");
-    assert.match(intent.pathname, /\/intent\/tweet$/);
-    let shareText = intent.searchParams.get("text") || "";
+    await page.waitForFunction(async () => (await navigator.clipboard.readText()).includes("Built my Technocore agent identity"));
+    let shareText = await page.evaluate(() => navigator.clipboard.readText());
     assert.match(shareText, /Built my Technocore agent identity/);
     assert.match(shareText, /did:key:z6Mk/);
-    assert.match(shareText, /#Technocore #FLOP/);testedActions++;
-    await page.evaluate(() => localStorage.setItem("reddragon-lang", "tr"));
+    assert.match(shareText, /#Technocore #FLOP/);
+    assert.deepEqual(unexpectedPopups, [], "English share copies text without opening a popup");
+    assert.equal(context.pages().length, pageCountBeforeShare, "English share must not create a new page");testedActions++;
+    await page.locator("#rdLangSwitcher button[data-lang='tr']").click();
+    await page.waitForFunction(() => document.documentElement.lang === "tr");
     await page.locator("#xShare").click();
-    intentUrls = await page.evaluate(() => window.__qaExternalIntents.splice(0));
-    assert.equal(intentUrls.length, 1, "Turkish X share should open one intercepted compose intent");
-    intent = new URL(intentUrls[0]);
-    shareText = intent.searchParams.get("text") || "";
+    await page.waitForFunction(async () => (await navigator.clipboard.readText()).includes("Technocore ajan kimliğimi oluşturdum"));
+    shareText = await page.evaluate(() => navigator.clipboard.readText());
     assert.match(shareText, /Technocore ajan kimliğimi oluşturdum/);
     assert.match(shareText, /did:key:z6Mk/);
-    assert.match(shareText, /#Technocore #FLOP/);testedActions++;
-    await page.evaluate(() => localStorage.setItem("reddragon-lang", "en"));
+    assert.match(shareText, /#Technocore #FLOP/);
+    assert.deepEqual(unexpectedPopups, [], "Turkish share copies text without opening a popup");
+    assert.equal(context.pages().length, pageCountBeforeShare, "Turkish share must not create a new page");testedActions++;
     await page.locator("#copyAutoGuide").click();
     assert.match(await page.evaluate(() => navigator.clipboard.readText()), /TECHNOCORE_PRIVATE_KEY_PKCS8_B64/);testedActions++;
     await acceptDialogDuring(page, () => page.locator("#resetBtn").click());
@@ -266,7 +279,7 @@ test("user-specific ledger, calculators and panel controls (desktop and mobile)"
     const {context,page}=await pageFor(size);
     const errors=[];page.on("pageerror",e=>errors.push(e.message));
     try{
-      await page.goto(ORIGIN+"/",{waitUntil:"domcontentloaded"});
+      await page.goto(LOCAL_ORIGIN+"/",{waitUntil:"domcontentloaded"});
       await ready(page,"#rdLedgerDid");
       const did=page.locator("#rdLedgerDid");
       await did.fill(DIDS[0]);
