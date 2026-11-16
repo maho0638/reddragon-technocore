@@ -1,5 +1,10 @@
 name: FLOP local Chromium E2E — checkpoint 9bbc626
 on:
+  push:
+    branches:
+      - qa/flop-e2e-9bbc626
+    paths:
+      - .github/workflows/flop-site-browser-audit.yml
   workflow_dispatch:
     inputs:
       run_production_acceptance:
@@ -14,7 +19,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   local-browser-e2e:
-    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/qa/flop-e2e-9bbc626' && inputs.run_production_acceptance == false }}
+    if: ${{ github.ref == 'refs/heads/qa/flop-e2e-9bbc626' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.run_production_acceptance == false)) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
