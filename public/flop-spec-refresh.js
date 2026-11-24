@@ -1,5 +1,5 @@
 const RD_FLOP_SPEC_DID = "did:key:z6MkuhrsP4tDZjWYdZLPxaur19WvrF1yuLGsGB2S8Q1gwS6K";
-const RD_FLOP_SPEC_CHECKED = "2026-11-10";
+const RD_FLOP_SPEC_CHECKED = "2026-11-24";
 const RD_FLOP_YELLOW_PAPER = "https://flop.finance/intro/yellowpaper/";
 const RD_FLOP_AGENT = "https://flop.finance/intro/agent/";
 const RD_FLOP_TEASER = "https://flop.finance/teaser/";
@@ -17,13 +17,13 @@ const RD_FLOP_SPEC_COPY = {
   "tr": {
     "intro": "FLOP Yellow Paper v0.5.0 / D-0440 ve resmî ağ kaynakları üzerinden güncel testnet hazırlığını gösterir. Bu kontrol airdrop miktarı veya uygunluk garantisi değildir.",
     "badge": "Yellow Paper v0.5.0 · D-0440 · taslak",
-    "endpoint": "10 Kasım 2026 kontrolünde resmî testnet sayfası hâlâ planned/unreleased. Halka açık testnet başlangıcı doğrulanmadı. Devnet halka açık geliştirme uçları sunuyor ancak validator katılımı yönetici onaylıdır ve ödül/airdrop puanı vermez.",
+    "endpoint": "24 Kasım 2026: resmî Testnet canlı ve puanlamasız açıldı. Salt okunur erişim ve operatör kaydı açık; puanlama bloğu/tarihi duyurulmadı, voucher işlemleri kapalı. Self claim ve Testnet faucet limitleri doğrulanmadı; Devnet faucet’i Testnet değildir.",
     "unlockLabel": "Yerel testnet kaydı mainnet kilidi kanıtlamaz",
     "spendTitle": "Mainnet kilitli Agent grant örneği",
     "spendIntro": "Yellow Paper R8.7–R8.8 uyarınca yalnızca mainnet Agent grant'inin kilitli kısmından ödenen, kesinleşmiş ve itiraz penceresi tamamlanmış inference payable'ının her 3 FLOP'u 1 FLOP kilidi açar. Kilitli grant harcaması anaparanın en fazla %75'idir. Testnet işlem kayıtları bu kilidi açmaz.",
     "plan3": "3 · Resmî inference settlement'ını doğrula",
     "plan3d": "Ödül için testnet'te hangi kesinleşmiş harcamanın sayılacağını resmî kurallardan doğrula. Dönüşüm skoru ve kimlik/limit kuralları E.38'de açık; tarayıcı kaydı kanıt değildir.",
-    "source": "10 Kasım 2026 kaynak kontrolü: Yellow Paper v0.5.0 taslak. Canlı sayfa 24 Eylül, GitHub içerik dosyası 26 Ekim güncellemesi gösteriyor; GitHub depo başlığı 5 Kasım CI-only. E.38 açık. Public testnet planned/unreleased.",
+    "source": "24 Kasım 2026 ağ durumu kontrolü: FLOP Testnet canlı ve puanlamasız. Yellow Paper v0.5.0 taslak; E.38 açık. Puanlama başlangıç bloğu ve Testnet claim limiti duyurulmadı. Kaynakların kendi tarihleri ayrıca gösterilir.",
     "yp": "Yellow Paper",
     "agent": "Agent",
     "teaser": "Teaser",
@@ -32,13 +32,13 @@ const RD_FLOP_SPEC_COPY = {
   "en": {
     "intro": "Current FLOP testnet readiness against Yellow Paper v0.5.0 and official network sources. This is not an airdrop or eligibility estimate.",
     "badge": "Yellow Paper v0.5.0 · D-0440 · draft",
-    "endpoint": "Checked 10 Nov 2026: the official testnet page remains planned/unreleased. No public testnet launch is confirmed. Devnet lists public development endpoints, but validator admission remains administrator-assisted and earns no reward or airdrop weight.",
+    "endpoint": "Checked 24 Nov 2026: official Testnet is live and unscored. Public reads and operator registration are open; no scoring activation block/date is announced, and voucher trading is disabled. Testnet Self claims and faucet limits remain unverified; the Devnet faucet is not Testnet.",
     "unlockLabel": "Testnet local records prove no mainnet unlock",
     "spendTitle": "Mainnet locked Agent grant illustration",
     "spendIntro": "Under Yellow Paper R8.7–R8.8, only eligible finalized inference payable sourced from locked principal of a mainnet Agent grant accrues unlock credit: 3 FLOP payable per 1 FLOP unlocked, after the dispute window, with locked spending capped at 75% of principal. Testnet ledger entries do not unlock grants.",
     "plan3": "3 · Verify real inference settlement",
     "plan3d": "Follow officially settled-compute scoring and evidence rules on testnet. E.38 still leaves conversion score, identity and caps open; a browser entry is not proof.",
-    "source": "Source check 10 Nov 2026: Yellow Paper v0.5.0 draft. Live page says updated 24 Sep; GitHub content file updated 26 Oct and repository head on 5 Nov is CI-only. E.38 remains open. Public testnet remains planned/unreleased.",
+    "source": "Network status check 24 Nov 2026: FLOP Testnet is live and unscored. Yellow Paper v0.5.0 remains a draft and E.38 remains open. No scoring activation block or Testnet claim limits have been announced. Source-specific dates are kept separate.",
     "yp": "Yellow Paper",
     "agent": "Agent",
     "teaser": "Teaser",
@@ -79,7 +79,7 @@ function rdFlopSpecExportLedger() {
         yellowPaperUpdated: "2026-09-24",
         authoritativeReference: "Live FLOP Network Yellow Paper implementation specification",
         decision: "D-0440",
-        plannedTestnet: "Q4 2026; 3 Nov target unconfirmed, public network planned/unreleased on check date",
+        plannedTestnet: "Opened 2026-11-24 · live, unscored; scoring activation block/date not announced",
         plannedMainnet: "Q1 2027",
         genesisSupplyFlop: 4400000000,
         genesisMinerAirdropFlop: 1200000000,
@@ -169,15 +169,15 @@ function rdFlopSpecPatch() {
   if (cols[0]) {
     const b = cols[0].querySelector("b");
     if (b) {
-      b.textContent = tr ? "Canlı public endpoint doğrulanmadı" : "No live public endpoint verified";
-      b.dataset.state = "off";
+      b.textContent = tr ? "Canlı · puanlama başlamadı" : "Live · unscored opening";
+      b.dataset.state = "warn";
     }
   }
   if (cols[1]) {
     const small = cols[1].querySelector("small");
     const strong = cols[1].querySelector("strong");
-    if (small) small.textContent = tr ? "Testnet planı" : "Testnet plan";
-    if (strong) strong.textContent = "planned / unreleased";
+    if (small) small.textContent = tr ? "Ağ durumu" : "Network status";
+    if (strong) strong.textContent = tr ? "24 Kasım · puanlama yok" : "24 Nov · unscored";
   }
   if (cols[2]) {
     const small = cols[2].querySelector("small");

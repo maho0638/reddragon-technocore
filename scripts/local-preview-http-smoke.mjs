@@ -72,6 +72,11 @@ try {
   assert.match((await relay.json()).error, /disabled in the local preview/);
   console.log("PASS local preview relay hard-deny prevents external writes");
 
+  const relayGet = await fetch(`${base}/api/relay`, { method: "GET" });
+  assert.equal(relayGet.status, 405);
+  assert.equal(relayGet.headers.get("allow"), "POST");
+  console.log("PASS local preview relay GET is rejected with HTTP 405");
+
   const write = await fetch(base, { method: "POST" });
   assert.equal(write.status, 405);
   assert.equal(write.headers.get("allow"), "GET, HEAD");

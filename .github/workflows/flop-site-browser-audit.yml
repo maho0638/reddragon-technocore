@@ -9,6 +9,7 @@ on:
       - "api/**"
       - "scripts/*.test.mjs"
       - "scripts/local-preview-server.mjs"
+      - "scripts/run-local-browser-acceptance.mjs"
       - "package.json"
       - "scripts/browser/site-acceptance.spec.mjs"
       - "scripts/browser/flop-ui.spec.mjs"
@@ -53,14 +54,7 @@ jobs:
         if: ${{ github.event_name == 'workflow_dispatch' || !contains(github.event.head_commit.message, '[candidate-only]') }}
         run: npm run test:local-http
       - name: Offline mocked desktop and mobile Playwright flows
-        env:
-          FOCUSED_CANDIDATE: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[candidate-only]') }}
-        run: |
-          if [[ "$FOCUSED_CANDIDATE" == "true" ]]; then
-            node --test --test-name-pattern="candidate X share opens a localized compose intent" scripts/browser/flop-ui.spec.mjs
-          else
-            node --test scripts/browser/flop-ui.spec.mjs
-          fi
+        run: node scripts/run-local-browser-acceptance.mjs
       - name: Post-release production read-only acceptance and intercepted write flows
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_production_acceptance }}
         run: node --test scripts/browser/site-acceptance.spec.mjs

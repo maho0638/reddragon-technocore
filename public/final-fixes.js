@@ -156,8 +156,8 @@ function fixQuickSetupOrder(isEn) {
   const warning = document.querySelector('[data-step="11"] .warning-box span');
   if (warning) {
     warning.textContent = isEn
-      ? "Primary and backup workflows run on staggered schedules. If GitHub delays one schedule, a later trigger can recover. Durable Technocore state keeps signed check-ins at least 12 hours apart."
-      : "Ana ve yedek workflow farklı dakikalarda çalışır. GitHub bir schedule'ı geciktirirse sonraki tetikleyici telafi edebilir. Technocore kalıcı kilidi signed check-in'leri en az 12 saat aralıklı tutar.";
+      ? "Each workflow is scheduled every 30 minutes, offset by 15 minutes. GitHub can delay or skip scheduled runs. TECHNOCORE_MIN_POST_HOURS defaults to 12 and is enforced with durable state; changing it changes the minimum gap. There is no official evidence that more frequent messages improve airdrop eligibility."
+      : "Her workflow 30 dakikada bir planlanır; ana ve yedek akış 15 dakika kaydırılmıştır. GitHub planlı çalıştırmaları geciktirebilir veya atlayabilir. TECHNOCORE_MIN_POST_HOURS varsayılanı 12 saattir ve kalıcı durumla uygulanır; bu değişken aralığı değiştirir. Daha sık mesajın airdrop uygunluğunu artırdığına dair resmî kanıt yoktur.";
   }
 
   const autoOut = document.querySelector("#autoOut");

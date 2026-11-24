@@ -416,6 +416,8 @@ function boot() {
   document.addEventListener("change", scheduleBoundedRefresh, true);
 }
 
-window.addEventListener("rd:languagechange", () => { applyStableLanguage(); translateDynamicEN(); });
-window.addEventListener("rd:addonsready", () => { applyStableLanguage(); translateDynamicEN(); });
+const refreshLanguageForDynamicUi = () => { applyStableLanguage(); translateDynamicEN(); };
+window.addEventListener("rd:languagechange", refreshLanguageForDynamicUi);
+window.addEventListener("rd:addonsready", refreshLanguageForDynamicUi);
+window.addEventListener("rd:dynamicuiready", refreshLanguageForDynamicUi);
 boot();

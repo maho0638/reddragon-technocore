@@ -18,6 +18,8 @@ const indexHtml = await readFile(new URL("../public/index.html", import.meta.url
 const flopHtml = await readFile(new URL("../public/flop.html", import.meta.url), "utf8");
 const browserWorkflow = await readFile(new URL("../.github/workflows/flop-site-browser-audit.yml", import.meta.url), "utf8");
 const productionBrowserAudit = await readFile(new URL("./browser/site-acceptance.spec.mjs", import.meta.url), "utf8");
+const flopBrowserAudit = await readFile(new URL("./browser/flop-ui.spec.mjs", import.meta.url), "utf8");
+const localBrowserRunner = await readFile(new URL("./run-local-browser-acceptance.mjs", import.meta.url), "utf8");
 const context = { window: {}, localStorage: { getItem: () => "en" }, navigator: { language: "en-US" } };
 vm.runInNewContext(source, context);
 const i18n = context.window.RD_I18N;
@@ -89,14 +91,17 @@ test("TR/EN visible labels and dynamic live copy use the selected locale", () =>
   assert.match(languageStable, /localStorage\.setItem\(LANG_KEY, next\)[\s\S]*location\.reload\(\)/);
 });
 
-test("X sharing opens a localized compose intent and provenance acceptance targets the live refresh control", () => {
+test("X proof sharing copies localized text and provenance acceptance targets the live refresh control", () => {
   for (const lang of ["en", "tr"]) {
     assert.ok(i18n.t("patch.siteShareDraft", { site: "https://example.test", handle: "@example" }, lang).includes("https://example.test"));
     assert.ok(i18n.t("app.xShareDraft", { handle: "@example", did: "did:key:z6Mk-test", url: "https://example.test", room: "lobby", seq: "1" }, lang).includes("did:key:z6Mk-test"));
   }
   assert.match(enhancements, /window\.RD_I18N\.t\("app\.xShareDraft"/);
   assert.match(enhancements, /xIntent\(proofShareText\(\)\)/);
-  assert.match(productionBrowserAudit, /__qaExternalIntents/);
+  assert.match(enhancements, /replacement\.onclick = \(\) => copy\(proofShareText\(\), window\.RD_I18N\.t\("app\.xTextCopied"\)\)/);
+  assert.match(productionBrowserAudit, /navigator\.clipboard\.readText\(\)/);
+  assert.match(productionBrowserAudit, /unexpectedPopups, \[\]/);
+  assert.match(productionBrowserAudit, /context\.pages\(\)\.length, pageCountBeforeShare/);
   assert.match(productionBrowserAudit, /#rdDidProvenance[\s\S]*#rdProvFixRefresh/);
   assert.match(productionBrowserAudit, /Kanıtı yenile/);
 });
@@ -140,6 +145,29 @@ test("both pages select and render the saved language before add-on loading", ()
   assert.match(languageStable, /window\.addEventListener\("rd:languagechange"/);
   assert.match(config, /window\.dispatchEvent\(new Event\("rd:addonsready"\)\)/);
   assert.match(languageStable, /window\.addEventListener\("rd:addonsready"/);
+});
+
+test("late controls reapply language and browser assertions target the correct page and JSON backup", () => {
+  assert.match(languageStable, /window\.addEventListener\("rd:dynamicuiready", refreshLanguageForDynamicUi\)/);
+  assert.match(enhancements, /window\.dispatchEvent\(new Event\("rd:dynamicuiready"\)\)/);
+  assert.match(proofImport, /installUi\(\);\s*window\.dispatchEvent\(new Event\("rd:dynamicuiready"\)\)/);
+  assert.match(flopBrowserAudit, /#rdProofImport button/);
+  assert.match(flopBrowserAudit, /#repoBtn/);
+  assert.match(flopBrowserAudit, /if \(!home\) return;/);
+  assert.match(productionBrowserAudit, /assert\.match\(backupName, \/\\\.json\$\/i/);
+  assert.match(productionBrowserAudit, /chooser\.setFiles\(\{ name: backupName, mimeType: "application\/json", buffer: backupContents \}\)/);
+  assert.match(productionBrowserAudit, /dialog\.type\(\)/);
+});
+
+test("local browser workflow uses the sequential isolated runner and keeps production acceptance separate", () => {
+  assert.match(browserWorkflow, /run: node scripts\/run-local-browser-acceptance\.mjs/);
+  assert.match(localBrowserRunner, /--test-concurrency=1/);
+  assert.match(localBrowserRunner, /SITE_ACCEPTANCE_ORIGIN: origin/);
+  assert.match(localBrowserRunner, /scripts\/browser\/site-acceptance\.spec\.mjs/);
+  assert.match(localBrowserRunner, /scripts\/browser\/flop-ui\.spec\.mjs/);
+  assert.doesNotMatch(localBrowserRunner, /reddragon-technocore\.vercel\.app/i);
+  assert.match(browserWorkflow, /run: node --test scripts\/browser\/site-acceptance\.spec\.mjs/);
+  assert.match(browserWorkflow, /github\.event_name == 'workflow_dispatch' && inputs\.run_production_acceptance/);
 });
 
 test("browser workflow can run only on the QA branch with read-only repository permissions", () => {

@@ -6,6 +6,7 @@ import {
 } from "./flop-agent-preflight.mjs";
 
 const PLANNED = '<!doctype html><p>Network: testnet (planned) · Release: next (unreleased) · Source: f6c89eaf7b96</p><h2>Expected genesis</h2><p>Unavailable — no verified public value</p><h2>RPC</h2><p>Unavailable — no verified public value</p>';
+const LIVE_UNSCORED = '<!doctype html><p>Network: testnet (live, unscored) · Release: next (unreleased) · Source: ccef3da4aaf6</p><p>Public chain reads and operator registration are open. Six founding validators launched FLOP Testnet on 24 November 2026.</p><p>WebSocket RPC wss://testnet.flop.network/</p><p>Genesis block hash 0x918abd58fb16306b30ef3886514cfaebffecb4de43e82b6f8ec4795c43cfd800</p><p>No verified public Self claim. Voucher trading, orders and swaps remain disabled.</p>';
 const fake = (html, status = 200, extra = {}) =>
   new Response(html, { status, headers: { "content-type": "text/html", ...extra } });
 
@@ -82,7 +83,14 @@ test("09: HTML scripts and comments do not affect status parsing", () => {
   assert.match(str, /testnet \(planned\)/);
 });
 
-test("10: official planned/unreleased testnet cannot be marked launched", () => {
+test("10: official live unscored opening is recognized without enabling transactions", () => {
+  const status = classifyNetworkPage(LIVE_UNSCORED);
+  assert.equal(status.state, "live-unscored");
+  assert.equal(status.genesis, "0x918abd58fb16306b30ef3886514cfaebffecb4de43e82b6f8ec4795c43cfd800");
+  assert.equal(status.rpc, "wss://testnet.flop.network/");
+  assert.equal(status.scoringActivated, false);
+  assert.equal(status.vouchersEnabled, false);
+  assert.equal(status.publicSelfClaim, false);
   assert.equal(classifyNetworkPage(PLANNED).state, "not-launched");
 });
 
@@ -98,11 +106,14 @@ test("12: changed page requires human verification, not transactions", () => {
   assert.equal(r.maySendInference, false);
 });
 
-test("13: generated report has provenance and no false reward claims", () => {
-  const r = makeReport(PLANNED, new Date("2026-11-07T00:00:00Z"));
-  assert.equal(r.checkedAt, "2026-11-07T00:00:00.000Z");
+test("13: generated live-unscored report preserves provenance and keeps actions disabled", () => {
+  const r = makeReport(LIVE_UNSCORED, new Date("2026-11-24T00:00:00Z"));
+  assert.equal(r.checkedAt, "2026-11-24T00:00:00.000Z");
   assert.equal(r.readOnly, true);
-  assert.equal(r.state, "not-launched");
+  assert.equal(r.state, "live-unscored");
+  assert.equal(r.mayClaim, false);
+  assert.equal(r.maySign, false);
+  assert.equal(r.maySendInference, false);
   assert.equal(r.did, DID);
   assert.equal(r.sourceSha256.length, 64);
   assert.equal(r.testnetTx, null);
@@ -120,7 +131,7 @@ test("14: preflight only visits the official testnet URL", async () => {
   assert.equal(result.state, "not-launched");
 });
 
-test("15: known unavailable genesis takes priority over new release copy", () => {
+test("15: missing official unscored marker stays blocked when the page says unavailable", () => {
   const r = classifyNetworkPage('<p>Network: testnet (public) · Release: 1.0.0</p><h2>Expected genesis</h2><p>Unavailable — no verified public value</p>');
   assert.equal(r.state, "not-launched");
 });

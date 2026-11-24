@@ -169,7 +169,7 @@ function upgradeProofShare() {
     const replacement = old.cloneNode(true);
     replacement.textContent = window.RD_I18N.language() === "en" ? "Share on X" : "X’te paylaş";
     old.replaceWith(replacement);
-    replacement.onclick = () => xIntent(proofShareText());
+    replacement.onclick = () => copy(proofShareText(), window.RD_I18N.t("app.xTextCopied"));
   }
 }
 
@@ -195,7 +195,7 @@ function agentRepoUrl() {
 
 function setupChecklist() {
   const base = agentRepoUrl();
-  return `RedDragon 7/24 Technocore Agent — güvenli hızlı kurulum\n\n1) Fork: ${REPO_URL}/fork\n2) Fork reponda Settings → Secrets and variables → Actions\n3) Yalnızca şu secret'i ekle:\n   TECHNOCORE_PRIVATE_KEY_PKCS8_B64 = RedDragon sitesindeki “Private key'i kopyala” değeri\n4) Actions → RedDragon Technocore Agent → Enable/Run workflow\n5) İlk run yeşil olmalı.\n\n${base ? `Senin repo: ${base}\nSecrets: ${base}/settings/secrets/actions\nActions: ${base}/actions/workflows/technocore-agent.yml\n\n` : ""}DID private key'den otomatik türetilir; ikinci bir DID secret'i gerekmez.\nSigned post yalnızca iki günlük cron penceresinde çalışır; heartbeat yaklaşık 30 dakikada bir kontrol edilir.\n\nGüvenlik: Site GitHub şifresi, tokeni veya wallet seed phrase istemez. Private key URL'ye, public GitHub dosyasına veya RedDragon sunucusuna gönderilmez.`;
+  return `RedDragon 7/24 Technocore Agent — güvenli hızlı kurulum\n\n1) Fork: ${REPO_URL}/fork\n2) Fork reponda Settings → Secrets and variables → Actions\n3) Yalnızca şu secret'i ekle:\n   TECHNOCORE_PRIVATE_KEY_PKCS8_B64 = RedDragon sitesindeki “Private key'i kopyala” değeri\n4) Actions → RedDragon Technocore Agent → Enable/Run workflow\n5) İlk run yeşil olmalı.\n\n${base ? `Senin repo: ${base}\nSecrets: ${base}/settings/secrets/actions\nActions: ${base}/actions/workflows/technocore-agent.yml\n\n` : ""}DID private key'den otomatik türetilir; ikinci bir DID secret'i gerekmez.\nHer workflow 30 dakikada bir planlanır; ana ve yedek akış 15 dakika kaydırılmıştır. GitHub çalıştırmaları geciktirebilir veya atlayabilir. TECHNOCORE_MIN_POST_HOURS varsayılanı 12 saattir ve kalıcı durumla uygulanır.\n\nGüvenlik: Site GitHub şifresi, tokeni veya wallet seed phrase istemez. Private key URL'ye, public GitHub dosyasına veya RedDragon sunucusuna gönderilmez.`;
 }
 
 function upgradeAgentSetup() {
@@ -203,7 +203,7 @@ function upgradeAgentSetup() {
   if (!card || $("#rdQuickSetup")) return;
 
   const warning = card.querySelector(".warning-box span");
-  if (warning) warning.textContent = "Heartbeat yaklaşık 30 dakikada bir kontrol edilir. Signed check-in yalnızca günde iki ayrı cron penceresinde çalışır; manuel/push testleri signed mesaj göndermez.";
+  if (warning) warning.textContent = "Her workflow 30 dakikada bir planlanır; ana ve yedek akış 15 dakika kaydırılmıştır. GitHub planlı çalıştırmaları geciktirebilir veya atlayabilir. TECHNOCORE_MIN_POST_HOURS varsayılanı 12 saattir ve kalıcı durumla uygulanır; daha sık mesajın airdrop uygunluğunu artırdığına dair resmî kanıt yoktur.";
 
   const didSecretBtn = $("#copyDidSecret");
   if (didSecretBtn?.parentElement) didSecretBtn.parentElement.classList.add("rd-hidden");
@@ -350,4 +350,5 @@ window.addEventListener("load", () => {
   upgradeFooter();
   friendlyCapacityErrors();
   checkRelay();
+  window.dispatchEvent(new Event("rd:dynamicuiready"));
 });

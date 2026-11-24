@@ -8,6 +8,7 @@ import {isPublicEd25519Did} from '../public/flop-did-utils.js';
 
 const path = new URL('../public/app.js', import.meta.url);
 const source = readFileSync(path, 'utf8');
+const i18nSource = readFileSync(new URL('../public/ui-i18n.js', import.meta.url), 'utf8');
 const elements = new Map();
 const mk = () => ({value:'',textContent:'',href:'',src:'',disabled:false,dataset:{},onclick:null,onchange:null,style:{setProperty(){}},classList:{add(){},remove(){},toggle(){}},setAttribute(){},getAttribute(){return null},appendChild(){},querySelector(){return mk()},addEventListener(){},click(){},scrollIntoView(){},innerHTML:''});
 function element(sel){if(!elements.has(sel))elements.set(sel,mk());return elements.get(sel);}
@@ -45,7 +46,7 @@ await check('Değiştirilmiş şifreli içerik reddedilir',async()=>{const bad=c
 await check('Bozuk JSON yedek reddedilir',async()=>{getState().did='sentinel3';await run('restore')({text:async()=>'{bad-json'});assert.equal(getState().did,'sentinel3');});
 await check('Geçersiz DID biçimleri reddedilir',()=>{for(const invalid of ['did:example:123','did:key:z6Mk0invalid','did:key:z6Mkabc','did:key:z6MkiIinvalid'])assert.equal(isPublicEd25519Did(invalid),false);});
 await check('İmzalı hello akışı gerçek API yazmadan test edilebilir',async()=>{promptReturn='demo-only-not-secret-2026';await run('restore')(file(backup));fetchCalls=[];const v=await run('postSigned("lobby", "hello test")');assert.equal(v.room,'lobby');assert.equal(v.seq,12345);assert.equal(fetchCalls[0].data.action,'signedPost');assert.equal(fetchCalls[0].url,'/api/relay');});
-await check('Public Proof gerçek app state alanlarını oluşturuyor',()=>{getState().contrib={room:'lobby',seq:12345};const p=run('makeProof()');assert.equal(p.did,originalDid);assert.equal(p.contribution.record.seq,12345);assert.ok(!JSON.stringify(p).includes('privateKeyPkcs8'));assert.ok(!JSON.stringify(p).includes('ciphertextB64u'));});
+await check('Public Proof JSON özeti sahiplik doğrulamasından ayrıdır',()=>{getState().contrib={room:'lobby',seq:12345};const p=run('makeProof()');assert.equal(p.did,originalDid);assert.equal(p.contribution.record.seq,12345);assert.equal(p.notice,'app.proofNotice');assert.match(i18nSource,/this JSON is not a cryptographic ownership proof/i);assert.match(i18nSource,/bu JSON tek başına kriptografik sahiplik kanıtı değildir/i);assert.ok(!JSON.stringify(p).includes('privateKeyPkcs8'));assert.ok(!JSON.stringify(p).includes('ciphertextB64u'));});
 await check('Tahrif edilmiş public-key alanı geri yüklemede reddediliyor mu?',async()=>{const kp=await webcrypto.subtle.generateKey({name:'Ed25519'},true,['sign','verify']);const bogusRaw=new Uint8Array(await webcrypto.subtle.exportKey('raw',kp.publicKey));const bad=clone(backup);bad.publicKeyRawB64u=run('b64u')(bogusRaw);const expectedDid=originalDid;getState().did='restore-guard';promptReturn='demo-only-not-secret-2026';await run('restore')(file(bad));assert.equal(getState().did,'restore-guard','UYARI: Restore, encrypted private key ile eşleşmeyen public key alanını kabul ediyor!');});
 
 await check('Yedekteki DID metni değiştirilirse reddedilir',async()=>{

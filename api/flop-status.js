@@ -9,7 +9,7 @@ const SOURCES = Object.freeze({
   paperContent: "https://api.github.com/repos/flop-labs/yellowpaper/commits?path=yellowpaper.md&per_page=1",
   repoHead: "https://api.github.com/repos/flop-labs/yellowpaper/commits/main",
   models: "https://api.flop.network/v1/models",
-  rpc: "https://rpc.devnet.flop.network"
+  rpc: "https://testnet.flop.network/"
 });
 const MAX_BYTES = 256 * 1024;
 // The official docs/API answered in ~4.6–5.9s in the authorized read-only
@@ -93,9 +93,15 @@ export function sourceText(html) {
 
 export function classifyTestnetPage(html) {
   const text = sourceText(html);
-  const head = text.slice(0, 700);
+  const head = text.slice(0, 1200);
+  const network = head.match(/Network\s*:\s*testnet\s*\(([^)]+)\)/i)?.[1]?.trim() || "";
   const hasIdentity = /Network\s*:\s*testnet/i.test(head);
   const release = head.match(/Release\s*:\s*([^\n·]{1,100})/i)?.[1]?.trim() || "";
+  const rpc = text.match(/\b(?:WebSocket\s+)?RPC\s+(wss?:\/\/[^\s]+)/i)?.[1]?.replace(/[.`]+$/g, "") || null;
+  const genesis = text.match(/(?:Expected\s+)?genesis(?:\s+block\s+hash)?\s+0x([0-9a-f]{64})/i)?.[1];
+  if (hasIdentity && /\blive\s*,\s*unscored\b/i.test(network)) {
+    return { state: "live-unscored", network, release: release || null, rpc, genesis: genesis ? `0x${genesis}` : null, vouchers: /voucher trading, orders and swaps remain disabled/i.test(text) || /voucher earning and trading are disabled/i.test(text) ? "disabled" : "unverified", publicSelfClaim: /no verified public self claim/i.test(text) ? false : null, scoringActivationAnnounced: /activation (?:block|date)/i.test(text) && !/no announced block or date/i.test(text) };
+  }
   const unreleased = /planned|unreleased|\bnext\b/i.test(head) || /public operator enrollment is unavailable|None verified/i.test(text);
   const hasRpc = /\bRPC\s+(?:wss?:\/\/|https?:\/\/)/i.test(text);
   const hasGenesis = /Expected genesis\s+0x[0-9a-f]{32,}/i.test(text);
@@ -191,7 +197,7 @@ async function probeRpc(fetchFn) {
       if (parsed.id !== i + 1 || parsed.error || !Object.hasOwn(parsed, "result")) throw new Error("Invalid read-only RPC response");
       return parsed.result;
     }));
-    return { state: results[2] === "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631" ? "identity-matched" : "identity-unverified", chain: String(results[0]).slice(0, 100), version: String(results[1]).slice(0, 80), genesis: String(results[2]).slice(0, 100), source: SOURCES.rpc };
+    return { state: results[2] === "0x918abd58fb16306b30ef3886514cfaebffecb4de43e82b6f8ec4795c43cfd800" ? "identity-matched" : "identity-unverified", chain: String(results[0]).slice(0, 100), version: String(results[1]).slice(0, 80), genesis: String(results[2]).slice(0, 100), source: SOURCES.rpc };
   } catch (error) { return { state: "unverified", error: String(error?.name === "AbortError" ? "RPC timeout" : error?.message || "RPC unavailable").slice(0, 140), source: SOURCES.rpc }; }
 }
 
@@ -227,13 +233,13 @@ export async function buildStatus({ fetchFn = fetch, now = new Date() } = {}) {
     schema: "reddragon-flop-live-status/v1",
     checkedAt: now.toISOString(),
     officialLinks: { ...official.data, state: official.state, source: SOURCES.official, checkedAt: official.checkedAt, error: official.error },
-    testnet: { ...testnet.data, source: SOURCES.testnet, state: testnet.state === "verified" ? testnet.data.state : "unverified", checkedAt: testnet.checkedAt, error: testnet.error },
+    testnet: { ...testnet.data, source: SOURCES.testnet, state: testnet.state === "verified" && ["live-unscored", "not-live", "manual-verification-required"].includes(testnet.data.state) ? testnet.data.state : "unverified", checkedAt: testnet.checkedAt, error: testnet.error },
     devnet: { ...devnet.data, rewards: devnet.state === "verified" && devnet.data.rewards === "none" ? "none" : timeline.state === "verified" ? timeline.data.devnetRewards : "unverified", source: SOURCES.devnet, state: devnet.state === "verified" ? devnet.data.state : "unverified", checkedAt: devnet.checkedAt, error: devnet.error },
     timeline: { ...timeline.data, state: timeline.state, source: SOURCES.timeline, checkedAt: timeline.checkedAt, error: timeline.error },
-    services: { gateway: { state: catalog.state === "verified" ? "catalog-responded" : "unverified", source: SOURCES.models, count: catalog.data?.count, models: catalog.data?.models, error: catalog.error }, rpc, faucet: { state: "published-endpoint; operational-status-unverified", url: "https://faucet.flop.network", source: SOURCES.official } },
+    services: { gateway: { state: catalog.state === "verified" ? "catalog-responded" : "unverified", source: SOURCES.models, count: catalog.data?.count, models: catalog.data?.models, error: catalog.error }, rpc, faucet: { state: "devnet-only; testnet-self-claim-unavailable", testnetSelfClaim: false, url: "https://faucet.flop.network", source: "https://docs.flop.network/networks/testnet" } },
     packages: { state: sdks.state === "verified" ? "verified-from-docs" : "unverified", source: SOURCES.sdks, versions: sdks.data || [], error: sdks.error, validatorPackage: validator.data?.packageVersion || null, validatorSource: SOURCES.validator, validatorManualVersion: validatorManual.data?.packageVersion || null, validatorManualUpdated: validatorManual.data?.updated || null, validatorManualSource: SOURCES.validatorManual, validatorAdmission: validator.data?.admission || "unverified" },
     yellowPaper: { version: "0.5.0 (draft)", livePageUpdated: "2026-09-24", liveSource: "https://flop.finance/intro/yellowpaper/", githubContentCommit: paperContent.data || null, githubRepositoryHead: repoHead.data || null, contentVsCiDistinguished: true, sources: { content: SOURCES.paperContent, repositoryHead: SOURCES.repoHead } },
-    notes: { devnetRewards: timeline.state === "verified" && timeline.data.devnetRewards === "none" ? "Official timeline FAQ says devnet earns nothing and has no reward or airdrop weight" : "unverified from current official sources", testnetDate: timeline.data?.testnetTarget || "Q4 2026 draft target; launch unverified", airdropConversion: "E.38 remains open; no individual reward estimate is produced", methodology: "Official sources and public read-only probes only. Failed checks remain unverified." }
+    notes: { devnetRewards: timeline.state === "verified" && timeline.data.devnetRewards === "none" ? "Official timeline FAQ says devnet earns nothing and has no reward or airdrop weight" : "unverified from current official sources", testnetDate: "Opened 2026-11-24 · live, unscored; no scoring activation block announced", airdropConversion: "E.38 remains open; no individual reward estimate is produced", methodology: "Official sources and public read-only probes only. Failed checks remain unverified." }
   };
   return data;
 }
@@ -270,7 +276,7 @@ export async function handler(req, res) {
 }
 
 export const __test = {
-  SOURCES, safeUrl, fetchText, parseModels, parseTimelinePage, readLimited, hasCurrentSourceData,
+  SOURCES, safeUrl, fetchText, parseModels, parseTimelinePage, readLimited, hasCurrentSourceData, probeRpc,
   getCache: () => memoryCache,
   resetCache: () => { memoryCache = undefined; },
   seedCache: (data, savedAt) => { memoryCache = { data, savedAt }; }

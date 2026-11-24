@@ -1,11 +1,13 @@
-// Live site acceptance audit: external writes are intercepted, no real signing or posting.
+// Local preview acceptance or post-release read-only audit: external writes are intercepted, no real signing or posting.
 // Browser-only DID generation uses an ephemeral test identity; no keys are uploaded or logged.
 import assert from "node:assert/strict";
+import { createPublicKey, verify as verifySignature } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { before, after, test } from "node:test";
 const require = createRequire(import.meta.url);
 const { chromium } = require("playwright");
-const ORIGIN = "https://reddragon-technocore.vercel.app";
+const ORIGIN = process.env.SITE_ACCEPTANCE_ORIGIN || "https://reddragon-technocore.vercel.app";
 const DIDS = [
   "did:key:z6MkuhrsP4tDZjWYdZLPxaur19WvrF1yuLGsGB2S8Q1gwS6K",
   "did:key:z6MkqEhk421dSv8pEnDvWVPatEMegY2RgXU2ksDw5pbUbU48"
@@ -25,9 +27,11 @@ async function pageFor(size) {
   const context = await browser.newContext({ viewport: { width: size.width, height: size.height }, locale: "en-US", isMobile: size.mobile, hasTouch: size.mobile, permissions: ["clipboard-read", "clipboard-write"], acceptDownloads: true });
   // Only test data; no persistent test identities or real relay writes.
   await context.addInitScript(() => { try { if (!sessionStorage.getItem("__rdAcceptanceInitialized")) { localStorage.clear(); sessionStorage.setItem("__rdAcceptanceInitialized", "1"); } } catch {} });
+  const signedPosts = [];
   await context.route("**/api/relay", async route => {
     let body = {};
     try { body = JSON.parse(route.request().postData() || "{}"); } catch {}
+    if (body.action === "signedPost") signedPosts.push(body);
     const responses = {
       health: { ok: true, technocore: true }, rooms: { rooms: [], total: 0, notes: {}, engagement: {} },
       config: {}, read: { messages: [], next: null }, kvGet: { value: null }
@@ -36,7 +40,7 @@ async function pageFor(size) {
   });
   const page = await context.newPage();
   page.setDefaultTimeout(20000);
-  return { context, page };
+  return { context, page, signedPosts };
 }
 async function activate(locator, size) { if(size.mobile) await locator.tap(); else await locator.click(); }
 async function overflow(page, name) {
@@ -100,7 +104,60 @@ async function inventory(page, name) {
   assert.deepEqual(items.filter(x => x.tag === "A" && (!x.href || /^(javascript|data):/i.test(x.href))), [], name + " unsafe/empty links");
 }
 async function ready(page, selector) { await page.locator(selector).first().waitFor({ state: "visible", timeout: 30000 }); }
-test("public production HTTP/JSON read-only health", { timeout: 90000 }, async () => {
+async function createMockedContribution(page, locale) {
+  await page.locator("#clink").fill("https://github.com/maho0638/reddragon-technocore");
+  await page.locator("#ctitle").fill("Ephemeral browser audit contribution");
+  await page.locator("#contribBtn").click();
+  await page.waitForFunction(language => {
+    const text = document.querySelector("#contribOut")?.textContent || "";
+    return language === "en" ? /Signed contribution.*seq\s+\d+/i.test(text) : /İmzalı katkı.*sıra\s+\d+/i.test(text);
+  }, locale);
+}
+async function restoreDownloadedBackup(page, backupPath, backupName, password) {
+  assert.match(backupName, /\.json$/i, "encrypted identity backup must retain its .json filename");
+  const backupContents = await readFile(backupPath);
+  const chooserEvent = page.waitForEvent("filechooser", { timeout: 30000 });
+  await page.locator("label.filebtn").filter({ has: page.locator("#restoreInput") }).click();
+  const chooser = await chooserEvent;
+  const promptEvent = page.waitForEvent("dialog", { timeout: 15000 });
+  await chooser.setFiles({ name: backupName, mimeType: "application/json", buffer: backupContents });
+  const dialog = await promptEvent;
+  assert.equal(dialog.type(), "prompt", "restoring encrypted backup must request password");
+  const promptText = dialog.message();
+  await dialog.accept(password);
+  return promptText;
+}
+function decodeBase58(value) {
+  const alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+  let number = 0n;
+  for (const char of value) {
+    const digit = alphabet.indexOf(char);
+    assert.notEqual(digit, -1, "DID multibase must use base58btc");
+    number = number * 58n + BigInt(digit);
+  }
+  const bytes = [];
+  while (number > 0n) { bytes.unshift(Number(number & 0xffn)); number >>= 8n; }
+  let zeroes = 0;
+  while (value[zeroes] === "1") zeroes++;
+  return Buffer.from([...Array(zeroes).fill(0), ...bytes]);
+}
+function ed25519PublicKeyFromDid(did) {
+  assert.ok(did.startsWith("did:key:z"), "restored identity must be a base58btc did:key");
+  const multicodec = decodeBase58(did.slice("did:key:z".length));
+  assert.equal(multicodec.length, 34, "Ed25519 DID must encode a 32-byte public key");
+  assert.deepEqual([...multicodec.subarray(0, 2)], [0xed, 0x01], "DID must encode the Ed25519 multicodec");
+  const spkiPrefix = Buffer.from("302a300506032b6570032100", "hex");
+  return createPublicKey({ key: Buffer.concat([spkiPrefix, multicodec.subarray(2)]), format: "der", type: "spki" });
+}
+function assertSignedPostMatchesDid(post, expectedDid) {
+  assert.equal(post.did, expectedDid, "signed relay request must use the restored DID");
+  assert.equal(typeof post.sig, "string");
+  assert.equal(typeof post.nonce, "string");
+  const payload = Buffer.from(`${post.room}|${post.nonce}|${post.text}`, "utf8");
+  assert.equal(verifySignature(null, payload, ed25519PublicKeyFromDid(post.did), Buffer.from(post.sig, "base64url")), true,
+    "restored private key must cryptographically match the DID public key");
+}
+test("target HTTP/JSON read-only health", { timeout: 90000 }, async () => {
   for (const path of ["/", "/flop", "/flop-source-status.json", "/api/flop-status", "/assets/reddragon.jpg"]) {
     const r = await fetch(ORIGIN + path, { signal: AbortSignal.timeout(30000), redirect: "manual" });
     assert.equal(r.status, 200, path + " returned HTTP " + r.status);
@@ -179,7 +236,7 @@ test("home and FLOP links, menus, languages, refresh, desktop + two mobile width
   }
 });
 test("local identity, validation and signed UI workflows with mocked relay (NO external writes)", { timeout: 180000 }, async () => {
-  const { context, page } = await pageFor(sizes[0]);
+  const { context, page, signedPosts } = await pageFor(sizes[0]);
   const errors=[];page.on("pageerror",e=>errors.push(e.message));
   try {
     await page.goto(ORIGIN + "/", { waitUntil: "domcontentloaded" });
@@ -200,7 +257,13 @@ test("local identity, validation and signed UI workflows with mocked relay (NO e
     const backup = await backupEvent;
     assert.match(backup.suggestedFilename(), /reddragon-technocore-.*\.json/);testedActions++;
     const backupPath = await backup.path();
-    await acceptDialogDuring(page, () => page.locator("#restoreInput").setInputFiles(backupPath), "ephemeral-ui-audit-only-password");
+    const backupJson = JSON.parse(await readFile(backupPath, "utf8"));
+    assert.equal(backupJson.format, "reddragon-technocore-identity");
+    assert.equal(backupJson.cipher, "AES-256-GCM");
+    assert.equal(backupJson.kdf, "PBKDF2-SHA256-310000");
+    assert.equal(backupJson.did, generatedDid);
+    assert.ok(backupJson.ciphertextB64u && backupJson.saltB64u && backupJson.ivB64u, "downloaded backup must contain encrypted key material");
+    assert.equal(await restoreDownloadedBackup(page, backupPath, backup.suggestedFilename(), "ephemeral-ui-audit-only-password"), "Enter the backup password:");
     await page.waitForFunction(() => (document.querySelector("#identityOut")?.textContent || "").includes("did:key:z6Mk"));
     assert.equal((await page.locator("#identityOut").textContent()).split("\n")[0].trim(), generatedDid, "encrypted backup restores the same public DID");testedActions++;
     await page.locator("#copyDidBtn").click();
@@ -218,6 +281,8 @@ test("local identity, validation and signed UI workflows with mocked relay (NO e
       await page.waitForFunction(arg => (document.querySelector(arg.out)?.textContent || "").toLowerCase().includes(arg.expected.toLowerCase()),{out,expected});
       testedActions++;console.log("[QA] mocked write flow " + btn + ": UI progressed");
     }
+    assert.ok(signedPosts.length >= 4, "the restored identity must produce the mocked signed UI posts");
+    for (const post of signedPosts) assertSignedPostMatchesDid(post, generatedDid);
     await page.locator("#clink").fill("https://github.com/maho0638/reddragon-technocore");
     await page.locator("#ctitle").fill("Ephemeral browser audit contribution");
     await page.locator("#contribBtn").click();
@@ -228,30 +293,61 @@ test("local identity, validation and signed UI workflows with mocked relay (NO e
     assert.match((await proofDownloadEvent).suggestedFilename(), /reddragon-proof-.*\.json/);testedActions++;
     await page.locator("#copyProof").click();
     assert.match(await page.evaluate(() => navigator.clipboard.readText()), /"did":\s*"did:key:z6Mk/);testedActions++;
-    await page.evaluate(() => {
-      window.__qaExternalIntents = [];
-      window.open = (url) => { window.__qaExternalIntents.push(String(url)); return { opener: null }; };
-    });
+    await page.waitForFunction((did) => {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (!key?.startsWith("reddragon-public-state-v1:")) continue;
+        try {
+          const saved = JSON.parse(localStorage.getItem(key) || "null");
+          const record = saved?.proof?.contribution?.record;
+          if (saved?.did === did && record?.did === did && /^\d+$/.test(String(record.seq)) && Number(record.seq) > 0) return true;
+        } catch {}
+      }
+      return false;
+    }, generatedDid, { timeout: 15000 });
+    const enNavigation = page.waitForNavigation({ waitUntil: "domcontentloaded" });
+    await page.locator("#rdLangSwitcher button[data-lang='en']").click();
+    await enNavigation;
+    await page.waitForFunction(() => document.documentElement.lang === "en");
+    assert.equal(await restoreDownloadedBackup(page, backupPath, backup.suggestedFilename(), "ephemeral-ui-audit-only-password"), "Enter the backup password:");
+    await page.waitForFunction(() => (document.querySelector("#identityOut")?.textContent || "").includes("did:key:z6Mk"));
+    assert.equal((await page.locator("#identityOut").textContent()).split("\n")[0].trim(), generatedDid, "English reload restores the same DID from the encrypted backup");
+    const beforeEnglishContribution = signedPosts.length;
+    await createMockedContribution(page, "en");
+    assertSignedPostMatchesDid(signedPosts[beforeEnglishContribution], generatedDid);
+    await page.waitForFunction(() => !document.querySelector("#xShare")?.disabled, null, { timeout: 15000 });
+    const unexpectedPopups = [];
+    const pageCountBeforeShare = context.pages().length;
+    page.on("popup", popup => unexpectedPopups.push(popup));
     await page.locator("#xShare").click();
-    let intentUrls = await page.evaluate(() => window.__qaExternalIntents.splice(0));
-    assert.equal(intentUrls.length, 1, "X share should open one intercepted compose intent");
-    let intent = new URL(intentUrls[0]);
-    assert.equal(intent.origin, "https://x.com");
-    assert.match(intent.pathname, /\/intent\/tweet$/);
-    let shareText = intent.searchParams.get("text") || "";
+    await page.waitForFunction(async () => (await navigator.clipboard.readText()).includes("Built my Technocore agent identity"));
+    let shareText = await page.evaluate(() => navigator.clipboard.readText());
     assert.match(shareText, /Built my Technocore agent identity/);
-    assert.match(shareText, /did:key:z6Mk/);
-    assert.match(shareText, /#Technocore #FLOP/);testedActions++;
-    await page.evaluate(() => localStorage.setItem("reddragon-lang", "tr"));
+    assert.match(shareText, new RegExp(generatedDid.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+    assert.match(shareText, /https:\/\/github\.com\/maho0638\/reddragon-technocore/);
+    assert.match(shareText, /#Technocore #FLOP/);
+    assert.deepEqual(unexpectedPopups, [], "English X share copies text without opening a popup");
+    assert.equal(context.pages().length, pageCountBeforeShare, "English X share must not create a new page");testedActions++;
+    const trNavigation = page.waitForNavigation({ waitUntil: "domcontentloaded" });
+    await page.locator("#rdLangSwitcher button[data-lang='tr']").click();
+    await trNavigation;
+    await page.waitForFunction(() => document.documentElement.lang === "tr");
+    assert.equal(await restoreDownloadedBackup(page, backupPath, backup.suggestedFilename(), "ephemeral-ui-audit-only-password"), "Yedek parolasını gir:");
+    await page.waitForFunction(() => (document.querySelector("#identityOut")?.textContent || "").includes("did:key:z6Mk"));
+    assert.equal((await page.locator("#identityOut").textContent()).split("\n")[0].trim(), generatedDid, "Turkish reload restores the same DID from the encrypted backup");
+    const beforeTurkishContribution = signedPosts.length;
+    await createMockedContribution(page, "tr");
+    assertSignedPostMatchesDid(signedPosts[beforeTurkishContribution], generatedDid);
+    await page.waitForFunction(() => !document.querySelector("#xShare")?.disabled, null, { timeout: 15000 });
     await page.locator("#xShare").click();
-    intentUrls = await page.evaluate(() => window.__qaExternalIntents.splice(0));
-    assert.equal(intentUrls.length, 1, "Turkish X share should open one intercepted compose intent");
-    intent = new URL(intentUrls[0]);
-    shareText = intent.searchParams.get("text") || "";
+    await page.waitForFunction(async () => (await navigator.clipboard.readText()).includes("Technocore ajan kimliğimi oluşturdum"));
+    shareText = await page.evaluate(() => navigator.clipboard.readText());
     assert.match(shareText, /Technocore ajan kimliğimi oluşturdum/);
-    assert.match(shareText, /did:key:z6Mk/);
-    assert.match(shareText, /#Technocore #FLOP/);testedActions++;
-    await page.evaluate(() => localStorage.setItem("reddragon-lang", "en"));
+    assert.ok(shareText.includes(generatedDid));
+    assert.match(shareText, /https:\/\/github\.com\/maho0638\/reddragon-technocore/);
+    assert.match(shareText, /#Technocore #FLOP/);
+    assert.deepEqual(unexpectedPopups, [], "Turkish X share copies text without opening a popup");
+    assert.equal(context.pages().length, pageCountBeforeShare, "Turkish X share must not create a new page");testedActions++;
     await page.locator("#copyAutoGuide").click();
     assert.match(await page.evaluate(() => navigator.clipboard.readText()), /TECHNOCORE_PRIVATE_KEY_PKCS8_B64/);testedActions++;
     await acceptDialogDuring(page, () => page.locator("#resetBtn").click());

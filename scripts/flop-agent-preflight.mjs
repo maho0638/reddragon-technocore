@@ -102,7 +102,21 @@ export function classifyNetworkPage(html) {
   if (!match) return { state: "unverified", reason: "Public testnet identity not found" };
   const nearby = text.slice(match.index, match.index + 320);
   const release = nearby.match(/\bRelease\s*:\s*([^\n]{1,80})/i)?.[1] || "";
-  const blocked = /planned|unreleased|\bnext\b|placeholder|coming soon/i.test((match[1] || "") + " " + release) ||
+  const networkStatus = match[1] || "";
+  if (/\blive\s*,\s*unscored\b/i.test(networkStatus)) {
+    const genesis = text.match(/Genesis block hash\s+(0x[0-9a-f]{64})/i)?.[1] || null;
+    const rpc = text.match(/WebSocket RPC\s+(wss?:\/\/[^\s]+)/i)?.[1] || null;
+    return {
+      state: "live-unscored",
+      reason: "Official docs confirm the unscored opening; no scoring activation block is announced",
+      genesis,
+      rpc,
+      scoringActivated: false,
+      vouchersEnabled: false,
+      publicSelfClaim: false
+    };
+  }
+  const blocked = /planned|unreleased|\bnext\b|placeholder|coming soon/i.test(networkStatus + " " + release) ||
     /Unavailable\s*[—-]\s*no verified public value|None verified|Admission\s+Unavailable|public operator enrollment is unavailable/i.test(text);
   if (blocked) {
     return { state: "not-launched", reason: "Official testnet release or network settings not verified" };
@@ -133,10 +147,10 @@ export function makeReport(html, now = new Date()) {
     settlementReceipt: null,
     devnetAirdropCredit: 0,
     requiredAfterLaunch: [
-      "Verify official testnet release, chain genesis and RPC",
-      "Verify DID-to-chain-account mapping and approved signer protocol",
-      "Use official free faucet once within published limits",
-      "Send one authorized signed inference and verify final on-chain settlement receipt"
+      "Wait for a publicly announced scoring activation block and signed operator/agent kits",
+      "Verify RPC block zero against the official Testnet genesis and confirm supported runtime compatibility",
+      "Confirm a Testnet-specific free faucet, limits and approved DID/wallet signing protocol",
+      "Only after scoring activates, verify an authorized inference and finalized settlement receipt"
     ]
   };
 }
@@ -154,7 +168,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     try {
       const result = await runPreflight();
       console.log(JSON.stringify(result, null, 2));
-      if (result.state !== "not-launched") process.exitCode = 3;
+      if (result.state !== "fully-integrated") process.exitCode = 3;
     } catch (error) {
       console.error(JSON.stringify({ readOnly: true, state: "unverified", error: String(error.message || error) }));
       process.exitCode = 1;

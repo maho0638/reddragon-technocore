@@ -16,7 +16,7 @@ const viewports = [
 ];
 const statusFixture = {
   schema: "reddragon-flop-live-status/v1", checkedAt: "2026-11-10T12:00:00.000Z", stale: false,
-  testnet: { state: "not-live", release: "next (unreleased)" },
+  testnet: { state: "live-unscored", network: "live, unscored", release: "next (unreleased)", vouchers: "disabled", publicSelfClaim: false, scoringActivationAnnounced: false, genesis: "0x918abd58fb16306b30ef3886514cfaebffecb4de43e82b6f8ec4795c43cfd800" },
   devnet: { state: "public-development-network", rewards: "none", operatorEnrollment: "administrator-assisted / public self-service unavailable" },
   timeline: { state: "verified", updated: "2026-10-30", testnetTarget: "Tuesday 3 November 2026", testnetOpenClaim: true, devnetRewards: "none" },
   services: { rpc: { state: "verified" }, gateway: { state: "catalog-responded", count: 2 }, validator: { state: "verified" } },
@@ -96,7 +96,7 @@ async function assertNoHorizontalOverflow(page) {
   assert.ok(diagnosis.scroll <= diagnosis.client + 1, `horizontal overflow / DOM offenders: ${JSON.stringify(diagnosis)}`);
 }
 
-async function assertVisibleCopyLocale(page, locale, label) {
+async function assertVisibleCopyLocale(page, locale, label, { home = false } = {}) {
   const copy = await page.evaluate(() => {
     const clone = document.body.cloneNode(true);
     clone.querySelectorAll("script,style,noscript,code,pre,input,textarea,select,[hidden],[aria-hidden='true']").forEach(el => el.remove());
@@ -111,6 +111,22 @@ async function assertVisibleCopyLocale(page, locale, label) {
     const untranslated = /\b(?:the password|no records|no signed|refresh status|refresh proof|refresh inbox|enter a valid|enter your|open room|public self-service unavailable|waiting for demo|live-verify)\b/i.exec(copy);
     assert.equal(untranslated, null, `${label}: English UI phrase remains: ${untranslated?.[0]}`);
   }
+  if (!home) return;
+  const expected = locale === "en" ? {
+    proofImport: "Import Public Proof JSON",
+    repository: "Open GitHub repository",
+    share: "𝕏 Share this site",
+    heading: "Share · everyone uses their own account"
+  } : {
+    proofImport: "Herkese Açık Kanıt JSON'unu içe aktar",
+    repository: "GitHub repo'yu aç",
+    share: "𝕏 Siteyi paylaş",
+    heading: "Paylaş · herkes kendi hesabından"
+  };
+  assert.equal((await page.locator("#rdProofImport button").first().textContent()).trim(), expected.proofImport, `${label}: public-proof action locale`);
+  assert.equal((await page.locator("#repoBtn").textContent()).trim(), expected.repository, `${label}: GitHub action locale`);
+  assert.equal((await page.locator("#rdShareSiteX").textContent()).trim(), expected.share, `${label}: social share locale`);
+  assert.equal((await page.locator("#rdSharePanel h3").textContent()).trim(), expected.heading, `${label}: share panel locale`);
 }
 
 before(async () => {
@@ -147,6 +163,9 @@ test("main page boots from empty storage and translates in desktop and mobile", 
       await page.locator("#rdTestnetToolkit").waitFor({ state: "visible" });
       await page.locator("#rdTclkWorkbench").waitFor({ state: "visible" });
       await page.locator("#rdProvFixSummary").waitFor({ state: "visible" });
+      await page.locator("#rdProofImport button").first().waitFor({ state: "visible" });
+      await page.locator("#repoBtn").waitFor({ state: "visible" });
+      await page.locator("#rdSharePanel h3").waitFor({ state: "visible" });
       const catalogAudit = await page.evaluate(() => window.RD_I18N.audit());
       assert.ok(catalogAudit.catalogs >= 6, `all module catalogs registered: ${JSON.stringify(catalogAudit)}`);
       assert.match(await page.locator("#heroDid").textContent(), /did:key:z6Mk/);
@@ -181,7 +200,7 @@ test("main page boots from empty storage and translates in desktop and mobile", 
       assert.match(await page.locator("#rdProvFixSummary").textContent(), /proof signals|core proof/i);
       assert.doesNotMatch(await page.locator("#rdTestnetToolkit .rd-testnet-head p").textContent(), /^FLOP'un güncel/);
       assert.doesNotMatch(await page.locator("#rdDidProvenance").innerText(), /Live-verifies/);
-      await assertVisibleCopyLocale(page, "en", `${viewport.name}/home`);
+      await assertVisibleCopyLocale(page, "en", `${viewport.name}/home`, { home: true });
 
       assert.equal((await page.locator("#helloText").inputValue()).startsWith("Hello Technocore!"), true, "English default message must be localized");
       await page.locator("#createBtn").click();
@@ -199,7 +218,7 @@ test("main page boots from empty storage and translates in desktop and mobile", 
       assert.match(await page.locator("#rdProvFixSummary").textContent(), /kanıt|doğrulanamadı/i);
       assert.doesNotMatch(await page.locator("#rdTestnetToolkit .rd-testnet-head p").textContent(), /Turns FLOP's current/);
       assert.doesNotMatch(await page.locator("#rdDidProvenance").innerText(), /Live-verifies/);
-      await assertVisibleCopyLocale(page, "tr", `${viewport.name}/home`);
+      await assertVisibleCopyLocale(page, "tr", `${viewport.name}/home`, { home: true });
       assert.equal((await page.locator("#helloText").inputValue()).startsWith("Merhaba Technocore!"), true, "Turkish default message must be localized");
       await page.locator("#createBtn").click();
       assert.equal((await page.locator("#toast").textContent()).trim(), "Parola en az 12 karakter olmalı.");
@@ -213,11 +232,11 @@ test("step 11 warning copy stays separated and localized at all supported widths
   const translations = {
     tr: {
       title: "İstenmeyen ileti değil, sürdürülebilir etkinlik",
-      description: "Otomasyon 30 dakikada bir çalışır; imzalı gönderiler için varsayılan aralık 12 saattir. Daha sık mesaj göndermenin airdrop uygunluğunu artırdığına dair resmî kanıt yoktur."
+      description: "Her workflow 30 dakikada bir planlanır; ana ve yedek akış 15 dakika kaydırılmıştır. GitHub planlı çalıştırmaları geciktirebilir veya atlayabilir. TECHNOCORE_MIN_POST_HOURS varsayılanı 12 saattir ve kalıcı durumla uygulanır; bu değişken aralığı değiştirir. Daha sık mesajın airdrop uygunluğunu artırdığına dair resmî kanıt yoktur."
     },
     en: {
       title: "Sustainable activity, not spam",
-      description: "The workflow wakes every 30 minutes; the default interval for signed posts is 12 hours. There is no official evidence that sending messages more often improves airdrop eligibility."
+      description: "Each workflow is scheduled every 30 minutes, offset by 15 minutes. GitHub can delay or skip scheduled runs. TECHNOCORE_MIN_POST_HOURS defaults to 12 and is enforced with durable state; changing it changes the minimum gap. There is no official evidence that more frequent messages improve airdrop eligibility."
     }
   };
 
@@ -350,7 +369,8 @@ test("/flop Turkish and English copy, fail-closed status, and responsive layout"
       assert.equal(await page.locator("footer > span:last-child").textContent(), "Community-built · source-first · no affiliation claim");
       await page.reload();
       assert.equal(await language.inputValue(), "en", "English choice should survive reload");
-      assert.match(await page.locator("#rdLiveTestnet [data-status]").textContent(), /planned|unreleased/i);
+      assert.match(await page.locator("#rdLiveTestnet [data-status]").textContent(), /live.*unscored/i);
+      assert.match(await page.locator("#rdLiveTestnet [data-detail]").textContent(), /no announced activation block|no announced.*date/i);
       assert.match(await page.locator("#rdLiveDevnet [data-detail]").textContent(), /administrator-assisted|administrator assistance/i);
       assert.doesNotMatch(await page.locator("#rdLiveDevnet [data-detail]").textContent(), /public self-service unavailable/);
       await assertVisibleCopyLocale(page, "en", `${viewport.name}/flop`);
@@ -389,7 +409,7 @@ test("language changes render all panels consistently across reloads and in-flig
     assert.equal(await page.evaluate(() => localStorage.getItem("reddragon-lang")), "en");
     await expectCapacityMessage(page, "en", "The live source returned HTTP 503.");
     releaseStatus();
-    await page.waitForFunction(() => document.querySelector("#rdLiveTestnet [data-status]")?.textContent.includes("Planned / unreleased"));
+    await page.waitForFunction(() => document.querySelector("#rdLiveTestnet [data-status]")?.textContent.includes("Live · unscored opening"));
     assert.equal(await page.locator("html").getAttribute("lang"), "en", "late live data uses current locale");
     await language.selectOption("tr");
     await expectCapacityMessage(page, "tr", "Canlı kaynak HTTP 503 yanıtı verdi.");
@@ -489,7 +509,7 @@ test("DID create, encrypted backup, restore, prompts and mocked signed flows wor
   }
 });
 
-test("candidate X share opens a localized compose intent without external writes", { timeout: 90000 }, async () => {
+test("candidate X share copies localized text without opening X or writing externally", { timeout: 90000 }, async () => {
   for (const locale of ["en", "tr"]) {
     const { context, page } = await newPage(viewports[0], locale);
     const errors = [];
@@ -511,24 +531,21 @@ test("candidate X share opens a localized compose intent without external writes
       const shareButton = page.locator("#xShare");
       assert.equal(await shareButton.isEnabled(), true, "a recorded contribution enables X sharing");
       assert.equal((await shareButton.textContent()).trim(), locale === "tr" ? "X'te paylaş" : "Share on X");
-
-      await page.evaluate(() => {
-        window.__qaExternalIntents = [];
-        window.open = url => { window.__qaExternalIntents.push(String(url)); return { opener: null }; };
-      });
+      const unexpectedPopups = [];
+      const pageCountBeforeShare = context.pages().length;
+      page.on("popup", popup => unexpectedPopups.push(popup));
       await shareButton.click();
-      const urls = await page.evaluate(() => window.__qaExternalIntents.splice(0));
-      assert.equal(urls.length, 1, `${locale} should open one intercepted X compose intent`);
-      const intent = new URL(urls[0]);
-      assert.equal(intent.origin, "https://x.com");
-      assert.equal(intent.pathname, "/intent/tweet");
-      const text = intent.searchParams.get("text") || "";
-      assert.match(text, locale === "tr"
-        ? /Technocore ajan kimliğimi oluşturdum ve faydalı bir katkı yayımladım/
-        : /Built my Technocore agent identity and published a useful contribution/);
+      const expectedStart = locale === "tr"
+        ? "Technocore ajan kimliğimi oluşturdum ve faydalı bir katkı yayımladım"
+        : "Built my Technocore agent identity and published a useful contribution";
+      await page.waitForFunction(async expected => (await navigator.clipboard.readText()).includes(expected), expectedStart);
+      const text = await page.evaluate(() => navigator.clipboard.readText());
+      assert.ok(text.includes(expectedStart), `${locale} clipboard share has the correct localized intro`);
       assert.ok(text.includes(did), `${locale} share contains the public DID`);
       assert.ok(text.includes("https://example.test/red-dragon-contribution"), `${locale} share contains the contribution URL`);
       assert.match(text, /#Technocore #FLOP/);
+      assert.deepEqual(unexpectedPopups, [], `${locale} clipboard share must not open a popup`);
+      assert.equal(context.pages().length, pageCountBeforeShare, `${locale} clipboard share must not create a new page`);
       assert.deepEqual(errors, [], `${locale} X share should not throw a browser exception`);
     } finally { await context.close(); }
   }

@@ -36,7 +36,7 @@ test("public supply and cohort allocations agree with signed manifest", async ()
   assert.equal(s.project.xUrl, "https://x.com/lionmousse");
   assert.equal(m.projectX, s.project.xUrl);
   assert.equal(m.did, did);
-  assert.equal(s.checkedAt, "2026-11-10");
+  assert.equal(s.checkedAt, "2026-11-24");
 });
 
 test("newer paper-content drift is distinct from CI-only repository head", async () => {
@@ -52,7 +52,16 @@ test("newer paper-content drift is distinct from CI-only repository head", async
 
 test("testnet remains fail-closed and devnet has no airdrop weight", async () => {
   const s = await json("public/flop-source-status.json");
-  assert.match(s.roadmap.testnetNetworkStatus, /planned.+unreleased/i);
+  assert.match(s.roadmap.testnetNetworkStatus, /live, unscored opening/i);
+  assert.equal(s.roadmap.publicTestnetRpc, "wss://testnet.flop.network/");
+  assert.equal(s.roadmap.publicTestnetRpcHttp, "https://testnet.flop.network/");
+  assert.equal(s.roadmap.expectedTestnetGenesis, "0x918abd58fb16306b30ef3886514cfaebffecb4de43e82b6f8ec4795c43cfd800");
+  assert.equal(s.roadmap.testnetRpcGenesisVerifiedAtSnapshot, false);
+  assert.equal(s.roadmap.testnetScoringActivationAnnounced, false);
+  assert.equal(s.roadmap.testnetVoucherTradingEnabled, false);
+  assert.equal(s.roadmap.testnetPublicSelfClaimAvailable, false);
+  assert.equal(s.roadmap.testnetFaucetLimitsAnnounced, false);
+  assert.deepEqual(s.roadmap.testnetSdk, { package: "@flop-labs/sdk", documentedVersion: "0.9.0", publishedRuntimeAllowlistMax: 1014034, testnetOpeningRuntime: 1014035, compatibility: "unverified until SDK allowlist covers opening runtime; keep compatibility checks enabled", source: "https://docs.flop.network/networks/testnet" });
   assert.equal(s.roadmap.officialFaucetEndpointVerifiedLive, false);
   assert.equal(s.roadmap.officialInferenceEndpointVerifiedLive, false);
   assert.equal(s.roadmap.devnetEarnsAirdropWeight, false);
@@ -60,6 +69,16 @@ test("testnet remains fail-closed and devnet has no airdrop weight", async () =>
   assert.equal(s.roadmap.validatorPackage, "0.4.1-devnet.1 (explorer page; administrator-assisted access)");
   const page = await read("public/flop.html");
   assert.match(page, /https:\/\/docs\.flop\.network\/networks\/testnet/);
+  assert.match(page, /https:\/\/testnet\.flopscan\.io/);
+  assert.match(page, /SDK 0\.9\.0[\s\S]*1014034[\s\S]*1014035[\s\S]*Keep compatibility checks enabled/i);
+  assert.match(page, /Live · unscored opening/);
+  assert.doesNotMatch(page, /public testnet launch is not confirmed|planned and its release is unreleased/i);
+  const liveStatus = await read("public/flop-live-status.js");
+  assert.match(liveStatus, /testnetLiveUnscored/);
+  assert.match(liveStatus, /Check SDK\/runtime compatibility/);
+  const toolkit = await read("public/testnet-toolkit.js");
+  assert.match(toolkit, /24 Nov 2026: Testnet is live and unscored/);
+  assert.match(toolkit, /Devnet faucet is not Testnet/);
   assert.match(page, /https:\/\/docs\.flop\.network\/networks\/devnet/);
   assert.match(page, /timeline FAQ, updated 30 October, says devnet earns nothing and has no reward or airdrop weight/i);
   assert.match(page, /https:\/\/docs\.flop\.network\/docs\/testnet-and-timeline/);

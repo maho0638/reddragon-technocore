@@ -46,6 +46,10 @@ const server = http.createServer(async (req, res) => {
     return;
   }
   if (url.pathname === "/api/relay") {
+    if (req.method !== "POST") {
+      res.setHeader("allow", "POST");
+      return send(res, 405, JSON.stringify({ error: "Relay requires POST" }));
+    }
     return send(res, 503, JSON.stringify({ error: "Relay is disabled in the local preview; no external writes are allowed" }));
   }
   if (req.method !== "GET" && req.method !== "HEAD") {

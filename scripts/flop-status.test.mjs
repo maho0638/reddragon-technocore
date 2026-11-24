@@ -3,13 +3,23 @@ import assert from "node:assert/strict";
 import flopStatus, { buildStatus, classifyTestnetPage, parseCommit, parseDevnetPage, parsePackageVersions, parseTimelinePage, parseValidatorManual, parseValidatorPackage, sourceText, __test } from "../api/flop-status.js";
 import { isPublicEd25519Did, ledgerStorageKey, loadDidLedger, saveDidLedger } from "../public/flop-did-utils.js";
 
-const testnet = `<h1>testnet network</h1><p>Network: testnet (planned) · Release: next (unreleased)</p><p>Public operator enrollment is unavailable.</p><p>RPC Unavailable — no verified public value</p>`;
+const testnet = `<h1>testnet network</h1><p>Network: testnet (live, unscored) · Release: next (unreleased) · Source: ccef3da4aaf6</p><p>Public chain reads and operator registration are open. The signed operator kits are pending publication.</p><p>Six founding validators launched FLOP Testnet on 24 November 2026. This early network is unscored. Test FLOP has no monetary value.</p><p>WebSocket RPC wss://testnet.flop.network/</p><p>Genesis block hash 0x918abd58fb16306b30ef3886514cfaebffecb4de43e82b6f8ec4795c43cfd800</p><p>No verified public Self claim at this opening.</p><p>There is no announced block or date yet. Earlier activity earns zero, with no backfill. Voucher trading, orders and swaps remain disabled.</p></p>`;
+const plannedTestnet = `<h1>testnet network</h1><p>Network: testnet (planned) · Release: next (unreleased)</p><p>Public operator enrollment is unavailable.</p><p>RPC Unavailable — no verified public value</p>`;
 const devnet = `<h1>devnet network</h1><p>Network: devnet (development) · Release: next (unreleased)</p><p>RPC wss://rpc.devnet.flop.network</p><p>Gateway https://api.flop.network</p><p>Model catalog https://api.flop.network/v1/models</p><p>Public devnet endpoints are available. Operator enrollment and inference readiness require separate checks.</p><p>Devnet is running and earns nothing: no rewards and no airdrop weight.</p>`;
 const sdk = `<p>@flop-labs/client 0.2.1 (npm)</p><p>@flop-labs/sdk 0.4.0 (npm)</p><p>@flop-labs/cli 0.4.0 (npm)</p><p>flop-sdk 0.2.0 (PyPI)</p>`;
 const timeline = `<p>Last updated 2026-10-30</p><p>The working target is Tuesday 3 November 2026. It is a target rather than a fixed date.</p><p>Devnet earns nothing: no rewards and no airdrop weight.</p><p>Testnet is open — no whitelist.</p>`;
 
-test("testnet status is fail-closed for planned, unreleased and unknown source copy", () => {
-  assert.deepEqual(classifyTestnetPage(testnet), { state: "not-live", release: "next (unreleased)" });
+test("official live unscored opening is distinct from release status, while planned pages stay fail-closed", () => {
+  const parsed = classifyTestnetPage(testnet);
+  assert.equal(parsed.state, "live-unscored");
+  assert.equal(parsed.network, "live, unscored");
+  assert.equal(parsed.release, "next (unreleased)");
+  assert.equal(parsed.rpc, "wss://testnet.flop.network/");
+  assert.equal(parsed.genesis, "0x918abd58fb16306b30ef3886514cfaebffecb4de43e82b6f8ec4795c43cfd800");
+  assert.equal(parsed.vouchers, "disabled");
+  assert.equal(parsed.publicSelfClaim, false);
+  assert.equal(parsed.scoringActivationAnnounced, false);
+  assert.deepEqual(classifyTestnetPage(plannedTestnet), { state: "not-live", release: "next (unreleased)" });
   assert.equal(classifyTestnetPage("<p>Network: testnet</p><p>Release: 1.0</p>").state, "unverified");
   assert.equal(classifyTestnetPage("<p>Launch is soon</p>").state, "unverified");
 });
@@ -46,7 +56,7 @@ test("official timeline is dated and its testnet contradiction never changes net
   assert.equal(parsed.testnetTargetIsUnconfirmed, true);
   assert.equal(parsed.testnetOpenClaim, true);
   assert.equal(parsed.devnetRewards, "none");
-  assert.equal(classifyTestnetPage(testnet).state, "not-live");
+  assert.equal(classifyTestnetPage(testnet).state, "live-unscored");
   assert.throws(() => __test.safeUrl("https://docs.flop.network/docs/testnet-and-timeline?next=https://evil.example"), /not allowlisted/);
 });
 
@@ -99,6 +109,28 @@ test("timeouts produce explicit aborts rather than fabricated success", async ()
   await assert.rejects(__test.fetchText(__test.SOURCES.testnet, (url, options) => new Promise((_, reject) => options.signal.addEventListener("abort", () => reject(Object.assign(new Error("aborted"), { name: "AbortError" })))), { timeoutMs: 20 }), /aborted/);
 });
 
+
+test("Testnet RPC identity uses only read-only methods and the official Testnet genesis", async () => {
+  const calls = [];
+  const responses = {
+    system_chain: "FLOP Testnet",
+    system_version: "1.0.0",
+    chain_getBlockHash: "0x918abd58fb16306b30ef3886514cfaebffecb4de43e82b6f8ec4795c43cfd800"
+  };
+  const result = await __test.probeRpc(async (url, options) => {
+    calls.push({ url, options });
+    const body = JSON.parse(options.body);
+    return new Response(JSON.stringify({ jsonrpc: "2.0", id: body.id, result: responses[body.method] }), { headers: { "content-type": "application/json" } });
+  });
+  assert.equal(result.state, "identity-matched");
+  assert.equal(result.chain, "FLOP Testnet");
+  assert.equal(result.genesis, "0x918abd58fb16306b30ef3886514cfaebffecb4de43e82b6f8ec4795c43cfd800");
+  assert.equal(calls.length, 3);
+  assert.ok(calls.every(({ url, options }) => url === "https://testnet.flop.network/" && options.method === "POST"));
+  assert.deepEqual(calls.map(({ options }) => JSON.parse(options.body).method).sort(), ["chain_getBlockHash", "system_chain", "system_version"]);
+  assert.throws(() => __test.safeUrl("https://rpc.devnet.flop.network"), /not allowlisted/);
+});
+
 test("all read-only sources and RPC errors remain visible as unverified", async () => {
   const fetchFn = async (url, options = {}) => {
     if (url === __test.SOURCES.testnet) return new Response(testnet, { headers: { "content-type": "text/html" } });
@@ -113,15 +145,17 @@ test("all read-only sources and RPC errors remain visible as unverified", async 
     if (url === __test.SOURCES.rpc) throw new Error("network unavailable");
     throw new Error("Unexpected source");
   };
-  const data = await buildStatus({ fetchFn, now: new Date("2026-11-10T12:00:00Z") });
-  assert.equal(data.testnet.state, "not-live");
+  const data = await buildStatus({ fetchFn, now: new Date("2026-11-24T12:00:00Z") });
+  assert.equal(data.testnet.state, "live-unscored");
   assert.equal(data.devnet.state, "public-development-network");
   assert.equal(data.devnet.rewards, "none");
   assert.equal(data.timeline.updated, "2026-10-30");
   assert.equal(data.timeline.testnetOpenClaim, true);
-  assert.equal(data.testnet.state, "not-live");
+  assert.equal(data.testnet.state, "live-unscored");
   assert.equal(data.services.gateway.state, "catalog-responded");
   assert.equal(data.services.rpc.state, "unverified");
+  assert.equal(data.services.faucet.state, "devnet-only; testnet-self-claim-unavailable");
+  assert.equal(data.services.faucet.testnetSelfClaim, false);
   assert.equal(data.yellowPaper.githubContentCommit.sha, "content-sha");
   assert.equal(data.yellowPaper.githubRepositoryHead.sha, "ci-sha");
   assert.equal(data.yellowPaper.contentVsCiDistinguished, true);

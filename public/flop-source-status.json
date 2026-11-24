@@ -1,6 +1,6 @@
 {
   "schema": "reddragon-flop-source-status/v1",
-  "checkedAt": "2026-11-10",
+  "checkedAt": "2026-11-24",
   "project": {
     "name": "RedDragon FLOP Community Observatory",
     "site": "https://reddragon-technocore.vercel.app/flop",
@@ -77,24 +77,40 @@
     }
   ],
   "roadmap": {
-    "testnet": "Q4 2026; 3 November was a working target, not confirmed launch",
+    "testnet": "Opened 24 November 2026 · live, unscored; scored phase planned up to about 90 days, but activation block/date not announced",
     "mainnet": "Q1 2027 target",
     "officialFaucetEndpointVerifiedLive": false,
     "officialInferenceEndpointVerifiedLive": false,
-    "testnetNetworkStatus": "planned / next (unreleased) as of 2026-11-10; launch not confirmed",
+    "testnetNetworkStatus": "live, unscored opening as of 2026-11-24; scored activation block/date not announced; voucher trading, orders and swaps disabled",
     "devnetNetworkStatus": "public development endpoints are listed; operator admission is administrator-assisted and public self-service testnet onboarding is unavailable",
     "devnetEarnsAirdropWeight": false,
     "publicDevnetRpc": "wss://rpc.devnet.flop.network",
     "publicDevnetGateway": "https://api.flop.network",
     "publicDevnetModelCatalog": "https://api.flop.network/v1/models",
-    "faucetEndpointPublished": "https://faucet.flop.network",
+    "faucetEndpointPublished": "https://faucet.flop.network (Devnet only; not a Testnet claim endpoint)",
     "devnetRpcGenesisVerifiedAtSnapshot": false,
     "sdkVersionsSource": "https://docs.flop.network/docs/sdk-references (last updated 2026-10-30; registry is authoritative if versions differ)",
     "validatorPackage": "0.4.1-devnet.1 (explorer page; administrator-assisted access)",
     "validatorManualVersion": "0.4.0-devnet.1 (docs page last updated 2026-11-06)",
     "validatorVersionConflict": "The current explorer page and validator manual show different package versions. The package listing is newer, but admission remains administrator-assisted.",
     "testnetOperatorUrl": "https://docs.flop.network/networks/testnet",
-    "devnetOperatorUrl": "https://docs.flop.network/networks/devnet"
+    "devnetOperatorUrl": "https://docs.flop.network/networks/devnet",
+    "publicTestnetRpc": "wss://testnet.flop.network/",
+    "publicTestnetRpcHttp": "https://testnet.flop.network/",
+    "expectedTestnetGenesis": "0x918abd58fb16306b30ef3886514cfaebffecb4de43e82b6f8ec4795c43cfd800",
+    "testnetRpcGenesisVerifiedAtSnapshot": false,
+    "testnetScoringActivationAnnounced": false,
+    "testnetVoucherTradingEnabled": false,
+    "testnetPublicSelfClaimAvailable": false,
+    "testnetFaucetLimitsAnnounced": false,
+    "testnetSdk": {
+      "package": "@flop-labs/sdk",
+      "documentedVersion": "0.9.0",
+      "publishedRuntimeAllowlistMax": 1014034,
+      "testnetOpeningRuntime": 1014035,
+      "compatibility": "unverified until SDK allowlist covers opening runtime; keep compatibility checks enabled",
+      "source": "https://docs.flop.network/networks/testnet"
+    }
   },
   "currentOpportunities": {
     "kolCreatorApplicationsOpen": true,
@@ -116,7 +132,7 @@
     "https://docs.flop.network/networks/devnet",
     "https://docs.flop.network/docs/testnet-and-timeline"
   ],
-  "disclaimer": "Independent community status snapshot checked 2026-11-10. The live status endpoint checks allowlisted official sources; an unreachable or malformed source is reported as unverified. FLOP Labs controls the actual release, rewards, conversion and eligibility. Devnet activity earns no rewards or airdrop weight. A DID, faucet note or balance does not guarantee allocation.",
+  "disclaimer": "Independent community status snapshot checked 2026-11-24 for Testnet opening status; source-specific paper, SDK, Devnet and repository dates remain recorded separately. Live status checks use allowlisted official sources and public read-only probes; unreachable or malformed sources remain unverified. FLOP Labs controls scoring, rewards, conversion and eligibility. Devnet activity earns no rewards or airdrop weight. A DID, faucet note or balance does not guarantee allocation.",
   "resolvedSourceDrift": [
     {
       "id": "github-mirror-d0440-2026-09-24",

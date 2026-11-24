@@ -624,6 +624,7 @@ installFetchCapture();
 
 window.addEventListener("load", () => {
   installUi();
+  window.dispatchEvent(new Event("rd:dynamicuiready"));
   let attempts = 0;
   const timer = setInterval(async () => {
     installUi();
