@@ -115,6 +115,7 @@ test("Testnet RPC identity uses only read-only methods and the official Testnet 
   const responses = {
     system_chain: "FLOP Testnet",
     system_version: "1.0.0",
+    state_getRuntimeVersion: { specName: "flop-testnet", specVersion: 1014035 },
     chain_getBlockHash: "0x918abd58fb16306b30ef3886514cfaebffecb4de43e82b6f8ec4795c43cfd800"
   };
   const result = await __test.probeRpc(async (url, options) => {
@@ -124,11 +125,27 @@ test("Testnet RPC identity uses only read-only methods and the official Testnet 
   });
   assert.equal(result.state, "identity-matched");
   assert.equal(result.chain, "FLOP Testnet");
+  assert.equal(result.runtimeSpecName, "flop-testnet");
+  assert.equal(result.runtimeSpecVersion, 1014035);
   assert.equal(result.genesis, "0x918abd58fb16306b30ef3886514cfaebffecb4de43e82b6f8ec4795c43cfd800");
-  assert.equal(calls.length, 3);
+  assert.equal(calls.length, 4);
   assert.ok(calls.every(({ url, options }) => url === "https://testnet.flop.network/" && options.method === "POST"));
-  assert.deepEqual(calls.map(({ options }) => JSON.parse(options.body).method).sort(), ["chain_getBlockHash", "system_chain", "system_version"]);
+  assert.deepEqual(calls.map(({ options }) => JSON.parse(options.body).method).sort(), ["chain_getBlockHash", "state_getRuntimeVersion", "system_chain", "system_version"]);
   assert.throws(() => __test.safeUrl("https://rpc.devnet.flop.network"), /not allowlisted/);
+});
+
+test("Testnet RPC fails identity verification when the runtime differs from the opened network", async () => {
+  const result = await __test.probeRpc(async (_url, options) => {
+    const body = JSON.parse(options.body);
+    const values = {
+      system_chain: "FLOP Testnet", system_version: "1.0.0",
+      state_getRuntimeVersion: { specName: "flop-testnet", specVersion: 1014034 },
+      chain_getBlockHash: "0x918abd58fb16306b30ef3886514cfaebffecb4de43e82b6f8ec4795c43cfd800"
+    };
+    return new Response(JSON.stringify({ jsonrpc: "2.0", id: body.id, result: values[body.method] }), { headers: { "content-type": "application/json" } });
+  });
+  assert.equal(result.state, "identity-unverified");
+  assert.equal(result.runtimeSpecVersion, 1014034);
 });
 
 test("all read-only sources and RPC errors remain visible as unverified", async () => {

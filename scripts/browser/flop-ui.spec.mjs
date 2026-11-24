@@ -58,6 +58,10 @@ async function newPage(viewport, preferredLocale) {
       if (locale === "tr" || locale === "en") localStorage.setItem("reddragon-lang", locale);
       sessionStorage.setItem("__rdBrowserSmokeInitialized", "1");
     }
+    document.addEventListener("securitypolicyviolation", event => {
+      window.__rdCspViolations = window.__rdCspViolations || [];
+      window.__rdCspViolations.push({ directive: event.violatedDirective, blockedURI: event.blockedURI });
+    });
   }, preferredLocale);
   await context.route("**/api/flop-status", (route) => route.fulfill({
     status: 200, contentType: "application/json", body: JSON.stringify(statusFixture)
@@ -124,6 +128,11 @@ async function assertVisibleCopyLocale(page, locale, label, { home = false } = {
     heading: "Paylaş · herkes kendi hesabından"
   };
   assert.equal((await page.locator("#rdProofImport button").first().textContent()).trim(), expected.proofImport, `${label}: public-proof action locale`);
+  await page.locator("#rdUsageGuide").waitFor({ state: "visible" });
+  const guideStyle = await page.locator("#rdUsageGuide").evaluate(element => ({ border: getComputedStyle(element).borderTopStyle, width: getComputedStyle(element).borderTopWidth }));
+  assert.deepEqual(guideStyle, { border: "solid", width: "1px" }, `${label}: usage guide styling must load from external CSS under CSP`);
+  const styleViolations = await page.evaluate(() => (window.__rdCspViolations || []).filter(item => item.directive.startsWith("style-src")));
+  assert.deepEqual(styleViolations, [], `${label}: CSP blocked styles: ${JSON.stringify(styleViolations)}`);
   assert.equal((await page.locator("#repoBtn").textContent()).trim(), expected.repository, `${label}: GitHub action locale`);
   assert.equal((await page.locator("#rdShareSiteX").textContent()).trim(), expected.share, `${label}: social share locale`);
   assert.equal((await page.locator("#rdSharePanel h3").textContent()).trim(), expected.heading, `${label}: share panel locale`);

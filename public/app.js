@@ -101,7 +101,18 @@ async function sign(room,text){ text=clean(text);const nonce=String(Date.now());
 async function relay(body){ const r=await fetch("/api/relay",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)});const txt=await r.text();if(!r.ok)throw new Error(txt);try{return JSON.parse(txt)}catch{return txt} }
 function parseSeq(resp){ if(typeof resp==="object"&&resp)return resp.seq||resp.sequence||resp.id||JSON.stringify(resp);const s=String(resp);const m=s.match(/(?:seq|sequence|#)\s*[:=]?\s*(\d+)/i)||s.match(/\b(\d{3,})\b/);return m?m[1]:s.slice(0,120); }
 async function postSigned(room,text){ const s=await sign(room,text);const resp=await relay({action:"signedPost",room,...s});return{room,seq:parseSeq(resp),raw:resp,nonce:s.nonce,text:s.text}; }
-async function kvSet(ns,key,value){ return relay({action:"kvSet",ns,key,value}); }
+async function kvSet(ns,key,value){
+  const cleanValue=String(value||"").replace(/[\p{Cc}\p{Cf}\p{Cs}\p{Co}\p{Zl}\p{Zp}]/gu," ").replace(/\s+/g," ").trim();
+  const body={action:"kvSet",ns,key,value:cleanValue};
+  if(ns==="profile"){
+    if(!state.did||!state.privateKey)throw new Error("Profile signing key unavailable");
+    const nonce=String(Date.now());
+    const payload=enc.encode(`${ns}|${key}|${nonce}|${cleanValue}`);
+    const sig=new Uint8Array(await crypto.subtle.sign({name:"Ed25519"},state.privateKey,payload));
+    Object.assign(body,{did:state.did,nonce,sig:b64u(sig)});
+  }
+  return relay(body);
+}
 
 function markDone(n){ state.done.add(n);savePublicProgress();updateUI(); }
 function savePublicProgress(){ localStorage.setItem("reddragon-progress",JSON.stringify([...state.done])); }

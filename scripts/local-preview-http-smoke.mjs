@@ -27,8 +27,11 @@ async function waitReady() {
 try {
   const home = await waitReady();
   assert.match(home.headers.get("x-content-type-options") || "", /nosniff/);
+  const homeCsp = home.headers.get("content-security-policy") || "";
+  assert.match(homeCsp, /(?:^|;\s*)style-src 'self'(?:;|$)/);
+  assert.doesNotMatch(homeCsp, /unsafe-inline/);
   assert.match(await home.text(), /RedDragon · FLOP Community Observatory/);
-  console.log("PASS local preview serves the main page over loopback with nosniff");
+  console.log("PASS local preview serves the main page over loopback with nosniff and strict style-src");
 
   const flop = await fetch(`${base}/flop`);
   assert.equal(flop.status, 200);
@@ -36,7 +39,7 @@ try {
   console.log("PASS local preview serves /flop route");
 
   const assetResponses = new Map();
-  for (const path of ["/ui-i18n.js", "/responsive-fixes.css", "/flop-responsive-fixes.css"]) {
+  for (const path of ["/ui-i18n.js", "/styles.css", "/responsive-fixes.css", "/flop-responsive-fixes.css"]) {
     const response = await fetch(`${base}${path}`);
     assetResponses.set(path, response);
     assert.equal(response.status, 200, `${path} missing from local preview`);
@@ -60,6 +63,7 @@ try {
   assert.equal(responsiveCss?.status, 200, "responsive-fixes.css must return HTTP 200");
   assert.match(responsiveCss?.headers.get("content-type") || "", /text\/css/, "responsive-fixes.css must use CSS MIME type");
   assert.match(flopHtml, /flop-responsive-fixes\.css/);
+  assert.match(await assetResponses.get("/styles.css").text(), /#rdUsageGuide \.rd-guide-kicker/);
   console.log("PASS local preview serves the render-blocking responsive stylesheet once with CSS MIME");
 
   const script = await fetch(`${base}/flop-live-status.js`);

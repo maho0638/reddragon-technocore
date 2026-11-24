@@ -51,6 +51,21 @@ test("relay uses a separate lower budget for signed writes and KV writes", async
   assert.equal(limited.headers["x-ratelimit-limit"], "10");
 });
 
+test("per-instance counters can double the write allowance across two isolated workers", async () => {
+  const second = await import("../api/relay.js?isolated-worker=second");
+  relayTest.rateBuckets.clear();
+  second.__test.rateBuckets.clear();
+  const req = request({ action: "signedPost" });
+  for (let i = 0; i < relayTest.RATE_LIMITS.write; i++) {
+    assert.equal(relayTest.rateLimit(req, response(), "signedPost"), false);
+    assert.equal(second.__test.rateLimit(req, response(), "signedPost"), false);
+  }
+  assert.equal(relayTest.rateLimit(req, response(), "signedPost"), true);
+  assert.equal(second.__test.rateLimit(req, response(), "signedPost"), true);
+  assert.equal(relayTest.rateBuckets.get("203.0.113.7:write").count, 11);
+  assert.equal(second.__test.rateBuckets.get("203.0.113.7:write").count, 11);
+});
+
 test("relay trusts the final forwarded address and retains POST/content-type gates", async () => {
   assert.equal(relayTest.clientKey({ headers: { "x-forwarded-for": "198.51.100.1, 203.0.113.9" } }), "203.0.113.9");
   const get = response();
