@@ -1,7 +1,7 @@
 // Local preview acceptance or post-release read-only audit: external writes are intercepted, no real signing or posting.
 // Browser-only DID generation uses an ephemeral test identity; no keys are uploaded or logged.
 import assert from "node:assert/strict";
-import { createPublicKey, verify as verifySignature } from "node:crypto";
+import { createHash, createPublicKey, verify as verifySignature } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { before, after, test } from "node:test";
@@ -28,10 +28,12 @@ async function pageFor(size) {
   // Only test data; no persistent test identities or real relay writes.
   await context.addInitScript(() => { try { if (!sessionStorage.getItem("__rdAcceptanceInitialized")) { localStorage.clear(); sessionStorage.setItem("__rdAcceptanceInitialized", "1"); } } catch {} });
   const signedPosts = [];
+  const kvWrites = [];
   await context.route("**/api/relay", async route => {
     let body = {};
     try { body = JSON.parse(route.request().postData() || "{}"); } catch {}
     if (body.action === "signedPost") signedPosts.push(body);
+    if (body.action === "kvSet") kvWrites.push(body);
     const responses = {
       health: { ok: true, technocore: true }, rooms: { rooms: [], total: 0, notes: {}, engagement: {} },
       config: {}, read: { messages: [], next: null }, kvGet: { value: null }
@@ -40,7 +42,7 @@ async function pageFor(size) {
   });
   const page = await context.newPage();
   page.setDefaultTimeout(20000);
-  return { context, page, signedPosts };
+  return { context, page, signedPosts, kvWrites };
 }
 async function activate(locator, size) { if(size.mobile) await locator.tap(); else await locator.click(); }
 async function overflow(page, name) {
@@ -157,6 +159,16 @@ function assertSignedPostMatchesDid(post, expectedDid) {
   assert.equal(verifySignature(null, payload, ed25519PublicKeyFromDid(post.did), Buffer.from(post.sig, "base64url")), true,
     "restored private key must cryptographically match the DID public key");
 }
+function assertSignedProfileMatchesDid(write, expectedDid) {
+  assert.equal(write.ns, "profile");
+  assert.equal(write.did, expectedDid, "profile write must identify its signer");
+  assert.equal(write.key, createHash("sha256").update(expectedDid, "utf8").digest("hex").slice(0, 16), "profile key must be derived from signer DID");
+  assert.match(write.nonce, /^\d{1,19}$/);
+  const normalized = write.value.replace(/[\p{Cc}\p{Cf}\p{Cs}\p{Co}\p{Zl}\p{Zp}]/gu, " ").replace(/\s+/g, " ").trim();
+  const payload = Buffer.from(`${write.ns}|${write.key}|${write.nonce}|${normalized}`, "utf8");
+  assert.equal(verifySignature(null, payload, ed25519PublicKeyFromDid(write.did), Buffer.from(write.sig, "base64url")), true,
+    "profile write signature must verify against the DID and exact stored value");
+}
 test("target HTTP/JSON read-only health", { timeout: 90000 }, async () => {
   for (const path of ["/", "/flop", "/flop-source-status.json", "/api/flop-status", "/assets/reddragon.jpg"]) {
     const r = await fetch(ORIGIN + path, { signal: AbortSignal.timeout(30000), redirect: "manual" });
@@ -236,7 +248,7 @@ test("home and FLOP links, menus, languages, refresh, desktop + two mobile width
   }
 });
 test("local identity, validation and signed UI workflows with mocked relay (NO external writes)", { timeout: 180000 }, async () => {
-  const { context, page, signedPosts } = await pageFor(sizes[0]);
+  const { context, page, signedPosts, kvWrites } = await pageFor(sizes[0]);
   const errors=[];page.on("pageerror",e=>errors.push(e.message));
   try {
     await page.goto(ORIGIN + "/", { waitUntil: "domcontentloaded" });
@@ -283,6 +295,10 @@ test("local identity, validation and signed UI workflows with mocked relay (NO e
     }
     assert.ok(signedPosts.length >= 4, "the restored identity must produce the mocked signed UI posts");
     for (const post of signedPosts) assertSignedPostMatchesDid(post, generatedDid);
+    assert.equal(kvWrites.length, 3, "DID note, public topic and profile writes must be sent through the mocked relay");
+    const profileWrite = kvWrites.find(write => write.ns === "profile");
+    assert.ok(profileWrite, "style flow must submit a profile write");
+    assertSignedProfileMatchesDid(profileWrite, generatedDid);
     await page.locator("#clink").fill("https://github.com/maho0638/reddragon-technocore");
     await page.locator("#ctitle").fill("Ephemeral browser audit contribution");
     await page.locator("#contribBtn").click();

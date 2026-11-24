@@ -1,6 +1,6 @@
 {
   "schema": "reddragon-flop-source-status/v1",
-  "checkedAt": "2026-11-24",
+  "checkedAt": "2026-11-25",
   "project": {
     "name": "RedDragon FLOP Community Observatory",
     "site": "https://reddragon-technocore.vercel.app/flop",
@@ -98,7 +98,7 @@
     "publicTestnetRpc": "wss://testnet.flop.network/",
     "publicTestnetRpcHttp": "https://testnet.flop.network/",
     "expectedTestnetGenesis": "0x918abd58fb16306b30ef3886514cfaebffecb4de43e82b6f8ec4795c43cfd800",
-    "testnetRpcGenesisVerifiedAtSnapshot": false,
+    "testnetRpcGenesisVerifiedAtSnapshot": true,
     "testnetScoringActivationAnnounced": false,
     "testnetVoucherTradingEnabled": false,
     "testnetPublicSelfClaimAvailable": false,
@@ -106,11 +106,14 @@
     "testnetSdk": {
       "package": "@flop-labs/sdk",
       "documentedVersion": "0.9.0",
-      "publishedRuntimeAllowlistMax": 1014034,
-      "testnetOpeningRuntime": 1014035,
-      "compatibility": "unverified until SDK allowlist covers opening runtime; keep compatibility checks enabled",
-      "source": "https://docs.flop.network/networks/testnet"
-    }
+      "latestPublishedVersion": "0.10.0",
+      "publishedRuntimeAllowlistIncludes": 1014035,
+      "compatibility": "published 0.10.0 runtime guard verified for 1014035; inference and settlement remain unverified",
+      "packageSource": "https://registry.npmjs.org/@flop-labs/sdk",
+      "networkSource": "https://docs.flop.network/networks/testnet"
+    },
+    "testnetRuntimeSpecName": "flop-testnet",
+    "testnetRuntimeSpecVersion": 1014035
   },
   "currentOpportunities": {
     "kolCreatorApplicationsOpen": true,

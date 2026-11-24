@@ -9,6 +9,15 @@ const flopStatus = await readFile(new URL("../public/flop-live-status.js", impor
 const patches = await readFile(new URL("../public/patches.js", import.meta.url), "utf8");
 const enhancements = await readFile(new URL("../public/enhancements.js", import.meta.url), "utf8");
 const languageStable = await readFile(new URL("../public/language-stable.js", import.meta.url), "utf8");
+const finalFixes = await readFile(new URL("../public/final-fixes.js", import.meta.url), "utf8");
+const styles = await readFile(new URL("../public/styles.css", import.meta.url), "utf8");
+const localPreviewServer = await readFile(new URL("./local-preview-server.mjs", import.meta.url), "utf8");
+let vercelConfig = null;
+try {
+  vercelConfig = await readFile(new URL("../vercel.json", import.meta.url), "utf8");
+} catch (error) {
+  if (error.code !== "ENOENT") throw error;
+}
 const config = await readFile(new URL("../public/config.js", import.meta.url), "utf8");
 const proofImport = await readFile(new URL("../public/proof-import.js", import.meta.url), "utf8");
 const liveObservatory = await readFile(new URL("../public/live-observatory.js", import.meta.url), "utf8");
@@ -20,6 +29,7 @@ const browserWorkflow = await readFile(new URL("../.github/workflows/flop-site-b
 const productionBrowserAudit = await readFile(new URL("./browser/site-acceptance.spec.mjs", import.meta.url), "utf8");
 const flopBrowserAudit = await readFile(new URL("./browser/flop-ui.spec.mjs", import.meta.url), "utf8");
 const localBrowserRunner = await readFile(new URL("./run-local-browser-acceptance.mjs", import.meta.url), "utf8");
+const packageManifest = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
 const context = { window: {}, localStorage: { getItem: () => "en" }, navigator: { language: "en-US" } };
 vm.runInNewContext(source, context);
 const i18n = context.window.RD_I18N;
@@ -157,6 +167,19 @@ test("both pages select and render the saved language before add-on loading", ()
   assert.match(languageStable, /window\.addEventListener\("rd:addonsready"/);
 });
 
+test("usage guide uses external CSS and keeps the strict CSP policy", () => {
+  assert.doesNotMatch(finalFixes, /ensureUsageGuideStyles|document\.createElement\(["']style["']\)/);
+  assert.match(styles, /#rdUsageGuide \.rd-guide-kicker/);
+  assert.match(styles, /#rdUsageGuide \.rd-guide-danger/);
+  assert.match(localPreviewServer, /style-src 'self'/);
+  assert.doesNotMatch(localPreviewServer, /unsafe-inline/);
+  if (vercelConfig !== null) {
+    assert.match(vercelConfig, /style-src 'self'/);
+    assert.doesNotMatch(vercelConfig, /unsafe-inline/);
+  }
+  assert.match(indexHtml, /<link rel="stylesheet" href="\/styles\.css"\s*\/>/);
+});
+
 test("late controls reapply language and browser assertions target the correct page and JSON backup", () => {
   assert.match(languageStable, /window\.addEventListener\("rd:dynamicuiready", refreshLanguageForDynamicUi\)/);
   assert.match(enhancements, /window\.dispatchEvent\(new Event\("rd:dynamicuiready"\)\)/);
@@ -178,6 +201,7 @@ test("local browser workflow uses the sequential isolated runner and keeps produ
   assert.match(localBrowserRunner, /scripts\/browser\/site-acceptance\.spec\.mjs/);
   assert.match(localBrowserRunner, /scripts\/browser\/flop-ui\.spec\.mjs/);
   assert.doesNotMatch(localBrowserRunner, /reddragon-technocore\.vercel\.app/i);
+  assert.equal(packageManifest.scripts["test:browser"], "node scripts/run-local-browser-acceptance.mjs");
   assert.match(browserWorkflow, /run: node --test scripts\/browser\/site-acceptance\.spec\.mjs/);
   assert.match(browserWorkflow, /github\.event_name == 'workflow_dispatch' && inputs\.run_production_acceptance/);
 });

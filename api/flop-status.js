@@ -187,7 +187,7 @@ function parseModels(text) {
 
 async function probeRpc(fetchFn) {
   try {
-    const calls = ["system_chain", "system_version", "chain_getBlockHash"];
+    const calls = ["system_chain", "system_version", "state_getRuntimeVersion", "chain_getBlockHash"];
     const results = await Promise.all(calls.map(async (method, i) => {
       const text = await fetchText(SOURCES.rpc, fetchFn, {
         method: "POST", headers: { "content-type": "application/json", accept: "application/json" },
@@ -197,7 +197,17 @@ async function probeRpc(fetchFn) {
       if (parsed.id !== i + 1 || parsed.error || !Object.hasOwn(parsed, "result")) throw new Error("Invalid read-only RPC response");
       return parsed.result;
     }));
-    return { state: results[2] === "0x918abd58fb16306b30ef3886514cfaebffecb4de43e82b6f8ec4795c43cfd800" ? "identity-matched" : "identity-unverified", chain: String(results[0]).slice(0, 100), version: String(results[1]).slice(0, 80), genesis: String(results[2]).slice(0, 100), source: SOURCES.rpc };
+    const runtime = results[2];
+    const identityMatched = results[0] === "FLOP Testnet" && runtime?.specName === "flop-testnet"
+      && runtime?.specVersion === 1014035
+      && results[3] === "0x918abd58fb16306b30ef3886514cfaebffecb4de43e82b6f8ec4795c43cfd800";
+    return {
+      state: identityMatched ? "identity-matched" : "identity-unverified",
+      chain: String(results[0]).slice(0, 100), version: String(results[1]).slice(0, 80),
+      runtimeSpecName: typeof runtime?.specName === "string" ? runtime.specName.slice(0, 80) : null,
+      runtimeSpecVersion: Number.isInteger(runtime?.specVersion) ? runtime.specVersion : null,
+      genesis: String(results[3]).slice(0, 100), source: SOURCES.rpc
+    };
   } catch (error) { return { state: "unverified", error: String(error?.name === "AbortError" ? "RPC timeout" : error?.message || "RPC unavailable").slice(0, 140), source: SOURCES.rpc }; }
 }
 

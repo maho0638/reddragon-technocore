@@ -42,6 +42,17 @@ function signedBody(room = "lobby", text = "hello") {
   return { action: "signedPost", room, did, sig, nonce, text };
 }
 
+function signedProfileBody({ did: targetDid, key, value } = {}) {
+  const signer = identity();
+  const did = targetDid || signer.did;
+  const profileKey = key || createHash("sha256").update(did, "utf8").digest("hex").slice(0, 16);
+  const profileValue = value || JSON.stringify({ did, name: "Synthetic profile" });
+  const nonce = "1794613172001";
+  const clean = profileValue.replace(/[\p{Cc}\p{Cf}\p{Cs}\p{Co}\p{Zl}\p{Zp}]/gu, " ").replace(/\s+/g, " ").trim();
+  const sig = sign(null, Buffer.from(`profile|${profileKey}|${nonce}|${clean}`, "utf8"), signer.privateKey).toString("base64url");
+  return { action: "kvSet", ns: "profile", key: profileKey, value: profileValue, did, nonce, sig };
+}
+
 let calls = [];
 let shardedDidMiss = false;
 const originalFetch = globalThis.fetch;
@@ -110,9 +121,32 @@ try {
     assert.match(calls[0].url, /https:\/\/technocore\.chat\/kv\/did-[0-9a-f]{2}\/[0-9a-f]{14}\/set\//);
   });
 
-  await test("preserves supported profile and topic writes with mocked upstream", async () => {
+  await test("rejects an unsigned profile overwrite before upstream", async () => {
     calls = [];
-    const profile = await exercise({ action: "kvSet", ns: "profile", key: "deadbeefdeadbeef", value: '{"name":"RedDragon"}' });
+    const result = await exercise({ action: "kvSet", ns: "profile", key: "deadbeefdeadbeef", value: '{"did":"victim","name":"spoof"}' });
+    assert.equal(result.statusCode, 400);
+    assert.equal(calls.length, 0);
+  });
+
+  await test("rejects a profile key belonging to another DID before upstream", async () => {
+    calls = [];
+    const result = await exercise(signedProfileBody({ key: "deadbeefdeadbeef" }));
+    assert.equal(result.statusCode, 403);
+    assert.equal(calls.length, 0);
+  });
+
+  await test("rejects a modified signed profile value before upstream", async () => {
+    calls = [];
+    const body = signedProfileBody();
+    body.value = body.value.replace("Synthetic profile", "forged profile");
+    const result = await exercise(body);
+    assert.equal(result.statusCode, 400);
+    assert.equal(calls.length, 0);
+  });
+
+  await test("preserves owner-signed profile and public topic writes with mocked upstream", async () => {
+    calls = [];
+    const profile = await exercise(signedProfileBody());
     assert.equal(profile.statusCode, 200);
     const topic = await exercise({ action: "kvSet", ns: "topic", key: "lobby", value: "community chat" });
     assert.equal(topic.statusCode, 200);

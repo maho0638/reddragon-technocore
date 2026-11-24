@@ -28,7 +28,7 @@ Current checked status (2026-11-24; network opening facts checked against offici
 - FLOP Testnet opened 24 November 2026 with six founding validators; status is live, unscored. Public chain reads and operator registration are open, but no scoring activation block/date is announced. Voucher earning/trading/orders/swaps are disabled.
 - Testnet has no verified public Self claim at opening; the generic faucet reports Devnet. Testnet faucet limits are not announced; Devnet faucet limits do not apply to Testnet.
 - Official Testnet RPC: wss://testnet.flop.network/; expected genesis: 0x918abd58fb16306b30ef3886514cfaebffecb4de43e82b6f8ec4795c43cfd800. A docs-published hash is not a successful RPC identity probe.
-- Official Testnet docs list @flop-labs/sdk 0.9.0, but its runtime allowlist stops at 1014034 while opening runtime is 1014035; keep compatibility checks enabled until updated support is confirmed.
+- The Testnet page still lists @flop-labs/sdk 0.9.0, while npm's latest 0.10.0 shipped runtime guard includes live runtime 1014035. This verifies version admission only; inference/settlement remain unverified. Keep compatibility checks enabled.
 - Devnet is development-only with administrator-reviewed admission and no airdrop or reward weight.
 - Mainnet/TGE Q1 2027 remains a working target. No guaranteed rewards for site contributions or individual accounts.
 - FLOP KOL application: https://flop.finance/apply/kol

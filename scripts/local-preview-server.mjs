@@ -6,6 +6,7 @@ import flopStatus from "../api/flop-status.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../public");
 const rootReal = await realpath(root);
+const contentSecurityPolicy = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'; upgrade-insecure-requests";
 const mime = new Map([
   [".css", "text/css; charset=utf-8"], [".html", "text/html; charset=utf-8"],
   [".js", "text/javascript; charset=utf-8"], [".json", "application/json; charset=utf-8"],
@@ -17,6 +18,7 @@ function send(res, status, body, contentType = "application/json; charset=utf-8"
   res.writeHead(status, {
     "content-type": contentType,
     "cache-control": "no-store",
+    "content-security-policy": contentSecurityPolicy,
     "x-content-type-options": "nosniff",
     "referrer-policy": "no-referrer"
   });
@@ -71,6 +73,7 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(200, {
       "content-type": mime.get(path.extname(targetReal).toLowerCase()) || "application/octet-stream",
       "cache-control": "no-store",
+      "content-security-policy": contentSecurityPolicy,
       "x-content-type-options": "nosniff",
       "referrer-policy": "no-referrer"
     });
