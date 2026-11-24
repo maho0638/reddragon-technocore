@@ -68,6 +68,7 @@ test("onboarding and proof-import UI copy uses shared translations in both langu
 });
 
 test("TR/EN visible labels and dynamic live copy use the selected locale", () => {
+  assert.match(languageStable, /text\("#copyDidSecret", en \? "Copy" : "Kopyala"\)/);
   const exactEntries = languageStable.match(/const exactEN = new Map\((\[[\s\S]*?\])\);/)?.[1];
   assert.ok(exactEntries, "dynamic English translation table must exist");
   const exactEN = vm.runInNewContext(`new Map(${exactEntries})`);

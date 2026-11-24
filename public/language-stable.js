@@ -197,6 +197,7 @@ function translateCore(en) {
   setFileLabel(en ? "Restore from backup" : "Yedekten geri yükle");
   text("#backupBtn", en ? "Download encrypted identity backup" : "Şifreli kimlik yedeğini indir");
   text("#copyDidBtn", en ? "Copy public DID" : "Açık DID'yi kopyala");
+  text("#copyDidSecret", en ? "Copy" : "Kopyala");
   text('[data-step="2"] .danger-text', en ? "This file + password controls the identity. Do not confuse it with a wallet seed phrase and never send it to anyone." : "Bu dosya + parola kimliğini kontrol eder. Wallet seed phrase ile karıştırma ve kimseye gönderme.");
   text("#publishDidBtn", en ? "Publish DID note" : "DID notunu yayınla");
   text("#helloBtn", en ? "Send signed hello" : "İmzalı merhaba gönder");
