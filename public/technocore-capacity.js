@@ -70,6 +70,8 @@ function rdRenderCapacity(locale = rdCapacityLang()) {
   const noteCap = rdNum(notes.capacity ?? config.max_notes_total ?? config.notes?.capacity ?? config.MAX_NOTES_TOTAL);
   const windowedMessages = rdNum(engagement.windowed_messages);
 
+  rdSet("rdTcWindowLabel", tr ? "Dönen oda listesindeki belirli süreli mesajlar" : "Windowed messages across the returned room page");
+  rdSet("rdTcUpdatedLabel", tr ? "Son başarılı veya denenmiş yenileme" : "Last successful/attempted refresh");
   rdSet("rdTcRooms", listed == null ? "—" : rdFmt(listed, lang));
   rdSet("rdTcRoomCap", roomCap == null ? (tr ? "sınır —" : "cap —") : `${tr ? "sınır" : "cap"} ${rdFmt(roomCap, lang)} · ${tr ? "listelenen doluluk" : "listed occupancy"} ${rdPct(listed, roomCap)}`);
   rdSet("rdTcNotes", noteTotal == null ? "—" : rdFmt(noteTotal, lang));

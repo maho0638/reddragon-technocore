@@ -85,6 +85,11 @@ function renderStatic(lang) {
     const span = card.querySelector("span"); const h = card.querySelector("h2"); const p = card.querySelector("p"); const a = card.querySelector("a");
     if (span) span.textContent = item[0]; if (h && i !== 2) h.textContent = item[1]; if (p && i !== 2) p.textContent = item[2]; if (a && i !== 2) a.textContent = item[3];
   });
+  const paperHistoryLink = document.querySelectorAll(".status-grid .status-card")[2]?.querySelector("a");
+  if (paperHistoryLink) paperHistoryLink.textContent = lang === "tr" ? "Yellow Paper dosya geçmişi →" : "Yellow Paper file history →";
+  const devnetCard = document.querySelectorAll(".status-grid .status-card")[8];
+  const devnetLinks = devnetCard?.querySelectorAll("a");
+  if (devnetLinks?.[1]) devnetLinks[1].textContent = lang === "tr" ? "Resmî zaman çizelgesi ve ödül SSS'si →" : "Official timeline and reward FAQ →";
   const sections = document.querySelectorAll("main > .why");
   if (sections[0]) {
     put(sections[0], ".kicker", lang === "tr" ? "TECHNOCORE · CANLI GENEL KAPASİTE" : "TECHNOCORE · LIVE PUBLIC CAPACITY");
@@ -100,7 +105,7 @@ function renderStatic(lang) {
     sections[1].querySelectorAll(".feature-list > div").forEach((row, i) => { put(row, "b", labels[i]?.[0]); put(row, "span", labels[i]?.[1]); });
   }
   const machine = document.querySelector(".machine");
-  if (machine) { put(machine, ".kicker", lang === "tr" ? "AJANLAR, GELİŞTİRİCİLER VE İNCELEYENLER İÇİN" : "FOR AGENTS, BUILDERS & REVIEWERS"); put(machine, "h2", lang === "tr" ? "İnsanlar ve yazılımlar için okunabilir." : "Human-readable and machine-readable."); put(machine, "p", lang === "tr" ? "Resmî kaynak durumu JSON olarak yayımlanır; aynı temkinli bilgileri başka araçlar da kullanabilir." : "Current source status is published as JSON so agents and tools can use the same conservative facts."); const links = machine.querySelectorAll(".actions a"); if (links[0]) links[0].textContent = lang === "tr" ? "Durum JSON'unu aç" : "Open source-status JSON"; if (links[1]) links[1].textContent = lang === "tr" ? "GitHub kaynak kodu" : "Inspect source on GitHub"; }
+  if (machine) { put(machine, ".kicker", lang === "tr" ? "AJANLAR, GELİŞTİRİCİLER VE İNCELEYENLER İÇİN" : "FOR AGENTS, BUILDERS & REVIEWERS"); put(machine, "h2", lang === "tr" ? "İnsanlar ve yazılımlar için okunabilir." : "Human-readable and machine-readable."); put(machine, "p:not(.kicker)", lang === "tr" ? "Resmî kaynak durumu JSON olarak yayımlanır; aynı temkinli bilgileri başka araçlar da kullanabilir." : "Current source status is published as JSON so agents and tools can use the same conservative facts."); const links = machine.querySelectorAll(".actions a"); if (links[0]) links[0].textContent = lang === "tr" ? "Durum JSON'unu aç" : "Open source-status JSON"; if (links[1]) links[1].textContent = lang === "tr" ? "GitHub kaynak kodu" : "Inspect source on GitHub"; }
   const sources = document.querySelector(".sources");
   if (sources) { put(sources, ".kicker", lang === "tr" ? "KULLANILAN RESMÎ KAYNAKLAR" : "OFFICIAL SOURCES USED"); put(sources, "h2", lang === "tr" ? "Birincil kaynaklar" : "Primary references"); const rows = sources.querySelectorAll(".source-links a"); const labels = lang === "tr" ? [["FLOP Yellow Paper", "Normatif uygulama tanımı"], ["FLOP Ajan sayfası", "Ajan işleyişi ve kullanım biçimi"], ["FLOP Teaser", "Genel bakış ve yol haritası"], ["flop.finance", "Resmî proje ve başvurular"], ["FLOP GPU piyasası", "Resmî kiralık GPU izleyicisi"], ["flop-labs/yellowpaper", "Açık teknik metin ve içerik geçmişi"], ["Resmî testnet ağı", "Başlangıç, sürüm ve katılım durumu"], ["Resmî devnet ağı", "Geliştirme ağı ve kabul durumu"], ["Testnet zaman çizelgesi", "Çalışma hedefleri ve devnet ayrımı"]] : [["FLOP Yellow Paper", "Normative implementation specification"], ["FLOP Agent page", "Public agent mechanics and usage model"], ["FLOP Teaser", "Project overview and roadmap"], ["flop.finance", "Official project and applications"], ["FLOP GPU market", "Official rentable-GPU monitor"], ["flop-labs/yellowpaper", "Public technical spec and content history"], ["Official testnet network", "Launch, release and admission status"], ["Official devnet network", "Development network and admission"], ["Testnet timeline", "Working dates and devnet distinction"]]; rows.forEach((a,i)=>{put(a,"b",labels[i]?.[0]);put(a,"span",labels[i]?.[1]);}); }
   const section = document.getElementById("join-guide");
@@ -119,6 +124,21 @@ function renderStatic(lang) {
   }
   const live = document.getElementById("flop-live-status");
   if (live) {
+    const liveCardCopy = [
+      ["rdLiveTestnet", lang === "tr" ? "HALKA AÇIK TESTNET" : "PUBLIC TESTNET", lang === "tr" ? "Resmî testnet kaynağı ↗" : "Official testnet source ↗"],
+      ["rdLiveDevnet", "DEVNET", lang === "tr" ? "Resmî devnet kaynağı ↗" : "Official devnet source ↗"],
+      ["rdLiveRpc", lang === "tr" ? "SALT OKUNUR RPC KONTROLÜ" : "READ-ONLY RPC CHECK", lang === "tr" ? "FLOP Testnet gezgini ↗" : "FLOP Testnet explorer ↗"],
+      ["rdLiveGateway", lang === "tr" ? "AĞ GEÇİDİ / MODEL KATALOĞU" : "GATEWAY / MODEL CATALOG", lang === "tr" ? "Resmî katalog ↗" : "Official catalog ↗"],
+      ["rdLivePackages", lang === "tr" ? "SDK / CLI SÜRÜMLERİ" : "SDK / CLI RELEASES", lang === "tr" ? "Resmî SDK referansları ↗" : "Official SDK references ↗"],
+      ["rdLivePaper", "YELLOW PAPER / E.38", lang === "tr" ? "Resmî teknik tanım ↗" : "Official paper ↗"]
+    ];
+    for (const [id, title, linkText] of liveCardCopy) {
+      const card = document.getElementById(id);
+      put(card, "span", title);
+      const link = card?.querySelector("a:not(#rdLiveTimelineLink)");
+      if (link) link.textContent = linkText;
+    }
+    put(live, "#rdLiveTimelineLink", lang === "tr" ? "Resmî zaman çizelgesi / ödül SSS'si ↗" : "Official timeline / reward FAQ ↗");
     put(live, ".section-heading .kicker", lang === "tr" ? "SALT OKUNUR KAYNAK KONTROLÜ" : "READ-ONLY SOURCE CHECK");
     put(live, "#live-title", lang === "tr" ? "Canlı FLOP durumu" : "Live FLOP status");
     put(live, "#rdLiveSummary", c.summary); put(live, "#rdRefreshStatus", c.refresh);

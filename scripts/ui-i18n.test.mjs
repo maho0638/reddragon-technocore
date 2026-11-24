@@ -69,6 +69,13 @@ test("onboarding and proof-import UI copy uses shared translations in both langu
 
 test("TR/EN visible labels and dynamic live copy use the selected locale", () => {
   assert.match(languageStable, /text\("#copyDidSecret", en \? "Copy" : "Kopyala"\)/);
+  assert.match(flopStatus, /Official timeline and reward FAQ/);
+  assert.match(flopStatus, /HALKA AÇIK TESTNET/);
+  assert.match(flopStatus, /Yellow Paper dosya geçmişi →/);
+  assert.match(flopStatus, /p:not\(\.kicker\)/);
+  assert.match(flopStatus, /Resmî teknik tanım ↗/);
+  assert.match(capacity, /rdTcWindowLabel/);
+  assert.match(capacity, /rdTcUpdatedLabel/);
   const exactEntries = languageStable.match(/const exactEN = new Map\((\[[\s\S]*?\])\);/)?.[1];
   assert.ok(exactEntries, "dynamic English translation table must exist");
   const exactEN = vm.runInNewContext(`new Map(${exactEntries})`);
@@ -100,6 +107,8 @@ test("X proof sharing copies localized text and provenance acceptance targets th
   assert.match(enhancements, /window\.RD_I18N\.t\("app\.xShareDraft"/);
   assert.match(enhancements, /xIntent\(proofShareText\(\)\)/);
   assert.match(enhancements, /replacement\.onclick = \(\) => copy\(proofShareText\(\), window\.RD_I18N\.t\("app\.xTextCopied"\)\)/);
+  assert.match(flopBrowserAudit, /#rdLangSwitcher button\[data-lang="tr"\][\s\S]*?#rdProvFixSummary.*waitFor\(\{ state: "visible" \}\)/);
+  assert.match(flopBrowserAudit, /#rdProvFixSummary[\s\S]{0,100}ancestor::article\[1\]/);
   assert.match(productionBrowserAudit, /navigator\.clipboard\.readText\(\)/);
   assert.match(productionBrowserAudit, /unexpectedPopups, \[\]/);
   assert.match(productionBrowserAudit, /context\.pages\(\)\.length, pageCountBeforeShare/);
@@ -155,6 +164,8 @@ test("late controls reapply language and browser assertions target the correct p
   assert.match(flopBrowserAudit, /#rdProofImport button/);
   assert.match(flopBrowserAudit, /#repoBtn/);
   assert.match(flopBrowserAudit, /if \(!home\) return;/);
+  assert.match(flopBrowserAudit, /#rdLangSwitcher button\[data-lang="tr"\][\s\S]*?#rdProvFixSummary.*waitFor\(\{ state: "visible" \}\)/);
+  assert.match(flopBrowserAudit, /#rdProvFixSummary[\s\S]{0,100}ancestor::article\[1\]/);
   assert.match(productionBrowserAudit, /assert\.match\(backupName, \/\\\.json\$\/i/);
   assert.match(productionBrowserAudit, /chooser\.setFiles\(\{ name: backupName, mimeType: "application\/json", buffer: backupContents \}\)/);
   assert.match(productionBrowserAudit, /dialog\.type\(\)/);

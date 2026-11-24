@@ -108,7 +108,7 @@ async function assertVisibleCopyLocale(page, locale, label, { home = false } = {
     }));
     assert.deepEqual(hits, [], `${label}: Turkish UI characters remain in English copy`);
   } else {
-    const untranslated = /\b(?:the password|no records|no signed|refresh status|refresh proof|refresh inbox|enter a valid|enter your|open room|public self-service unavailable|waiting for demo|live-verify)\b/i.exec(copy);
+    const untranslated = /\b(?:the password|no records|no signed|refresh status|refresh proof|refresh inbox|enter a valid|enter your|open room|public self-service unavailable|waiting for demo|live-verify|official timeline and reward faq|yellow paper file history|windowed messages across the returned room page|last successful\/attempted refresh|the current source status is published|read-only rpc check|public testnet)\b/i.exec(copy);
     assert.equal(untranslated, null, `${label}: English UI phrase remains: ${untranslated?.[0]}`);
   }
   if (!home) return;
@@ -187,19 +187,21 @@ test("main page boots from empty storage and translates in desktop and mobile", 
       assert.match(await page.evaluate(() => localStorage.getItem("reddragon-lang")), /^(tr|en)$/);
       await page.locator('#rdLangSwitcher button[data-lang="en"]').click();
       await page.locator(".hero-actions .ghost-link").filter({ hasText: "Open FLOP Observatory" }).waitFor({ state: "visible" });
+      await page.locator("#rdProvFixSummary").waitFor({ state: "visible" });
       assert.equal(await page.locator("html").getAttribute("lang"), "en");
       assert.equal(await page.locator('.hero-actions .ghost-link[href="/flop"]').getAttribute("href"), "/flop");
       assert.match(await page.locator("#brandSub").textContent(), /Community Observatory/);
       assert.match(await page.locator("#rdDidProvenance .rd-prov-head h2").textContent(), /who built this tool/i);
       assert.match(await page.locator("#rdDidProvenance .rd-prov-head p").textContent(), /Checks the RedDragon Technocore DID binding/i);
-      assert.equal(await page.locator("#rdDidProvenance .rd-prov-kv span").first().textContent(), "Ownership claim");
-      assert.equal(await page.locator("#rdDidProvenance .rd-prov-kv span").nth(3).textContent(), "Mailbox lane");
+      assert.equal(await page.locator("#rdProvFixSummary").locator("xpath=ancestor::article[1]").locator(".rd-prov-kv span").first().textContent(), "Ownership claim");
+      assert.equal(await page.locator("#rdProvFixSummary").locator("xpath=ancestor::article[1]").locator(".rd-prov-kv span").nth(3).textContent(), "Mailbox lane");
       assert.match(await page.locator("#rdTestnetToolkit h2").textContent(), /testnet-ready/i);
       assert.match(await page.locator("#rdTclkWorkbench .rd-tclk-head p").textContent(), /verifiable agent-to-agent/i);
       await page.waitForFunction(() => /proof signals|core proof/i.test(document.querySelector("#rdProvFixSummary")?.textContent || ""));
       assert.match(await page.locator("#rdProvFixSummary").textContent(), /proof signals|core proof/i);
       assert.doesNotMatch(await page.locator("#rdTestnetToolkit .rd-testnet-head p").textContent(), /^FLOP'un güncel/);
       assert.doesNotMatch(await page.locator("#rdDidProvenance").innerText(), /Live-verifies/);
+      assert.equal(await page.locator("#copyDidSecret").textContent(), "Copy");
       await assertVisibleCopyLocale(page, "en", `${viewport.name}/home`, { home: true });
 
       assert.equal((await page.locator("#helloText").inputValue()).startsWith("Hello Technocore!"), true, "English default message must be localized");
@@ -207,17 +209,19 @@ test("main page boots from empty storage and translates in desktop and mobile", 
       assert.equal((await page.locator("#toast").textContent()).trim(), "The password must be at least 12 characters.");
       await page.locator('#rdLangSwitcher button[data-lang="tr"]').click();
       await page.locator(".hero-actions .ghost-link").filter({ hasText: "FLOP Gözlemevini aç" }).waitFor({ state: "visible" });
+      await page.locator("#rdProvFixSummary").waitFor({ state: "visible" });
       assert.equal(await page.locator("html").getAttribute("lang"), "tr");
       assert.match(await page.locator("#brandSub").textContent(), /Topluluk Gözlemevi/);
       assert.match(await page.locator("#rdDidProvenance .rd-prov-head h2").textContent(), /bu aracı kim geliştirdi/i);
-      assert.equal(await page.locator("#rdDidProvenance .rd-prov-kv span").first().textContent(), "Sahiplik beyanı");
-      assert.equal(await page.locator("#rdDidProvenance .rd-prov-kv span").nth(3).textContent(), "Posta kutusu kanalı");
+      assert.equal(await page.locator("#rdProvFixSummary").locator("xpath=ancestor::article[1]").locator(".rd-prov-kv span").first().textContent(), "Sahiplik beyanı");
+      assert.equal(await page.locator("#rdProvFixSummary").locator("xpath=ancestor::article[1]").locator(".rd-prov-kv span").nth(3).textContent(), "Posta kutusu kanalı");
       assert.match(await page.locator("#rdTestnetToolkit h2").textContent(), /testnet'e hazır mısın/i);
       assert.match(await page.locator("#rdTclkWorkbench .rd-tclk-head p").textContent(), /doğrulanabilir ajanlar arası/i);
       await page.waitForFunction(() => /kanıt|doğrulanamadı/i.test(document.querySelector("#rdProvFixSummary")?.textContent || ""));
       assert.match(await page.locator("#rdProvFixSummary").textContent(), /kanıt|doğrulanamadı/i);
       assert.doesNotMatch(await page.locator("#rdTestnetToolkit .rd-testnet-head p").textContent(), /Turns FLOP's current/);
       assert.doesNotMatch(await page.locator("#rdDidProvenance").innerText(), /Live-verifies/);
+      assert.equal(await page.locator("#copyDidSecret").textContent(), "Kopyala");
       await assertVisibleCopyLocale(page, "tr", `${viewport.name}/home`, { home: true });
       assert.equal((await page.locator("#helloText").inputValue()).startsWith("Merhaba Technocore!"), true, "Turkish default message must be localized");
       await page.locator("#createBtn").click();
@@ -359,6 +363,14 @@ test("/flop Turkish and English copy, fail-closed status, and responsive layout"
       assert.equal(await page.locator("#live-title").textContent(), "Canlı FLOP durumu");
       assert.equal(await page.locator(".lang-pick .sr-only").textContent(), "Arayüz dili");
       assert.equal(await page.locator("footer > span:last-child").textContent(), "Topluluk çalışması · kaynak odaklı · resmî bağlantı iddiası yok");
+      assert.equal(await page.locator("#rdLiveTestnet > span").textContent(), "HALKA AÇIK TESTNET");
+      assert.equal(await page.locator("#rdLiveRpc > span").textContent(), "SALT OKUNUR RPC KONTROLÜ");
+      assert.equal(await page.locator("#rdLiveTestnet a").first().textContent(), "Resmî testnet kaynağı ↗");
+      assert.equal(await page.locator(".status-grid .status-card").nth(2).locator("a").textContent(), "Yellow Paper dosya geçmişi →");
+      assert.equal(await page.locator(".status-grid .status-card").nth(8).locator("a").nth(1).textContent(), "Resmî zaman çizelgesi ve ödül SSS'si →");
+      assert.equal(await page.locator(".machine p:not(.kicker)").textContent(), "Resmî kaynak durumu JSON olarak yayımlanır; aynı temkinli bilgileri başka araçlar da kullanabilir.");
+      assert.equal(await page.locator("#rdTcWindowLabel").textContent(), "Dönen oda listesindeki belirli süreli mesajlar");
+      assert.equal(await page.locator("#rdTcUpdatedLabel").textContent(), "Son başarılı veya denenmiş yenileme");
       await assertVisibleCopyLocale(page, "tr", `${viewport.name}/flop`);
       await page.reload();
       assert.equal(await language.inputValue(), "tr", "Turkish choice should survive reload");
@@ -367,6 +379,14 @@ test("/flop Turkish and English copy, fail-closed status, and responsive layout"
       assert.equal(await page.locator("#live-title").textContent(), "Live FLOP status");
       assert.equal(await page.locator(".lang-pick .sr-only").textContent(), "Language");
       assert.equal(await page.locator("footer > span:last-child").textContent(), "Community-built · source-first · no affiliation claim");
+      assert.equal(await page.locator("#rdLiveTestnet > span").textContent(), "PUBLIC TESTNET");
+      assert.equal(await page.locator("#rdLiveRpc > span").textContent(), "READ-ONLY RPC CHECK");
+      assert.equal(await page.locator("#rdLiveTestnet a").first().textContent(), "Official testnet source ↗");
+      assert.equal(await page.locator(".status-grid .status-card").nth(2).locator("a").textContent(), "Yellow Paper file history →");
+      assert.equal(await page.locator(".status-grid .status-card").nth(8).locator("a").nth(1).textContent(), "Official timeline and reward FAQ →");
+      assert.equal(await page.locator(".machine p:not(.kicker)").textContent(), "Current source status is published as JSON so agents and tools can use the same conservative facts.");
+      assert.equal(await page.locator("#rdTcWindowLabel").textContent(), "Windowed messages across the returned room page");
+      assert.equal(await page.locator("#rdTcUpdatedLabel").textContent(), "Last successful/attempted refresh");
       await page.reload();
       assert.equal(await language.inputValue(), "en", "English choice should survive reload");
       assert.match(await page.locator("#rdLiveTestnet [data-status]").textContent(), /live.*unscored/i);
