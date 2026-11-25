@@ -1,0 +1,48 @@
+name: RedDragon FLOP Testnet First Claim
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/flop-testnet-first-claim.yml'
+      - 'scripts/flop-testnet-first-claim.mjs'
+      - 'scripts/flop-testnet-first-claim.test.mjs'
+  schedule:
+    - cron: '23 * * * *'
+permissions:
+  contents: read
+concurrency:
+  group: reddragon-flop-testnet-first-claim
+  cancel-in-progress: false
+jobs:
+  first-claim:
+    if: github.repository == 'maho0638/reddragon-technocore' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # existing pinned v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # existing pinned v7.0.0
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: Test first-claim safety before using signer
+        run: node --test scripts/flop-testnet-first-claim.test.mjs
+      - name: Restore public receipt or backoff state (never a key or signature)
+        uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+        with:
+          path: .flop-claim-state/receipt.json
+          key: flop-first-claim-1795599508000-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: flop-first-claim-1795599508000-
+      - name: Check existing signer and attempt one eligible free Testnet claim
+        id: claim
+        env:
+          TECHNOCORE_PRIVATE_KEY_PKCS8_B64: ${{ secrets.TECHNOCORE_PRIVATE_KEY_PKCS8_B64 }}
+        run: node scripts/flop-testnet-first-claim.mjs
+      - name: Retain only public result state
+        if: steps.claim.outputs.save_state == 'true'
+        uses: actions/cache/save@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+        with:
+          path: .flop-claim-state/receipt.json
+          key: flop-first-claim-1795599508000-${{ github.run_id }}-${{ github.run_attempt }}
