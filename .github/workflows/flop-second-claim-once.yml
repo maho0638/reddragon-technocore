@@ -1,0 +1,28 @@
+name: RedDragon FLOP second claim one authorized attempt
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/flop-second-claim-once.yml']
+permissions:
+  contents: read
+concurrency:
+  group: reddragon-flop-testnet-first-claim
+  cancel-in-progress: false
+jobs:
+  attempt:
+    if: github.repository == 'maho0638/reddragon-technocore' && github.ref == 'refs/heads/main' && github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba825825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - run: node --check scripts/flop-second-claim-once.mjs && node --test scripts/flop-testnet-first-claim.test.mjs
+      - name: Submit exactly one ordinary free Testnet claim
+        env:
+          TECHNOCORE_PRIVATE_KEY_PKCS8_B64: ${{ secrets.TECHNOCORE_PRIVATE_KEY_PKCS8_B64 }}
+        run: node scripts/flop-second-claim-once.mjs
