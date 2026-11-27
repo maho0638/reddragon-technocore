@@ -1,0 +1,42 @@
+name: FLOP direct session SDK and proof inspection
+on:
+  push:
+    branches: ['prep/flop-testnet-did-20261107']
+    paths: ['.github/workflows/flop-direct-proof-inspection.yml']
+permissions: {}
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    steps:
+      - name: Inspect exact SDK package without executing it
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$(mktemp -d)"
+          npm pack @flop-labs/sdk@0.13.1 --ignore-scripts --silent
+          printf '%s  %s\n' "$(openssl dgst -sha512 -binary flop-labs-sdk-0.13.1.tgz | openssl base64 -A)" "flop-labs-sdk-0.13.1.tgz"
+          test "$(openssl dgst -sha512 -binary flop-labs-sdk-0.13.1.tgz | openssl base64 -A)" = 'L2dhuXIabTqAH9a76jnO6Zzr5eDDcX4HRsrJX9r8O9rKRC7gpSfLUdfi6dVfH51AVuQAu5EBMm4xEebG2BoAgg=='
+          tar -xzf flop-labs-sdk-0.13.1.tgz
+          node -e 'const p=require("./package/package.json");console.log("SDK_META="+JSON.stringify({name:p.name,version:p.version,dependencies:p.dependencies,exports:p.exports,repository:p.repository}));'
+          find package -type f | grep -Ei 'direct-session|session-info|chain\.d\.ts|session-proof|signer|index\.d\.ts' | head -60
+          grep -R -n -m 2 -E 'function (verifySessionInfoProof|fetchMinerSessionInfoProof)|/session/info-proof|interface DirectSessionOptions|type DirectSessionOptions|type ChainSigner|interface ChainSigner' package/dist --include='*.js' --include='*.d.ts' | cut -c1-500 | head -70 || true
+          for f in $(find package/dist -name 'direct-session.d.ts' -o -name 'direct-session.js' -o -name '*info-proof*.d.ts' -o -name '*info-proof*.js'); do
+            echo "SDK_FILE=$f"
+            sed -n '1,155p' "$f" | cut -c1-1000
+          done
+      - name: Inspect official miner pack readiness proof request
+        shell: bash
+        run: |
+          python - <<'PY'
+          import urllib.request
+          u='https://flop.network/releases/cli/miner-pack-testnet-20261126/self-check.sh'
+          try:
+              with urllib.request.urlopen(u,timeout=10) as r:
+                  t=r.read(250000).decode()
+              lines=t.splitlines()
+              for i,l in enumerate(lines):
+                  if 'info-proof' in l:
+                      print('\n'.join(lines[max(0,i-7):i+10]))
+          except Exception as e: print('PACK_READ_ERROR='+str(e))
+          PY
