@@ -131,15 +131,16 @@ function addTopLinks() {
 function addHeroSocial() {
   const host = $(".hero-actions");
   if (!host || $("#rdSocialStrip")) return;
+  const isEn = window.RD_I18N?.language() === "en";
   const strip = document.createElement("div");
   strip.id = "rdSocialStrip";
   strip.className = "rd-social-strip";
   strip.innerHTML = `
-    <button type="button" id="rdShareSiteX">𝕏 Siteden paylaş</button>
+    <button type="button" id="rdShareSiteX">${isEn ? "𝕏 Share this site" : "𝕏 Siteyi paylaş"}</button>
     <a href="${REPO_URL}" target="_blank" rel="noreferrer">★ GitHub</a>
     <a href="${REPO_URL}/fork" target="_blank" rel="noreferrer">⑂ Fork</a>
     <a href="${MEDIUM_URL}" target="_blank" rel="noreferrer">M Medium</a>
-    <a href="https://x.com/${X_USER}" target="_blank" rel="noreferrer">Takip et ${X_HANDLE}</a>`;
+    <a href="https://x.com/${X_USER}" target="_blank" rel="noreferrer">${isEn ? "Follow" : "Takip et"} ${X_HANDLE}</a>`;
   host.after(strip);
   $("#rdShareSiteX").onclick = () => xIntent(siteShareText());
 }
@@ -147,17 +148,18 @@ function addHeroSocial() {
 function upgradeProofShare() {
   const card = document.querySelector('[data-step="10"]');
   if (!card || $("#rdSharePanel")) return;
+  const isEn = window.RD_I18N?.language() === "en";
   const panel = document.createElement("div");
   panel.id = "rdSharePanel";
   panel.className = "rd-share-panel";
   panel.innerHTML = `
-    <h3>Paylaş · herkes kendi hesabından</h3>
-    <p>X butonu, o tarayıcıda giriş yapılmış X hesabının paylaşım ekranını açar. Metinde ${X_HANDLE} geçtiği için proje hesabı mention alır. Medium için yazıyı kopyalayıp kendi hesabında yayınlayabilirsin.</p>
+    <h3>${isEn ? "Share · everyone uses their own account" : "Paylaş · herkes kendi hesabından"}</h3>
+    <p>${isEn ? "The X text is copied to your clipboard; the DID + proof button opens the X composer. For Medium, copy the draft and publish it from your own account." : "X metni panoya kopyalanır; istersen DID + proof düğmesi X paylaşım penceresini açar. Medium için yazıyı kopyalayıp kendi hesabında yayınlayabilirsin."}</p>
     <div class="rd-share-grid">
-      <button type="button" id="rdProofX">𝕏 DID + proof paylaş</button>
-      <button type="button" id="rdThreadCopy">3 tweetlik diziyi kopyala</button>
-      <button type="button" id="rdMediumCopy">Medium yazısını kopyala</button>
-      <a href="${MEDIUM_WRITE_URL}" target="_blank" rel="noreferrer">Medium’da yeni yazı aç</a>
+      <button type="button" id="rdProofX">${isEn ? "𝕏 Share DID + proof" : "𝕏 DID + kanıt paylaş"}</button>
+      <button type="button" id="rdThreadCopy">${isEn ? "Copy 3-post thread" : "3 gönderilik diziyi kopyala"}</button>
+      <button type="button" id="rdMediumCopy">${isEn ? "Copy Medium draft" : "Medium taslağını kopyala"}</button>
+      <a href="${MEDIUM_WRITE_URL}" target="_blank" rel="noreferrer">${isEn ? "Open a new Medium story" : "Medium'da yeni yazı aç"}</a>
     </div>`;
   card.appendChild(panel);
   $("#rdProofX").onclick = () => xIntent(proofShareText());
@@ -195,15 +197,16 @@ function agentRepoUrl() {
 
 function setupChecklist() {
   const base = agentRepoUrl();
-  return `RedDragon 7/24 Technocore Agent — güvenli hızlı kurulum\n\n1) Fork: ${REPO_URL}/fork\n2) Fork reponda Settings → Secrets and variables → Actions\n3) Yalnızca şu secret'i ekle:\n   TECHNOCORE_PRIVATE_KEY_PKCS8_B64 = RedDragon sitesindeki “Private key'i kopyala” değeri\n4) Actions → RedDragon Technocore Agent → Enable/Run workflow\n5) İlk run yeşil olmalı.\n\n${base ? `Senin repo: ${base}\nSecrets: ${base}/settings/secrets/actions\nActions: ${base}/actions/workflows/technocore-agent.yml\n\n` : ""}DID private key'den otomatik türetilir; ikinci bir DID secret'i gerekmez.\nHer workflow 30 dakikada bir planlanır; ana ve yedek akış 15 dakika kaydırılmıştır. GitHub çalıştırmaları geciktirebilir veya atlayabilir. TECHNOCORE_MIN_POST_HOURS varsayılanı 12 saattir ve kalıcı durumla uygulanır.\n\nGüvenlik: Site GitHub şifresi, tokeni veya wallet seed phrase istemez. Private key URL'ye, public GitHub dosyasına veya RedDragon sunucusuna gönderilmez.`;
+  return `RedDragon 7/24 Technocore Agent — güvenli hızlı kurulum\n\n1) Fork: ${REPO_URL}/fork\n2) Fork reponda Settings → Secrets and variables → Actions\n3) Yalnızca şu secret'i ekle:\n   TECHNOCORE_PRIVATE_KEY_PKCS8_B64 = RedDragon sitesindeki “Private key'i kopyala” değeri\n4) Actions → RedDragon Technocore Agent → Enable/Run workflow\n5) İlk run yeşil olmalı.\n\n${base ? `Senin repo: ${base}\nSecrets: ${base}/settings/secrets/actions\nActions: ${base}/actions/workflows/technocore-agent.yml\n\n` : ""}DID private key'den otomatik türetilir; ikinci bir DID secret'i gerekmez.\nSigned post yalnızca iki günlük cron penceresinde çalışır; heartbeat yaklaşık 30 dakikada bir kontrol edilir.\n\nGüvenlik: Site GitHub şifresi, tokeni veya wallet seed phrase istemez. Private key URL'ye, public GitHub dosyasına veya RedDragon sunucusuna gönderilmez.`;
 }
 
 function upgradeAgentSetup() {
   const card = document.querySelector('[data-step="11"]');
   if (!card || $("#rdQuickSetup")) return;
+  const isEn = window.RD_I18N?.language() === "en";
 
   const warning = card.querySelector(".warning-box span");
-  if (warning) warning.textContent = "Her workflow 30 dakikada bir planlanır; ana ve yedek akış 15 dakika kaydırılmıştır. GitHub planlı çalıştırmaları geciktirebilir veya atlayabilir. TECHNOCORE_MIN_POST_HOURS varsayılanı 12 saattir ve kalıcı durumla uygulanır; daha sık mesajın airdrop uygunluğunu artırdığına dair resmî kanıt yoktur.";
+  if (warning) warning.textContent = window.RD_I18N.t("app.agentCadence");
 
   const didSecretBtn = $("#copyDidSecret");
   if (didSecretBtn?.parentElement) didSecretBtn.parentElement.classList.add("rd-hidden");
@@ -213,7 +216,7 @@ function upgradeAgentSetup() {
   const oldGuide = $("#copyAutoGuide");
   if (oldGuide) {
     const replacement = oldGuide.cloneNode(true);
-    replacement.textContent = "Hızlı kurulum listesini kopyala";
+    replacement.textContent = isEn ? "Copy quick setup checklist" : "Hızlı kurulum listesini kopyala";
     oldGuide.replaceWith(replacement);
     replacement.onclick = () => copy(setupChecklist(), "Kurulum listesi kopyalandı");
   }
@@ -223,30 +226,32 @@ function upgradeAgentSetup() {
     repoBtn.href = REPO_URL;
     repoBtn.target = "_blank";
     repoBtn.rel = "noreferrer";
-    repoBtn.textContent = "GitHub repo'yu aç";
+    repoBtn.textContent = isEn ? "Open GitHub repository" : "GitHub repo'yu aç";
     repoBtn.classList.remove("disabled-link");
   }
 
   const autoOut = $("#autoOut");
-  if (autoOut) autoOut.textContent = "Ajan fork-safe: DID private key'den otomatik türetilir. Kullanıcı yalnızca private-key GitHub Secret'ini ekler.";
+  if (autoOut) autoOut.textContent = isEn
+    ? "Fork-safe agent: the DID is derived from the private key. The user adds only the private-key GitHub Secret."
+    : "Fork-safe ajan: DID private key'den otomatik türetilir. Kullanıcı yalnızca private-key GitHub Secret'ini ekler.";
 
   const panel = document.createElement("div");
   panel.id = "rdQuickSetup";
   panel.className = "rd-quick-setup";
   panel.innerHTML = `
-    <h3>Hızlı güvenli ajan kurulumu</h3>
-    <p>Hiç kod bilmeden: repoyu forkla → tek secret'i ekle → Actions'ı çalıştır. Site GitHub tokeni istemez ve private key'i hiçbir URL'ye koymaz.</p>
+    <h3>${isEn ? "Quick secure agent setup" : "Hızlı güvenli ajan kurulumu"}</h3>
+    <p>${isEn ? "No coding: fork the repository → add one secret → run Actions. The site never asks for a GitHub token or puts your private key in a URL." : "Hiç kod bilmeden: repoyu forkla → tek secret'i ekle → Actions'ı çalıştır. Site GitHub tokeni istemez ve private key'i hiçbir URL'ye koymaz."}</p>
     <div class="rd-quick-form">
-      <input id="rdGithubUser" autocomplete="off" placeholder="GitHub kullanıcı adın" />
-      <input id="rdGithubRepo" autocomplete="off" value="reddragon-technocore" placeholder="Fork repo adı" />
+      <input id="rdGithubUser" autocomplete="off" placeholder="${isEn ? "Your GitHub username" : "GitHub kullanıcı adın"}" />
+      <input id="rdGithubRepo" autocomplete="off" value="reddragon-technocore" placeholder="${isEn ? "Fork repository name" : "Fork repo adı"}" />
     </div>
     <div class="rd-quick-actions">
-      <a href="${REPO_URL}/fork" target="_blank" rel="noreferrer">1 · Repoyu Forkla</a>
-      <button type="button" id="rdOpenSecrets">2 · Secret sayfasını aç</button>
-      <button type="button" id="rdCopyPrivate">3 · Private key'i kopyala</button>
-      <button type="button" id="rdOpenActions">4 · Actions'ı aç / test et</button>
+      <a href="${REPO_URL}/fork" target="_blank" rel="noreferrer">${isEn ? "1 · Fork repository" : "1 · Repoyu Forkla"}</a>
+      <button type="button" id="rdOpenSecrets">${isEn ? "2 · Open Secrets page" : "2 · Secret sayfasını aç"}</button>
+      <button type="button" id="rdCopyPrivate">${isEn ? "3 · Copy private key" : "3 · Private key'i kopyala"}</button>
+      <button type="button" id="rdOpenActions">${isEn ? "4 · Open / test Actions" : "4 · Actions'ı aç / test et"}</button>
     </div>
-    <div class="rd-security-note"><b>Güvenlik kuralı</b>RedDragon GitHub şifreni, tokenini veya wallet seed phrase'ini istemez. Private key'i yalnızca kendi GitHub repondaki <b>Actions Secret</b> alanına sen yapıştırırsın. Private key RedDragon sunucusuna gönderilmez ve public GitHub dosyalarına yazılmaz.</div>`;
+    <div class="rd-security-note"><b>${isEn ? "Security rule" : "Güvenlik kuralı"}</b>${isEn ? "RedDragon never asks for your GitHub password, token or wallet seed phrase. Paste your private key only into the Actions Secret field in your own GitHub repository. The private key is not sent to RedDragon servers or written to public GitHub files." : "RedDragon GitHub şifreni, tokenini veya wallet seed phrase'ini istemez. Private key'i yalnızca kendi GitHub repondaki Actions Secret alanına sen yapıştırırsın. Private key RedDragon sunucusuna gönderilmez ve public GitHub dosyalarına yazılmaz."}</div>`;
   card.appendChild(panel);
 
   $("#rdGithubUser").value = localStorage.getItem("rd-github-user") || "";
@@ -350,5 +355,4 @@ window.addEventListener("load", () => {
   upgradeFooter();
   friendlyCapacityErrors();
   checkRelay();
-  window.dispatchEvent(new Event("rd:dynamicuiready"));
 });

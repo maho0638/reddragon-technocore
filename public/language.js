@@ -216,7 +216,7 @@ function applyEnhancementTranslations() {
     if (items[4]) items[4].textContent = pick(`Takip et ${cfg.xHandle || "@lionmousse"}`, `Follow ${cfg.xHandle || "@lionmousse"}`);
   }
   setText("#rdSharePanel h3", "Paylaş · herkes kendi hesabından", "Share · everyone uses their own account");
-  setText("#rdSharePanel p", `X butonu, o tarayıcıda giriş yapılmış X hesabının paylaşım ekranını açar. Metinde ${cfg.xHandle || "@lionmousse"} geçtiği için proje hesabı mention alır. Medium için yazıyı kopyalayıp kendi hesabında yayınlayabilirsin.`, `The X button opens the composer for the X account currently signed in to this browser. The project account is mentioned as ${cfg.xHandle || "@lionmousse"}. For Medium, copy the draft and publish it from your own account.`);
+  setText("#rdSharePanel p", `X metni panoya kopyalanır; DID + proof düğmesi X paylaşım penceresini açar. Medium için yazıyı kopyalayıp kendi hesabında yayınlayabilirsin.`, `The X text is copied to your clipboard; the DID + proof button opens the X composer. For Medium, copy the draft and publish it from your own account.`);
   setText("#rdProofX", "𝕏 DID + proof paylaş", "𝕏 Share DID + proof");
   setText("#rdThreadCopy", "3 tweetlik diziyi kopyala", "Copy 3-post thread");
   setText("#rdMediumCopy", "Medium yazısını kopyala", "Copy Medium draft");

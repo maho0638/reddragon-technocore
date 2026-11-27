@@ -64,4 +64,3 @@ await check('Yanlış backup formatı reddedilir',async()=>{
   getState().did='guard-format';promptReturn='demo-only-not-secret-2026';
   await run('restore')(file(bad));assert.equal(getState().did,'guard-format');
 });
-

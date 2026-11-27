@@ -23,6 +23,7 @@
   <title>FLOP Community Observatory · RedDragon</title>
   <link rel="stylesheet" href="/flop.css" />
   <link rel="stylesheet" href="/flop-responsive-fixes.css" />
+  <link rel="stylesheet" href="/flop-wallet.css" />
 </head>
 <body>
   <header class="topbar">
@@ -89,9 +90,9 @@
       </article>
 
       <article class="status-card">
-        <span>PUBLIC TESTNET · LIVE · UNSCORED</span>
-        <h2>Live · unscored opening</h2>
-        <p>Checked 24 November 2026: six founding validators opened FLOP Testnet. Public chain reads and operator registration are open, but the scoring activation block/date has not been announced. Voucher earning, trading, orders and swaps are disabled. The generic faucet is Devnet, not a verified Testnet claim.</p>
+        <span>PUBLIC TESTNET · LIVE, UNSCORED</span>
+        <h2>Live · unscored</h2>
+        <p>FLOP Testnet opened on 24 November 2026. No voucher activation block has been announced; earlier activity receives no backfill. Test FLOP has no monetary value.</p>
         <a href="https://docs.flop.network/networks/testnet" target="_blank" rel="noopener noreferrer">Live official testnet status →</a>
       </article>
 
@@ -111,7 +112,7 @@
       <article class="status-card warn">
         <span>DEVNET · DEVELOPMENT ONLY</span>
         <h2>Public endpoints; restricted enrollment</h2>
-        <p>FLOP's operator network page publishes development endpoints and says enrollment requires separate checks. The official timeline FAQ, updated 30 October, says devnet earns nothing and has no reward or airdrop weight; the live panel reports when that FAQ was last verified.</p>
+        <p>FLOP's operator network page publishes development endpoints and says enrollment requires separate checks. The official timeline FAQ, updated 24 November, says devnet earns nothing and has no reward or airdrop weight; the live panel reports when that FAQ was last verified.</p>
         <a href="https://docs.flop.network/networks/devnet" target="_blank" rel="noopener noreferrer">Official devnet status →</a>
         <a href="https://docs.flop.network/docs/testnet-and-timeline" target="_blank" rel="noopener noreferrer">Official timeline and reward FAQ →</a>
       </article>
@@ -122,24 +123,69 @@
       <p id="rdLiveChecked" class="live-meta">Last check: loading…</p>
       <div class="live-grid">
         <article class="live-card" id="rdLiveTestnet"><span>PUBLIC TESTNET</span><b data-status>Checking…</b><p data-detail>Official network identity and release status</p><a href="https://docs.flop.network/networks/testnet" target="_blank" rel="noopener noreferrer">Official testnet source ↗</a><a id="rdLiveTimelineLink" href="https://docs.flop.network/docs/testnet-and-timeline" target="_blank" rel="noopener noreferrer">Timeline / reward FAQ ↗</a></article>
+        <article class="live-card" id="rdLiveTestnetRpc"><span>TESTNET RPC · READ ONLY</span><b data-status>Checking…</b><p data-detail>Block-zero hash must match the official Testnet genesis.</p><a href="https://docs.flop.network/networks/testnet" target="_blank" rel="noopener noreferrer">Official Testnet identity ↗</a></article>
+        <article class="live-card" id="rdLiveFaucet"><span>TESTNET FAUCET · READ ONLY</span><b data-status>Checking…</b><p data-detail>Signed claim availability and current limits are checked without submitting.</p><a href="https://faucet.flop.network/limits" target="_blank" rel="noopener noreferrer">Official faucet limits ↗</a></article>
         <article class="live-card" id="rdLiveDevnet"><span>DEVNET</span><b data-status>Checking…</b><p data-detail>Development network; admission is separate</p><a href="https://docs.flop.network/networks/devnet" target="_blank" rel="noopener noreferrer">Official devnet source ↗</a></article>
-        <article class="live-card" id="rdLiveRpc"><span>READ-ONLY RPC CHECK</span><b data-status>Checking…</b><p data-detail>Only chain identity, node version and genesis hash are queried</p><a href="https://testnet.flopscan.io" target="_blank" rel="noopener noreferrer">FLOP Testnet explorer ↗</a></article>
+        <article class="live-card" id="rdLiveRpc"><span>READ-ONLY RPC CHECK</span><b data-status>Checking…</b><p data-detail>Only chain identity, node version and genesis hash are queried</p><a href="https://explorer.devnet.flop.network/validator" target="_blank" rel="noopener noreferrer">Network identity reference ↗</a></article>
         <article class="live-card" id="rdLiveGateway"><span>GATEWAY / MODEL CATALOG</span><b data-status>Checking…</b><p data-detail>Read-only model list; no inference request is sent</p><a href="https://api.flop.network/v1/models" target="_blank" rel="noopener noreferrer">Official catalog ↗</a></article>
         <article class="live-card" id="rdLivePackages"><span>SDK / CLI RELEASES</span><b data-status>Checking…</b><p data-detail>Versions and validator admission note</p><a href="https://docs.flop.network/docs/sdk-references" target="_blank" rel="noopener noreferrer">Official SDK references ↗</a></article>
         <article class="live-card" id="rdLivePaper"><span>YELLOW PAPER / E.38</span><b data-status>Checking…</b><p data-detail>Public draft status and distinct GitHub file-history/repository-head dates</p><a href="https://flop.finance/intro/yellowpaper/" target="_blank" rel="noopener noreferrer">Official paper ↗</a></article>
       </div>
-      <p id="rdLiveDisclaimer" class="live-disclaimer">Status checks do not submit transactions, sign, claim faucet funds, or run inference. A timeout or malformed response is shown as unverified. The published genesis is an expected value, not proof that an RPC endpoint returned it; the live read-only check reports its own result.</p>
+      <p id="rdLiveDisclaimer" class="live-disclaimer">Status checks do not submit transactions, sign, claim faucet funds, or run inference. A timeout or malformed response is shown as unverified.</p>
+    </section>
+
+    <section class="participation rd-wallet" id="flop-wallet" aria-labelledby="wallet-title">
+      <p class="kicker">TESTNET WALLET · USER CONTROLLED</p>
+      <h2 id="wallet-title">Connect a wallet and prepare a faucet claim</h2>
+      <p id="rdWalletIntro">This page never receives a seed or private key. Wallet signing happens in your extension. Testnet is unscored; faucet funds have no monetary value.</p>
+      <div class="rd-wallet-status" id="rdWalletStatus" role="status" aria-live="polite">Checking official Testnet identity and faucet limits…</div>
+      <div class="rd-wallet-actions">
+        <label for="rdWalletProvider">Wallet extension</label>
+        <select id="rdWalletProvider" disabled aria-label="Wallet extension"><option value="">Choose extension</option></select>
+        <button id="rdWalletConnect" type="button">Connect Polkadot wallet</button>
+        <label for="rdWalletAccount">Account</label>
+        <select id="rdWalletAccount" disabled aria-label="Wallet account"><option value="">Connect a wallet first</option></select>
+        <button id="rdPrepareClaim" type="button" disabled>Prepare signed claim</button>
+        <button id="rdWalletForget" type="button">Forget this wallet</button>
+      </div>
+      <section id="rdWalletReadout" class="rd-wallet-readout" hidden aria-labelledby="rdWalletHistoryTitle">
+        <p id="rdWalletChainStatus" role="status" aria-live="polite"></p>
+        <p id="rdWalletBalance">Free balance: —</p>
+        <div class="rd-wallet-actions">
+          <button id="rdWalletRefreshAccount" type="button">Refresh balance and activity</button>
+          <a id="rdWalletExplorer" href="https://testnet.flopscan.io/" target="_blank" rel="noopener noreferrer">Open official Testnet explorer</a>
+        </div>
+        <h3 id="rdWalletHistoryTitle">Recent transfers</h3>
+        <p id="rdWalletHistoryCoverage" class="live-disclaimer">Recent finalized blocks only. Full account history is not available through the published archive feed yet.</p>
+        <p id="rdWalletHistoryStatus" role="status" aria-live="polite"></p>
+        <ol id="rdWalletHistoryList" class="rd-wallet-history"></ol>
+        <button id="rdWalletHistoryMore" type="button" disabled>Load older blocks</button>
+      </section>
+      <p id="rdWalletSafety" class="live-disclaimer">This page only prepares a signed request. FLOP's official agent guide documents a POST to the Testnet claim endpoint; this page provides a curl command for you to inspect and run manually. The page never submits the request.</p>
+      <div id="rdClaimOutput" hidden>
+        <p>Signed message: <code id="rdClaimMessage"></code></p>
+        <p>POST endpoint: <code>https://faucet.flop.network/v1/testnet/agent-claims</code></p>
+        <label for="rdClaimPayload">Signed request JSON</label>
+        <textarea id="rdClaimPayload" readonly rows="5" spellcheck="false"></textarea>
+        <div class="rd-wallet-actions"><button id="rdCopyClaim" type="button">Copy request JSON</button><a href="https://docs.flop.network/docs/testnet-and-timeline" target="_blank" rel="noopener noreferrer">Official claim instructions ↗</a></div>
+        <label for="rdClaimCommand">Manual submission command · inspect before running</label>
+        <textarea id="rdClaimCommand" readonly rows="4" spellcheck="false"></textarea>
+        <p id="rdClaimCommandSafety" class="live-disclaimer">Review this command before running it. It submits one signed request to the official faucet; there is no automatic submission or retry.</p>
+        <div class="rd-wallet-actions"><button id="rdCopyClaimCommand" type="button">Copy manual curl command</button></div>
+        <p id="rdClaimState" role="status"></p>
+      </div>
     </section>
 
     <section class="participation" id="join-guide">
       <p class="kicker">PRACTICAL GUIDE · DEVNET IS NOT TESTNET</p><h2>What you can do now</h2>
       <div class="guide-grid">
-        <article><h3>SDK/runtime guard now matches</h3><p>The Testnet page still documents SDK 0.9.0, but npm currently publishes 0.10.0 and its shipped runtime guard includes the live 1014035 runtime. This verifies version admission only; inference and settlement are not verified. Keep the SDK guard enabled and use read-only checks until those flows are supported and confirmed.</p><a href="https://docs.flop.network/networks/testnet" target="_blank" rel="noopener noreferrer">Official Testnet network and SDK notes ↗</a></article>
-        <article><h3>Testnet is live · unscored</h3><p>Use public reads and review the official registration guidance. Before any wallet action, verify the published Testnet genesis and an official Testnet claim endpoint. Scoring has no announced activation block/date; voucher trading remains disabled. Do not confuse the Devnet faucet with Testnet.</p><a href="https://docs.flop.network/networks/testnet" target="_blank" rel="noopener noreferrer">Recheck official launch status ↗</a></article>
+        <article><h3>Start with devnet</h3><p>Use the published read-only model catalog or SDK/CLI documentation. A validator package exists, but joining is administrator-assisted and requires an operations contact, approval, funding and activation. Do not treat local activity as testnet credit.</p><a href="https://docs.flop.network/docs/sdk-references" target="_blank" rel="noopener noreferrer">SDK versions and examples ↗</a></article>
+        <article><h3>Testnet is live, but unscored</h3><p>Verify the official genesis and current faucet limits before signing. Signed agent claims are open, but no voucher activation block is announced and earlier activity receives no backfill. Test FLOP has no monetary value.</p><a href="https://docs.flop.network/networks/testnet" target="_blank" rel="noopener noreferrer">Verify Testnet status ↗</a></article>
         <article><h3>No GPU? You can still prepare</h3><p>Read the spec and SDK docs, build an agent against documented APIs, validate a public DID format, compare official source versions and track your own local checklist. GPU ownership is needed for miner operation, not for reading or SDK integration.</p><a href="https://docs.flop.network/docs/run-miner" target="_blank" rel="noopener noreferrer">Miner guide and role details ↗</a></article>
-        <article><h3>Rewards are not guaranteed</h3><p>Testnet is currently unscored and no activation block/date has been announced. A DID, faucet note, model listing, test-token balance or manually saved activity is not proof of eligibility. Devnet grants and spend earn no airdrop credit; E.38 leaves conversion details open.</p><a href="https://docs.flop.network/docs/airdrop-and-testnet-conversion" target="_blank" rel="noopener noreferrer">Official conversion status ↗</a></article>
+        <article><h3>Rewards are not guaranteed</h3><p>Devnet has no reward or airdrop weight. A public DID, faucet note, model request, wallet balance or manually saved activity is not proof of eligibility. E.38 leaves important testnet-to-genesis conversion rules open.</p><a href="https://docs.flop.network/docs/airdrop-and-testnet-conversion" target="_blank" rel="noopener noreferrer">Official conversion status ↗</a></article>
       </div>
       <div class="tool-links"><a href="/">Open Agent Lab and existing DID tools</a><a href="https://docs.flop.network/docs/run-validator" target="_blank" rel="noopener noreferrer">Validator guide and current admission steps ↗</a><a href="https://docs.flop.network/docs/official-links" target="_blank" rel="noopener noreferrer">Check official links and scam guidance ↗</a></div>
+      <div class="tool-links"><a href="/apply.html">Request community permissions</a><a href="/admin.html">Administrator panel</a></div>
     </section>
 
     <section class="why" id="technocore-capacity">
@@ -152,8 +198,8 @@
       <div class="feature-list">
         <div><b id="rdTcRooms">—</b><span id="rdTcRoomCap">listed rooms</span></div>
         <div><b id="rdTcNotes">—</b><span id="rdTcNoteCap">notes</span></div>
-        <div><b id="rdTcWindow">—</b><span id="rdTcWindowLabel">windowed messages across the returned room page</span></div>
-        <div><b id="rdTcUpdated">—</b><span id="rdTcUpdatedLabel">last successful/attempted refresh</span></div>
+        <div><b id="rdTcWindow">—</b><span>windowed messages across the returned room page</span></div>
+        <div><b id="rdTcUpdated">—</b><span>last successful/attempted refresh</span></div>
       </div>
       <div class="actions">
         <a class="primary" href="https://github.com/flop-labs/technocore-chat/issues/253" target="_blank" rel="noopener noreferrer">Capacity issue #253</a>
@@ -211,5 +257,6 @@
   <script src="/ui-i18n.js"></script>
   <script src="/technocore-capacity.js"></script>
   <script src="/flop-live-status.js"></script>
+  <script type="module" src="/flop-wallet.js"></script>
 </body>
 </html>

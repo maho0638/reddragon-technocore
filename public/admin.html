@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow"><title>RedDragon · Admin</title>
+  <link rel="stylesheet" href="/admin.css">
+</head>
+<body>
+  <main class="wrap">
+    <div class="bar"><a href="/flop">← <span data-i18n="back">FLOP Community Observatory</span></a><label><span class="sr" data-i18n="language">Language</span><select id="pageLanguage" aria-label="Language"><option value="en">EN</option><option value="tr">TR</option></select></label></div>
+    <h1 data-i18n="admin">Administrator</h1>
+    <p class="note" data-i18n="adminNote">Faucet claims and inference remain disabled here. This panel manages permissions only; it never submits a chain transaction or model request.</p>
+    <section id="loginPanel">
+      <h2 data-i18n="signIn">Sign in</h2><form id="loginForm"><label><span data-i18n="password">Administrator password</span><input name="password" type="password" minlength="16" autocomplete="current-password" required></label><button data-i18n="signIn">Sign in</button></form>
+      <p id="loginStatus" role="status"></p>
+    </section>
+    <section id="adminPanel" hidden>
+      <div class="bar"><h2 data-i18n="controls">Applications and controls</h2><button id="logout" type="button" data-i18n="signOut">Sign out</button></div>
+      <p id="stopStatus" role="status"></p><button id="stopOn" type="button" data-i18n="stopOn">Enable emergency stop</button> <button id="stopOff" type="button" data-i18n="stopOff">Disable emergency stop</button>
+      <button id="refresh" type="button" data-i18n="refresh">Refresh queue and audit</button>
+      <h3 data-i18n="applications">Applications</h3><div id="applications" aria-live="polite"></div>
+      <h3 data-i18n="audit">Audit log</h3><ol id="audit"></ol>
+    </section>
+  </main>
+  <script type="module" src="/admin.js"></script>
+</body>
+</html>

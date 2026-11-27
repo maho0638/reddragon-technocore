@@ -60,9 +60,12 @@ function buildSwitcher() {
       button.addEventListener("click", () => {
         const next = button.dataset.lang;
         if (next !== "tr" && next !== "en") return;
-        if (window.RD_I18N?.setLanguage) window.RD_I18N.setLanguage(next);
-        else { try { localStorage.setItem(LANG_KEY, next); } catch {} }
-        location.reload();
+        if (window.RD_I18N?.setLanguage) {
+          window.RD_I18N.setLanguage(next);
+        } else {
+          try { localStorage.setItem(LANG_KEY, next); } catch {}
+          location.reload();
+        }
       });
     });
   }
@@ -197,7 +200,6 @@ function translateCore(en) {
   setFileLabel(en ? "Restore from backup" : "Yedekten geri yükle");
   text("#backupBtn", en ? "Download encrypted identity backup" : "Şifreli kimlik yedeğini indir");
   text("#copyDidBtn", en ? "Copy public DID" : "Açık DID'yi kopyala");
-  text("#copyDidSecret", en ? "Copy" : "Kopyala");
   text('[data-step="2"] .danger-text', en ? "This file + password controls the identity. Do not confuse it with a wallet seed phrase and never send it to anyone." : "Bu dosya + parola kimliğini kontrol eder. Wallet seed phrase ile karıştırma ve kimseye gönderme.");
   text("#publishDidBtn", en ? "Publish DID note" : "DID notunu yayınla");
   text("#helloBtn", en ? "Send signed hello" : "İmzalı merhaba gönder");
@@ -261,8 +263,8 @@ function translateEnhancements(en) {
   }
   text("#rdSharePanel h3", en ? "Share · everyone uses their own account" : "Paylaş · herkes kendi hesabından");
   text("#rdSharePanel p", en
-    ? `The X button opens the composer for the X account currently signed in to this browser. The project account is mentioned as ${cfg.xHandle || "@lionmousse"}. For Medium, copy the draft and publish it from your own account.`
-    : `X butonu bu tarayıcıda açık olan X hesabının paylaşım ekranını açar. Metinde ${cfg.xHandle || "@lionmousse"} geçtiği için proje hesabı mention alır. Medium için taslağı kopyalayıp kendi hesabında yayınlayabilirsin.`);
+    ? `The X text is copied to your clipboard; the DID + proof button opens the X composer. For Medium, copy the draft and publish it from your own account.`
+    : `X metni panoya kopyalanır; DID + proof düğmesi X paylaşım penceresini açar. Medium için taslağı kopyalayıp kendi hesabında yayınlayabilirsin.`);
   text("#rdProofX", en ? "𝕏 Share DID + proof" : "𝕏 DID + kanıt paylaş");
   text("#rdThreadCopy", en ? "Copy 3-post thread" : "3 gönderilik diziyi kopyala");
   text("#rdMediumCopy", en ? "Copy Medium draft" : "Medium taslağını kopyala");
@@ -417,8 +419,6 @@ function boot() {
   document.addEventListener("change", scheduleBoundedRefresh, true);
 }
 
-const refreshLanguageForDynamicUi = () => { applyStableLanguage(); translateDynamicEN(); };
-window.addEventListener("rd:languagechange", refreshLanguageForDynamicUi);
-window.addEventListener("rd:addonsready", refreshLanguageForDynamicUi);
-window.addEventListener("rd:dynamicuiready", refreshLanguageForDynamicUi);
+window.addEventListener("rd:languagechange", () => { applyStableLanguage(); translateDynamicEN(); });
+window.addEventListener("rd:addonsready", () => { applyStableLanguage(); translateDynamicEN(); });
 boot();

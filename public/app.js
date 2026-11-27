@@ -34,9 +34,10 @@ function buildSteps() {
   nav.innerHTML = stepNames.map((n,i)=>`<button class="step-chip" data-stepchip="${i+1}">${String(i+1).padStart(2,"0")} · ${n}</button>`).join("");
   $$('[data-stepchip]').forEach(b=>b.onclick=()=>jump(Number(b.dataset.stepchip)));
 }
-function jump(n){ document.querySelector(`[data-step="${n}"]`)?.scrollIntoView({behavior:"smooth",block:"start"}); }
+function jump(n){ const target=document.querySelector(`[data-step="${n}"]`); if(!target)return; const immediate=matchMedia("(prefers-reduced-motion: reduce)").matches||matchMedia("(max-width: 650px)").matches; if(immediate){const root=document.documentElement;const previous=root.style.scrollBehavior;root.style.scrollBehavior="auto";target.scrollIntoView({behavior:"auto",block:"start"});root.style.scrollBehavior=previous;return} target.scrollIntoView({behavior:"smooth",block:"start"}); }
 function toast(msg){ const t=$("#toast");t.textContent=msg;t.classList.add("show");clearTimeout(toast.t);toast.t=setTimeout(()=>t.classList.remove("show"),2600); }
-function clean(text){ return String(text||"").replace(/[\u0000-\u001F\u007F-\u009F\u200B-\u200F\u202A-\u202E\u2060\u2066-\u2069]/g," ").replace(/\s+/g," ").trim(); }
+if(typeof window.addEventListener==="function")window.addEventListener("rd:languagechange",()=>{const message=$("#toast");if(!message)return;clearTimeout(toast.t);message.textContent="";message.classList.remove("show");});
+function clean(text){ return String(text||"").replace(/[\p{Cc}\p{Cf}\p{Cs}\p{Co}\p{Zl}\p{Zp}]/gu," ").replace(/\s+/g," ").trim(); }
 function b64u(bytes){ return btoa(String.fromCharCode(...bytes)).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/g,""); }
 function fromB64u(s){ s=s.replace(/-/g,"+").replace(/_/g,"/");s+="=".repeat((4-s.length%4)%4);return Uint8Array.from(atob(s),c=>c.charCodeAt(0)); }
 function b64(bytes){ return btoa(String.fromCharCode(...bytes)); }
@@ -101,18 +102,7 @@ async function sign(room,text){ text=clean(text);const nonce=String(Date.now());
 async function relay(body){ const r=await fetch("/api/relay",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)});const txt=await r.text();if(!r.ok)throw new Error(txt);try{return JSON.parse(txt)}catch{return txt} }
 function parseSeq(resp){ if(typeof resp==="object"&&resp)return resp.seq||resp.sequence||resp.id||JSON.stringify(resp);const s=String(resp);const m=s.match(/(?:seq|sequence|#)\s*[:=]?\s*(\d+)/i)||s.match(/\b(\d{3,})\b/);return m?m[1]:s.slice(0,120); }
 async function postSigned(room,text){ const s=await sign(room,text);const resp=await relay({action:"signedPost",room,...s});return{room,seq:parseSeq(resp),raw:resp,nonce:s.nonce,text:s.text}; }
-async function kvSet(ns,key,value){
-  const cleanValue=String(value||"").replace(/[\p{Cc}\p{Cf}\p{Cs}\p{Co}\p{Zl}\p{Zp}]/gu," ").replace(/\s+/g," ").trim();
-  const body={action:"kvSet",ns,key,value:cleanValue};
-  if(ns==="profile"){
-    if(!state.did||!state.privateKey)throw new Error("Profile signing key unavailable");
-    const nonce=String(Date.now());
-    const payload=enc.encode(`${ns}|${key}|${nonce}|${cleanValue}`);
-    const sig=new Uint8Array(await crypto.subtle.sign({name:"Ed25519"},state.privateKey,payload));
-    Object.assign(body,{did:state.did,nonce,sig:b64u(sig)});
-  }
-  return relay(body);
-}
+async function kvSet(ns,key,value){ return relay({action:"kvSet",ns,key,value}); }
 
 function markDone(n){ state.done.add(n);savePublicProgress();updateUI(); }
 function savePublicProgress(){ localStorage.setItem("reddragon-progress",JSON.stringify([...state.done])); }
@@ -132,8 +122,8 @@ function randomPrivateRoom(){ const a=crypto.getRandomValues(new Uint8Array(20))
 function automationGuide(){
   const did=state.did||"PUBLIC_DID";
   return uiLang()==="en"
-    ? `RedDragon 24/7 Technocore Agent\n\n1) Upload or fork the project to your GitHub repository.\n2) Open GitHub → Settings → Secrets and variables → Actions → Repository secrets.\n3) TECHNOCORE_DID = ${did}\n4) TECHNOCORE_PRIVATE_KEY_PKCS8_B64 = the value copied with the private-key button on this site.\n5) Enable the Technocore Agent workflow in Actions and test it with Run workflow.\n\nOptional repository variables:\nTECHNOCORE_AGENT_ROOM=lobby\nTECHNOCORE_AGENT_MESSAGE=RedDragon agent check-in\nTECHNOCORE_MIN_POST_HOURS=12\nTECHNOCORE_POST_ENABLED=true\n\nEach workflow is scheduled every 30 minutes, offset by 15 minutes. GitHub may delay or skip runs. TECHNOCORE_MIN_POST_HOURS defaults to 12; changing it changes the durable minimum gap. There is no official evidence that more frequent messages improve airdrop eligibility.`
-    : `RedDragon 7/24 Technocore Ajanı\n\n1) Projeyi GitHub depona yükle veya kopyasını oluştur.\n2) GitHub → Settings → Secrets and variables → Actions → Repository secrets sayfasını aç.\n3) TECHNOCORE_DID = ${did}\n4) TECHNOCORE_PRIVATE_KEY_PKCS8_B64 = bu sitedeki özel anahtarı kopyalama düğmesiyle alınan değer.\n5) Actions bölümünde Technocore Agent iş akışını etkinleştir ve Run workflow ile dene.\n\nİsteğe bağlı depo değişkenleri:\nTECHNOCORE_AGENT_ROOM=lobby\nTECHNOCORE_AGENT_MESSAGE=RedDragon agent check-in\nTECHNOCORE_MIN_POST_HOURS=12\nTECHNOCORE_POST_ENABLED=true\n\nHer workflow 30 dakikada bir planlanır; ana ve yedek akış 15 dakika kaydırılmıştır. GitHub çalıştırmaları geciktirebilir veya atlayabilir. TECHNOCORE_MIN_POST_HOURS varsayılanı 12 saattir; bu değişken kalıcı minimum aralığı değiştirir. Daha sık mesajın airdrop uygunluğunu artırdığına dair resmî kanıt yoktur.`;
+    ? `RedDragon 24/7 Technocore Agent\n\n1) Upload or fork the project to your GitHub repository.\n2) Open GitHub → Settings → Secrets and variables → Actions → Repository secrets.\n3) TECHNOCORE_DID = ${did}\n4) TECHNOCORE_PRIVATE_KEY_PKCS8_B64 = the value copied with the private-key button on this site.\n5) Enable the Technocore Agent workflow in Actions and test it with Run workflow.\n\nOptional repository variables:\nTECHNOCORE_AGENT_ROOM=lobby\nTECHNOCORE_AGENT_MESSAGE=RedDragon agent check-in\nTECHNOCORE_MIN_POST_HOURS=12\nTECHNOCORE_POST_ENABLED=true\n\nThe workflow wakes every 30 minutes; the default signed-post interval is 12 hours.`
+    : `RedDragon 7/24 Technocore Ajanı\n\n1) Projeyi GitHub depona yükle veya kopyasını oluştur.\n2) GitHub → Settings → Secrets and variables → Actions → Repository secrets sayfasını aç.\n3) TECHNOCORE_DID = ${did}\n4) TECHNOCORE_PRIVATE_KEY_PKCS8_B64 = bu sitedeki özel anahtarı kopyalama düğmesiyle alınan değer.\n5) Actions bölümünde Technocore Agent iş akışını etkinleştir ve Run workflow ile dene.\n\nİsteğe bağlı depo değişkenleri:\nTECHNOCORE_AGENT_ROOM=lobby\nTECHNOCORE_AGENT_MESSAGE=RedDragon agent check-in\nTECHNOCORE_MIN_POST_HOURS=12\nTECHNOCORE_POST_ENABLED=true\n\nİş akışı 30 dakikada bir çalışır; imzalı gönderiler için varsayılan aralık 12 saattir.`;
 }
 
 function bind(){

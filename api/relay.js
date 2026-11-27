@@ -208,10 +208,6 @@ function decodeDidPublicKey(did) {
 }
 
 function verifySignedMessage(room, did, sig, nonce, text) {
-  return verifyDidPayload(did, sig, `${room}|${nonce}|${text}`);
-}
-
-function verifyDidPayload(did, sig, payload) {
   try {
     const raw = decodeDidPublicKey(did);
     if (!raw || !SIG_RE.test(sig)) return false;
@@ -219,7 +215,7 @@ function verifyDidPayload(did, sig, payload) {
     if (signature.length !== 64 || signature.toString("base64url") !== sig) return false;
     const spkiPrefix = Buffer.from("302a300506032b6570032100", "hex");
     const key = createPublicKey({ key: Buffer.concat([spkiPrefix, raw]), format: "der", type: "spki" });
-    return verifySignature(null, Buffer.from(payload, "utf8"), key, signature);
+    return verifySignature(null, Buffer.from(`${room}|${nonce}|${text}`, "utf8"), key, signature);
   } catch {
     return false;
   }
@@ -303,16 +299,6 @@ export default async function handler(req, res) {
         if (!FP_RE.test(writeKey) || !isPublicEd25519Did(v)) return bad(res, 400, "Invalid DID note");
         const fingerprint = createHash("sha256").update(v, "utf8").digest("hex").slice(0, 16);
         if (writeKey !== fingerprint) return bad(res, 400, "DID fingerprint mismatch");
-      }
-      if (writeNs === "profile") {
-        if (typeof did !== "string" || !isPublicEd25519Did(did)) return bad(res, 400, "Profile DID required");
-        if (typeof nonce !== "string" || !NONCE_RE.test(nonce)) return bad(res, 400, "Invalid profile nonce");
-        if (writeKey !== createHash("sha256").update(did, "utf8").digest("hex").slice(0, 16)) {
-          return bad(res, 403, "Profile key does not match DID");
-        }
-        if (typeof sig !== "string" || !verifyDidPayload(did, sig, `${writeNs}|${writeKey}|${nonce}|${v}`)) {
-          return bad(res, 400, "Profile signature does not match DID and value");
-        }
       }
       const r = await upstream(`${BASE}/kv/${encodeURIComponent(path.ns)}/${encodeURIComponent(path.key)}/set/${encodeURIComponent(v)}`, {
         headers: { accept: "text/plain,application/json" }

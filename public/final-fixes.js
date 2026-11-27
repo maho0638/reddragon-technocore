@@ -25,7 +25,36 @@ function fixProofImportCopy() {
   }
 }
 
+function ensureUsageGuideStyles() {
+  if (document.querySelector("#rdUsageGuideStyles")) return;
+  const style = document.createElement("style");
+  style.id = "rdUsageGuideStyles";
+  style.textContent = `
+    #rdUsageGuide{margin:22px 0 30px;padding:22px;border:1px solid rgba(86,170,255,.25);border-radius:18px;background:linear-gradient(180deg,rgba(19,31,45,.96),rgba(9,16,25,.96));box-shadow:0 18px 50px rgba(0,0,0,.18)}
+    #rdUsageGuide .rd-guide-kicker{display:inline-flex;align-items:center;gap:8px;font-size:12px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:#8ec8ff}
+    #rdUsageGuide h2{margin:7px 0 6px;font-size:26px;line-height:1.15}
+    #rdUsageGuide .rd-guide-lead{margin:0 0 16px;color:#aebdcb;line-height:1.55}
+    #rdUsageGuide .rd-guide-flow{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+    #rdUsageGuide .rd-guide-step{padding:15px;border:1px solid rgba(255,255,255,.09);border-radius:13px;background:rgba(255,255,255,.025)}
+    #rdUsageGuide .rd-guide-step b{display:block;margin-bottom:7px;color:#fff;font-size:14px}
+    #rdUsageGuide .rd-guide-step span{display:block;color:#aebdcb;font-size:13px;line-height:1.5}
+    #rdUsageGuide .rd-guide-num{display:inline-flex;width:27px;height:27px;align-items:center;justify-content:center;margin-bottom:9px;border-radius:9px;background:rgba(72,165,255,.14);color:#8ec8ff;font-weight:900;font-size:12px}
+    #rdUsageGuide .rd-github-guide{margin-top:14px;padding:16px;border:1px solid rgba(67,210,137,.25);border-radius:14px;background:rgba(20,91,57,.12)}
+    #rdUsageGuide .rd-github-guide h3{margin:0 0 9px;font-size:17px}
+    #rdUsageGuide .rd-github-guide ol{margin:0;padding-left:21px;color:#c4d0da;line-height:1.65}
+    #rdUsageGuide .rd-github-guide li+li{margin-top:4px}
+    #rdUsageGuide code{white-space:normal;overflow-wrap:anywhere}
+    #rdUsageGuide .rd-guide-ok{margin-top:12px;padding:11px 13px;border-radius:11px;background:rgba(67,210,137,.1);color:#bcebd2;font-size:13px;line-height:1.5}
+    #rdUsageGuide .rd-guide-danger{margin-top:9px;color:#ffb6b6;font-size:12px;line-height:1.5}
+    #rdGuideJump{white-space:nowrap}
+    @media(max-width:900px){#rdUsageGuide .rd-guide-flow{grid-template-columns:1fr 1fr}}
+    @media(max-width:580px){#rdUsageGuide{padding:17px}#rdUsageGuide .rd-guide-flow{grid-template-columns:1fr}#rdUsageGuide h2{font-size:22px}}
+  `;
+  document.head.appendChild(style);
+}
+
 function ensureUsageGuide(isEn) {
+  ensureUsageGuideStyles();
 
   const signal = document.querySelector(".signalbar");
   if (!signal) return;
@@ -127,8 +156,8 @@ function fixQuickSetupOrder(isEn) {
   const warning = document.querySelector('[data-step="11"] .warning-box span');
   if (warning) {
     warning.textContent = isEn
-      ? "Each workflow is scheduled every 30 minutes, offset by 15 minutes. GitHub can delay or skip scheduled runs. TECHNOCORE_MIN_POST_HOURS defaults to 12 and is enforced with durable state; changing it changes the minimum gap. There is no official evidence that more frequent messages improve airdrop eligibility."
-      : "Her workflow 30 dakikada bir planlanır; ana ve yedek akış 15 dakika kaydırılmıştır. GitHub planlı çalıştırmaları geciktirebilir veya atlayabilir. TECHNOCORE_MIN_POST_HOURS varsayılanı 12 saattir ve kalıcı durumla uygulanır; bu değişken aralığı değiştirir. Daha sık mesajın airdrop uygunluğunu artırdığına dair resmî kanıt yoktur.";
+      ? "Primary and backup workflows run on staggered schedules. If GitHub delays one schedule, a later trigger can recover. Durable Technocore state keeps signed check-ins at least 12 hours apart. More frequent posts are not known to improve airdrop eligibility; FLOP Labs alone confirms eligibility criteria."
+      : "Ana ve yedek workflow farklı zamanlarda çalışır. GitHub bir zamanlamayı geciktirirse sonraki tetikleyici açığı kapatabilir. Technocore'daki kalıcı durum, imzalı check-in'ler arasında en az 12 saat bırakır. Daha sık gönderilerin airdrop uygunluğunu artırdığına dair kanıt yoktur; uygunluk ölçütlerini yalnızca FLOP Labs doğrulayabilir.";
   }
 
   const autoOut = document.querySelector("#autoOut");
@@ -234,6 +263,10 @@ function applyFinalFixes() {
       : "<b>GitHub zamanlama notu</b> Public fork'larda scheduled workflow, Actions'tan etkinleştirene kadar varsayılan olarak kapalıdır. Ayrıca GitHub, public bir repoda 60 gün repo aktivitesi olmazsa scheduled workflow'u otomatik devre dışı bırakabilir.";
   }
 }
+
+window.addEventListener("rd:languagechange", (event) => {
+  if (event.detail?.lang === "tr" || event.detail?.lang === "en") applyFinalFixes();
+});
 
 window.addEventListener("load", () => {
   applyFinalFixes();

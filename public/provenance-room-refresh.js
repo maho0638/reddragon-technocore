@@ -68,7 +68,7 @@ const RD_PROV_FIX_COPY = {
 };
 
 const RD_PROV_FIX_CATALOG = window.RD_I18N?.register("provenanceRefresh", RD_PROV_FIX_COPY) || RD_PROV_FIX_COPY;
-const rdProvFixT = RD_PROV_FIX_CATALOG[rdProvFixLang()];
+let rdProvFixT = RD_PROV_FIX_CATALOG[rdProvFixLang()];
 let rdProvFixBusy = false;
 
 async function rdProvFixRelay(body) {
@@ -141,6 +141,8 @@ function rdProvFixBuild() {
   const grid = shell.querySelector(".rd-prov-grid");
   const card = grid?.querySelector("article");
   if (!card) return false;
+  const verifierRoom = document.getElementById("rdVerifyRoom");
+  const previousRoom = verifierRoom?.value;
 
   card.innerHTML = `
     <h3>${rdProvFixT.title}</h3>
@@ -167,8 +169,7 @@ function rdProvFixBuild() {
     </div>
     <div class="rd-prov-result">${rdProvFixT.capacityNote}</div>`;
 
-  const verifierRoom = document.getElementById("rdVerifyRoom");
-  if (verifierRoom) verifierRoom.value = RD_PROV_FIX_ROOM;
+  if (verifierRoom) verifierRoom.value = previousRoom || RD_PROV_FIX_ROOM;
   const sourceNote = shell.querySelector(".rd-prov-note");
   if (sourceNote) sourceNote.textContent = rdProvFixT.capacityNote;
 
@@ -258,6 +259,12 @@ function rdProvFixStart() {
   }
   rdProvFixRefresh();
 }
+
+window.addEventListener("rd:languagechange", (event) => {
+  const locale = event.detail?.lang === "tr" ? "tr" : "en";
+  rdProvFixT = RD_PROV_FIX_CATALOG[locale];
+  if (rdProvFixBuild()) rdProvFixRefresh();
+});
 
 if (document.readyState === "loading") {
   document.addEventListener("DOMContentLoaded", rdProvFixStart, { once: true });

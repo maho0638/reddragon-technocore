@@ -105,7 +105,7 @@ const rdProvCopy = {
 };
 
 const rdProvCatalog = window.RD_I18N?.register("provenance", rdProvCopy) || rdProvCopy;
-const rdProvT = rdProvCatalog[rdProvLang()];
+let rdProvT = rdProvCatalog[rdProvLang()];
 let rdProvBusy = false;
 let rdProvTimer = null;
 
@@ -186,6 +186,39 @@ function rdProvSetStatus(id, ok, detail) {
 function rdProvSetText(id, value) {
   const element = document.getElementById(id);
   if (element) element.textContent = String(value ?? "—");
+}
+
+function rdProvApplyLocale(locale = rdProvLang()) {
+  rdProvT = rdProvCatalog[locale === "tr" ? "tr" : "en"];
+  const shell = document.getElementById("rdDidProvenance");
+  if (!shell) return;
+  const set = (selector, value) => {
+    const element = shell.querySelector(selector);
+    if (element) element.textContent = value;
+  };
+  set(".rd-prov-head .rd-prov-eyebrow", rdProvT.eyebrow);
+  set(".rd-prov-head h2", rdProvT.title);
+  set(".rd-prov-head p", rdProvT.intro);
+  set(".rd-prov-badge", rdProvT.badge);
+  const verifier = shell.querySelector(".rd-prov-grid > article:nth-child(2)");
+  if (verifier) {
+    const setVerifier = (selector, value) => {
+      const element = verifier.querySelector(selector);
+      if (element) element.textContent = value;
+    };
+    setVerifier(":scope > h3", rdProvT.verifierTitle);
+    setVerifier(":scope > p", rdProvT.verifierIntro);
+    setVerifier('label[for="rdVerifyRoom"]', rdProvT.roomLabel);
+    setVerifier('label[for="rdVerifyDid"]', rdProvT.didLabel);
+    setVerifier("#rdVerifyButton", rdProvT.verify);
+    setVerifier(".rd-prov-mailbox h3", rdProvT.mailboxTitle);
+    setVerifier(".rd-prov-mailbox > p", rdProvT.mailboxIntro);
+    setVerifier("#rdCopyMailbox", rdProvT.copyMailbox);
+    setVerifier("#rdMailboxRefresh", rdProvT.refreshMailbox);
+  }
+  const result = shell.querySelector("#rdVerifyResult");
+  if (result?.dataset.localeKey) result.textContent = rdProvT[result.dataset.localeKey];
+  rdProvRefreshMailbox();
 }
 
 function rdProvCreateShell() {
@@ -321,16 +354,19 @@ async function rdProvRunGenericVerify() {
   if (!result) return;
   if (!RD_PROV_ROOM_RE.test(room)) {
     result.dataset.state = "bad";
+    result.dataset.localeKey = "invalidRoom";
     result.textContent = rdProvT.invalidRoom;
     return;
   }
   if (!RD_PROV_DID_RE.test(did)) {
     result.dataset.state = "bad";
+    result.dataset.localeKey = "invalidDid";
     result.textContent = rdProvT.invalidDid;
     return;
   }
 
   result.dataset.state = "";
+  delete result.dataset.localeKey;
   result.textContent = `${rdProvT.checking}…`;
   try {
     const [ownerRaw, roomData] = await Promise.all([
@@ -350,7 +386,8 @@ async function rdProvRunGenericVerify() {
       : rdProvT.ownerOkNoMessage;
   } catch (error) {
     result.dataset.state = "bad";
-    result.textContent = Number(error?.status) === 404 ? rdProvT.notFound : rdProvT.requestFailed;
+    result.dataset.localeKey = Number(error?.status) === 404 ? "notFound" : "requestFailed";
+    result.textContent = rdProvT[result.dataset.localeKey];
   }
 }
 
@@ -407,5 +444,9 @@ function rdProvStart() {
     if (document.visibilityState === "visible") rdProvRefreshMailbox();
   }, RD_PROV_REFRESH_MS);
 }
+
+window.addEventListener("rd:languagechange", (event) => {
+  rdProvApplyLocale(event.detail?.lang);
+});
 
 rdProvStart();

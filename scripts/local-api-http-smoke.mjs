@@ -39,11 +39,7 @@ try {
   assert.equal(statusBody.schema, "reddragon-flop-live-status/v1");
   assert.ok(statusBody.checkedAt, "status must expose its check timestamp");
   assert.ok(statusBody.testnet && statusBody.devnet && statusBody.services, "status must preserve the response sections");
-  if (statusBody.services.rpc.state === "identity-matched") {
-    assert.equal(statusBody.services.rpc.runtimeSpecName, "flop-testnet");
-    assert.equal(statusBody.services.rpc.runtimeSpecVersion, 1014035);
-  }
-  console.log(`PASS local HTTP status GET (testnet=${statusBody.testnet.state}, devnet=${statusBody.devnet.state}, RPC=${statusBody.services.rpc.state}, runtime=${statusBody.services.rpc.runtimeSpecVersion ?? "unverified"})`);
+  console.log(`PASS local HTTP status GET (testnet=${statusBody.testnet.state}, devnet=${statusBody.devnet.state}, RPC=${statusBody.services.rpc.state})`);
 
   const statusPost = await fetch(`${base}/api/flop-status`, { method: "POST" });
   assert.equal(statusPost.status, 405);

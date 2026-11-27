@@ -8,19 +8,22 @@
   <title>404 · RedDragon Technocore Agent Lab</title>
   <link rel="stylesheet" href="/styles.css" />
   <link rel="stylesheet" href="/enhancements.css" />
+  <script defer src="/404-i18n.js"></script>
 </head>
 <body>
   <div class="bg-grid"></div>
   <main class="rd-404-wrap">
     <section class="rd-404-card">
+      <label for="rd404Language" data-i18n="languageLabel">Language / Dil</label>
+      <select id="rd404Language" aria-label="Language / Dil"><option value="tr">Türkçe</option><option value="en">English</option></select>
       <span class="eyebrow">404 · REDDRAGON</span>
-      <h1>Bu bağlantı artık burada değil.</h1>
-      <p>Eski veya hatalı bir site içi bağlantıya geldin. Ana panele dön; DID, proof, X/Medium paylaşımı ve GitHub ajan kurulumu orada.</p>
+      <h1 data-i18n="title">Bu bağlantı artık burada değil.</h1>
+      <p data-i18n="description">Eski veya hatalı bir site içi bağlantıya geldin. Ana panele dön; DID, proof, X/Medium paylaşımı ve GitHub ajan kurulumu orada.</p>
       <div class="rd-social-strip">
-        <a href="/">Ana panele dön</a>
+        <a href="/" data-i18n="home">Ana panele dön</a>
         <a href="https://github.com/maho0638/reddragon-technocore" target="_blank" rel="noreferrer">GitHub</a>
         <a href="https://medium.com/@ayazunal450" target="_blank" rel="noreferrer">Medium</a>
-        <a href="https://x.com/joannawalker" target="_blank" rel="noreferrer">𝕏 @joannawalker</a>
+        <a href="https://x.com/lionmousse" target="_blank" rel="noreferrer">𝕏 @lionmousse</a>
       </div>
     </section>
   </main>

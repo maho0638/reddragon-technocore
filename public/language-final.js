@@ -94,7 +94,7 @@ function translateEnhancementsEN() {
   txt("#rdShareSiteX","𝕏 Share this site");
   const strip=$("#rdSocialStrip"); if(strip){const links=strip.querySelectorAll('a'); const follow=[...links].find(a=>a.href.includes('x.com/')); if(follow) follow.textContent=`Follow ${cfg.xHandle||"@lionmousse"}`;}
   txt("#rdSharePanel h3","Share · everyone uses their own account");
-  txt("#rdSharePanel p",`The X button opens the composer for the X account currently signed in to this browser. The project account is mentioned as ${cfg.xHandle||"@lionmousse"}. For Medium, copy the draft and publish it from your own account.`);
+  txt("#rdSharePanel p","The X text is copied to your clipboard; the DID + proof button opens the X composer.");
   txt("#rdProofX","𝕏 Share DID + proof"); txt("#rdThreadCopy","Copy 3-post thread"); txt("#rdMediumCopy","Copy Medium draft");
   const mediumNew=$("#rdSharePanel a"); if(mediumNew) mediumNew.textContent="Open a new Medium story";
 

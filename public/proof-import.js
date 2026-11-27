@@ -564,18 +564,21 @@ async function restoreDurableReceipt() {
 function installUi() {
   const card = document.querySelector('[data-step="10"]');
   if (!card || $("#rdProofImport")) return;
+  const isEn = window.RD_I18N?.language() === "en";
 
   const box = document.createElement("div");
   box.id = "rdProofImport";
   box.className = "rd-security-note";
 
   const title = document.createElement("b");
-  title.textContent = "Public proof'u geri yükle";
+  title.textContent = isEn ? "Restore public proof" : "Public proof'u geri yükle";
   const desc = document.createElement("span");
-  desc.textContent = " Yeni proof'lar Ed25519 imzasını da içerir; Technocore ring buffer eski mesajı silse bile imza yerel olarak doğrulanabilir. Eski v1 proof'lar yalnızca kayıt hâlâ Technocore'da duruyorsa doğrulanabilir.";
+  desc.textContent = isEn
+    ? " New proofs include the Ed25519 signature, so they can be verified locally even after the Technocore ring buffer removes the old message. Legacy v1 proofs can only be verified while the original record is still available on Technocore."
+    : " Yeni proof'lar Ed25519 imzasını da içerir; Technocore ring buffer eski mesajı silse bile imza yerel olarak doğrulanabilir. Eski v1 proof'lar yalnızca kayıt hâlâ Technocore'da duruyorsa doğrulanabilir.";
   const button = document.createElement("button");
   button.type = "button";
-  button.textContent = "Public Proof JSON içe aktar";
+  button.textContent = isEn ? "Import Public Proof JSON" : "Herkese Açık Kanıt JSON'unu içe aktar";
   button.style.marginTop = "12px";
 
   const input = document.createElement("input");
@@ -595,11 +598,11 @@ function installUi() {
   seqInput.type = "text";
   seqInput.inputMode = "numeric";
   seqInput.autocomplete = "off";
-  seqInput.placeholder = "Eski proof için bilinen seq";
+  seqInput.placeholder = isEn ? "Known sequence for legacy proof" : "Eski kanıt için bilinen sıra numarası";
   seqInput.style.cssText = "min-width:260px;flex:1";
   const seqButton = document.createElement("button");
   seqButton.type = "button";
-  seqButton.textContent = "Seq ile kontrol et";
+  seqButton.textContent = isEn ? "Check by sequence" : "Sıra numarasıyla kontrol et";
   seqButton.addEventListener("click", verifyManualSeq);
   manual.append(seqInput, seqButton);
 
@@ -624,7 +627,6 @@ installFetchCapture();
 
 window.addEventListener("load", () => {
   installUi();
-  window.dispatchEvent(new Event("rd:dynamicuiready"));
   let attempts = 0;
   const timer = setInterval(async () => {
     installUi();

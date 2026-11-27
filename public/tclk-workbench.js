@@ -49,6 +49,7 @@ const rdTclkCatalog=window.RD_I18N?.register("tclkWorkbench",rdTclkCopy)||rdTclk
 const rdTclkT=()=>rdTclkCatalog[rdTclkLang()];
 let rdTclkBusy=false;
 let rdTclkTimer=null;
+let rdTclkLastMessages=null;
 
 async function rdTclkRelay(body,timeoutMs=18_000){
   const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),timeoutMs);
@@ -94,7 +95,22 @@ function rdTclkBuild(){
   </div>`;
   anchor.insertAdjacentElement("afterend",sec);document.getElementById("rdTclkRefresh")?.addEventListener("click",rdTclkRefresh);return true;
 }
+function rdTclkApplyLocale(){
+  const root=document.getElementById("rdTclkWorkbench");if(!root)return;
+  const t=rdTclkT(),set=(selector,value)=>{const el=root.querySelector(selector);if(el)el.textContent=value;};
+  set(".rd-tclk-kicker",t.kicker);set(".rd-tclk-head h2",t.title);set(".rd-tclk-head p",t.intro);set(".rd-tclk-badge",t.badge);
+  set("#rdTclkRefresh",t.refresh);
+  const status=document.getElementById("rdTclkStatus");
+  if(status){for(const key of ["waiting","verified","partial"])if(Object.values(rdTclkCopy).some(copy=>copy[key]===status.textContent)){status.textContent=t[key];break;}}
+  const stages=[["#rdTclkOffer",t.offer],["#rdTclkAccept",t.accept],["#rdTclkLock",t.lock],["#rdTclkReveal",t.reveal],["#rdTclkReceipt",t.receipt]];
+  for(const [selector,label] of stages){const row=root.querySelector(selector);if(row){const span=row.querySelector("span");const detail=row.querySelector("small");if(span)span.textContent=label;if(detail&&Object.values(rdTclkCopy).some(copy=>copy.missing===detail.textContent))detail.textContent=t.missing;}}
+  const kv=root.querySelectorAll(".rd-tclk-kv > span");[t.payer,t.payee,t.contract,t.room].forEach((label,index)=>{if(kv[index])kv[index].textContent=label;});
+  set(".rd-tclk-card:nth-child(2) h3",t.transcript);set(".rd-tclk-card:nth-child(2) > p",t.transcriptIntro);
+  set(".rd-tclk-warning",t.paperNote);set(".rd-tclk-muted",t.demoIdentity);set(".rd-tclk-proof b",t.proof);set(".rd-tclk-note",t.source);
+  if(rdTclkLastMessages)rdTclkRenderTranscript(rdTclkLastMessages);
+}
 function rdTclkRenderTranscript(messages){
+  rdTclkLastMessages=messages;
   const host=document.getElementById("rdTclkTranscript");if(!host)return;host.textContent="";const t=rdTclkT();
   if(!messages.length){const e=document.createElement("div");e.className="rd-tclk-empty";e.textContent=t.noTranscript;host.appendChild(e);return;}
   for(const m of messages.sort((a,b)=>rdTclkSeq(a)-rdTclkSeq(b))){const frame=rdTclkFrame(m);if(!frame)continue;const row=document.createElement("div");row.className="rd-tclk-line";const top=document.createElement("div");const type=document.createElement("b");type.textContent=String(frame.type||"frame").toUpperCase();const meta=document.createElement("span");meta.textContent=`${rdTclkLang()==="tr"?"İMZALI":"SIGNED"} · ${rdTclkLang()==="tr"?"sıra":"seq"} ${rdTclkSeq(m)||"—"} · ${rdTclkShort(rdTclkDid(m))}`;top.append(type,meta);const code=document.createElement("code");code.textContent=rdTclkText(m);row.append(top,code);host.appendChild(row);}
@@ -115,4 +131,5 @@ async function rdTclkRefresh(){
   }catch{document.getElementById("rdTclkStatus").textContent=t.partial;}finally{rdTclkBusy=false;if(button)button.disabled=false;}
 }
 function rdTclkStart(){if(!rdTclkBuild()){setTimeout(rdTclkStart,300);return;}rdTclkRefresh();if(rdTclkTimer)clearInterval(rdTclkTimer);rdTclkTimer=setInterval(()=>{if(document.visibilityState==="visible")rdTclkRefresh();},RD_TCLK_REFRESH_MS);}
+window.addEventListener("rd:languagechange",rdTclkApplyLocale);
 if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",rdTclkStart,{once:true});else rdTclkStart();

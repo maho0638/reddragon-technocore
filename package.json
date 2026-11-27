@@ -4,18 +4,23 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vercel dev",
-    "start": "vercel dev",
-    "agent": "node scripts/technocore-agent.mjs",
     "test": "node --test scripts/*.test.mjs",
-    "test:flop": "node --test scripts/flop-status.test.mjs scripts/flop-agent-preflight.test.mjs scripts/verify-flop-observatory.test.mjs",
-    "test:local-http": "node scripts/local-api-http-smoke.mjs",
+    "test:security-regressions": "node --test scripts/did-backup-restore.test.mjs scripts/relay.test.mjs scripts/relay-security-audit.test.mjs scripts/ui-i18n.test.mjs scripts/verify-flop-observatory.test.mjs",
     "test:local-preview": "node scripts/local-preview-http-smoke.mjs",
     "preview:local": "node scripts/local-preview-server.mjs",
     "test:browser": "node scripts/run-local-browser-acceptance.mjs",
-    "test:browser:production": "node --test scripts/browser/site-acceptance.spec.mjs"
+    "build:wallet-chain": "node scripts/build-wallet-chain.mjs"
+  },
+  "dependencies": {
+    "@flop-labs/sdk": "0.12.1",
+    "@neondatabase/serverless": "1.2.1",
+    "@polkadot/api": "17.0.2",
+    "@polkadot/util-crypto": "14.0.3"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2"
   },
   "engines": {
-    "node": ">=24"
+    "node": "24.x"
   }
 }

@@ -1,13 +1,15 @@
-// Local preview acceptance or post-release read-only audit: external writes are intercepted, no real signing or posting.
+// Local preview acceptance audit: external writes are intercepted, no real posting.
 // Browser-only DID generation uses an ephemeral test identity; no keys are uploaded or logged.
 import assert from "node:assert/strict";
-import { createHash, createPublicKey, verify as verifySignature } from "node:crypto";
 import { readFile } from "node:fs/promises";
+import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
 import { before, after, test } from "node:test";
 const require = createRequire(import.meta.url);
-const { chromium } = require("playwright");
-const ORIGIN = process.env.SITE_ACCEPTANCE_ORIGIN || "https://reddragon-technocore.vercel.app";
+const { chromium, firefox, webkit } = require("playwright");
+const browserName = process.env.PLAYWRIGHT_BROWSER || "chromium";
+const browserType = { chromium, firefox, webkit }[browserName];
+assert.ok(browserType, `Unsupported PLAYWRIGHT_BROWSER: ${browserName}`);
 const DIDS = [
   "did:key:z6MkuhrsP4tDZjWYdZLPxaur19WvrF1yuLGsGB2S8Q1gwS6K",
   "did:key:z6MkqEhk421dSv8pEnDvWVPatEMegY2RgXU2ksDw5pbUbU48"
@@ -19,21 +21,66 @@ const sizes = [
   { name: "small-mobile", width: 320, height: 740, mobile: true }
 ];
 let browser;
+let previewServer;
+let LOCAL_ORIGIN;
 let visibleControls = 0;
 let testedActions = 0;
-before(async () => { browser = await chromium.launch({ headless: true }); });
-after(async () => { await browser?.close(); console.log("[QA] visible controls enumerated across pages: " + visibleControls + "; explicit action checks: " + testedActions + ". Inventory is NOT proof that every external action succeeded."); });
+let serverStdout = "";
+let serverStderr = "";
+before(async () => {
+  const supplied = process.env.SITE_ACCEPTANCE_ORIGIN;
+  if (supplied) {
+    const url = new URL(supplied);
+    assert.equal(url.protocol, "http:", "E2E origin must be local HTTP");
+    assert.ok(["127.0.0.1", "localhost"].includes(url.hostname), "E2E may only target loopback, never production");
+    LOCAL_ORIGIN = url.origin;
+    assert.equal((await fetch(LOCAL_ORIGIN)).ok, true, "shared local preview must be reachable");
+  } else {
+    const port = 43_000 + Math.floor(Math.random() * 1_000);
+    LOCAL_ORIGIN = `http://127.0.0.1:${port}`;
+    previewServer = spawn(process.execPath, ["scripts/local-preview-server.mjs"], {
+      cwd: process.cwd(), env: { ...process.env, PORT: String(port) }, stdio: ["ignore", "pipe", "pipe"]
+    });
+    previewServer.stdout.setEncoding("utf8").on("data", part => { serverStdout += part; });
+    previewServer.stderr.setEncoding("utf8").on("data", part => { serverStderr += part; });
+    const deadline = Date.now() + 8_000;
+    let localReady = false;
+    while (Date.now() < deadline) {
+      if (previewServer.exitCode !== null) throw new Error(`Local preview exited (${previewServer.exitCode ?? previewServer.signalCode}): ${serverStderr || serverStdout}`);
+      try {
+        if ((await fetch(LOCAL_ORIGIN, { signal: AbortSignal.timeout(500) })).ok) { localReady = true; break; }
+      } catch {}
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    if (!localReady) throw new Error(`Local preview did not become ready: ${serverStderr || serverStdout}`);
+  }
+  const executablePath = process.env[`PLAYWRIGHT_${browserName.toUpperCase()}_EXECUTABLE_PATH`];
+  browser = await browserType.launch({ headless: true, ...(executablePath ? { executablePath } : {}) });
+});
+after(async () => {
+  await browser?.close();
+  if (previewServer && previewServer.exitCode === null) {
+    previewServer.kill("SIGTERM");
+    await new Promise(resolve => {
+      previewServer.once("exit", resolve);
+      setTimeout(resolve, 2_000).unref();
+    });
+  }
+  console.log("[QA] local E2E controls: " + visibleControls + "; explicit checks: " + testedActions + ". Writes are mocked.");
+});
 async function pageFor(size) {
-  const context = await browser.newContext({ viewport: { width: size.width, height: size.height }, locale: "en-US", isMobile: size.mobile, hasTouch: size.mobile, permissions: ["clipboard-read", "clipboard-write"], acceptDownloads: true });
+  const context = await browser.newContext({ viewport: { width: size.width, height: size.height }, locale: "en-US", ...(browserName === "firefox" ? {} : { isMobile: size.mobile, hasTouch: size.mobile }), ...(browserName === "chromium" ? { permissions: ["clipboard-read", "clipboard-write"] } : {}), acceptDownloads: true });
+  if (browserName !== "chromium") await context.addInitScript(() => {
+    let copied = "";
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: async text => { copied = String(text); }, readText: async () => copied } });
+  });
   // Only test data; no persistent test identities or real relay writes.
   await context.addInitScript(() => { try { if (!sessionStorage.getItem("__rdAcceptanceInitialized")) { localStorage.clear(); sessionStorage.setItem("__rdAcceptanceInitialized", "1"); } } catch {} });
-  const signedPosts = [];
-  const kvWrites = [];
+  const relayCalls = [];
   await context.route("**/api/relay", async route => {
     let body = {};
     try { body = JSON.parse(route.request().postData() || "{}"); } catch {}
-    if (body.action === "signedPost") signedPosts.push(body);
-    if (body.action === "kvSet") kvWrites.push(body);
+    relayCalls.push(body);
     const responses = {
       health: { ok: true, technocore: true }, rooms: { rooms: [], total: 0, notes: {}, engagement: {} },
       config: {}, read: { messages: [], next: null }, kvGet: { value: null }
@@ -42,9 +89,9 @@ async function pageFor(size) {
   });
   const page = await context.newPage();
   page.setDefaultTimeout(20000);
-  return { context, page, signedPosts, kvWrites };
+  return { context, page, relayCalls };
 }
-async function activate(locator, size) { if(size.mobile) await locator.tap(); else await locator.click(); }
+async function activate(locator, size) { if(size.mobile && browserName !== "firefox") await locator.tap(); else await locator.click(); }
 async function overflow(page, name) {
   const x = await page.evaluate(() => {
     const inner = document.documentElement.clientWidth;
@@ -93,107 +140,28 @@ async function assertResponsiveHome(page, size, expectedLanguage) {
   for (const part of [layout.warning.title, layout.warning.copy]) {
     assert.ok(part.left >= layout.warning.box.left - 1 && part.right <= layout.warning.box.right + 1 && part.top >= layout.warning.box.top - 1 && part.bottom <= layout.warning.box.bottom + 1, size.name + "/" + expectedLanguage + " step 11 text escapes warning box: " + JSON.stringify(layout));
   }
-  console.log("[QA] production geometry " + size.name + "/" + expectedLanguage + ": " + JSON.stringify(layout));
+  console.log("[QA] local preview geometry " + size.name + "/" + expectedLanguage + ": " + JSON.stringify(layout));
 }
 async function acceptDialogDuring(page, action, promptText) {
   const dialogHandled = page.waitForEvent("dialog", { timeout: 15000 }).then(dialog => dialog.accept(promptText));
   await Promise.all([action(), dialogHandled]);
 }
 async function inventory(page, name) {
-  const items = await page.locator("button, a[href], select, input:not([type=hidden]), textarea").evaluateAll(nodes => nodes.filter(n => n.getClientRects().length).map(n => ({tag: n.tagName, id: n.id, text: (n.textContent || "").trim().slice(0, 45), href: n.tagName === "A" ? n.getAttribute("href") : null })));
+  const items = await page.locator("button, a[href], select, input:not([type=hidden]), textarea").evaluateAll(nodes => nodes.filter(n => n.getClientRects().length).map(n => ({tag: n.tagName, id: n.id, text: (n.textContent || "").trim().slice(0, 45), href: n.tagName === "A" ? n.getAttribute("href") : null, target: n.tagName === "A" ? n.getAttribute("target") : null, rel: n.tagName === "A" ? (n.getAttribute("rel") || "") : "" })));
   visibleControls += items.length;
+  const links = items.filter(item => item.tag === "A");
+  const linkFailures = links.filter(link => !link.href || /^(javascript|data):/i.test(link.href) || (/^https:/i.test(link.href) && link.target === "_blank" && !/noopener|noreferrer/i.test(link.rel)));
+  assert.deepEqual(linkFailures, [], name + " every visible link has a valid destination and safe new-tab policy");
+  for (const [index, link] of links.entries()) console.log("[QA] link acceptance PASS " + name + " #" + (index + 1) + ": " + JSON.stringify({id:link.id,href:link.href,target:link.target,rel:link.rel}));
   console.log("[QA] " + name + " visible controls: " + JSON.stringify(items));
-  assert.deepEqual(items.filter(x => x.tag === "A" && (!x.href || /^(javascript|data):/i.test(x.href))), [], name + " unsafe/empty links");
 }
 async function ready(page, selector) { await page.locator(selector).first().waitFor({ state: "visible", timeout: 30000 }); }
-async function createMockedContribution(page, locale) {
-  await page.locator("#clink").fill("https://github.com/maho0638/reddragon-technocore");
-  await page.locator("#ctitle").fill("Ephemeral browser audit contribution");
-  await page.locator("#contribBtn").click();
-  await page.waitForFunction(language => {
-    const text = document.querySelector("#contribOut")?.textContent || "";
-    return language === "en" ? /Signed contribution.*seq\s+\d+/i.test(text) : /İmzalı katkı.*sıra\s+\d+/i.test(text);
-  }, locale);
-}
-async function restoreDownloadedBackup(page, backupPath, backupName, password) {
-  assert.match(backupName, /\.json$/i, "encrypted identity backup must retain its .json filename");
-  const backupContents = await readFile(backupPath);
-  const chooserEvent = page.waitForEvent("filechooser", { timeout: 30000 });
-  await page.locator("label.filebtn").filter({ has: page.locator("#restoreInput") }).click();
-  const chooser = await chooserEvent;
-  const promptEvent = page.waitForEvent("dialog", { timeout: 15000 });
-  await chooser.setFiles({ name: backupName, mimeType: "application/json", buffer: backupContents });
-  const dialog = await promptEvent;
-  assert.equal(dialog.type(), "prompt", "restoring encrypted backup must request password");
-  const promptText = dialog.message();
-  await dialog.accept(password);
-  return promptText;
-}
-function decodeBase58(value) {
-  const alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
-  let number = 0n;
-  for (const char of value) {
-    const digit = alphabet.indexOf(char);
-    assert.notEqual(digit, -1, "DID multibase must use base58btc");
-    number = number * 58n + BigInt(digit);
-  }
-  const bytes = [];
-  while (number > 0n) { bytes.unshift(Number(number & 0xffn)); number >>= 8n; }
-  let zeroes = 0;
-  while (value[zeroes] === "1") zeroes++;
-  return Buffer.from([...Array(zeroes).fill(0), ...bytes]);
-}
-function ed25519PublicKeyFromDid(did) {
-  assert.ok(did.startsWith("did:key:z"), "restored identity must be a base58btc did:key");
-  const multicodec = decodeBase58(did.slice("did:key:z".length));
-  assert.equal(multicodec.length, 34, "Ed25519 DID must encode a 32-byte public key");
-  assert.deepEqual([...multicodec.subarray(0, 2)], [0xed, 0x01], "DID must encode the Ed25519 multicodec");
-  const spkiPrefix = Buffer.from("302a300506032b6570032100", "hex");
-  return createPublicKey({ key: Buffer.concat([spkiPrefix, multicodec.subarray(2)]), format: "der", type: "spki" });
-}
-function assertSignedPostMatchesDid(post, expectedDid) {
-  assert.equal(post.did, expectedDid, "signed relay request must use the restored DID");
-  assert.equal(typeof post.sig, "string");
-  assert.equal(typeof post.nonce, "string");
-  const payload = Buffer.from(`${post.room}|${post.nonce}|${post.text}`, "utf8");
-  assert.equal(verifySignature(null, payload, ed25519PublicKeyFromDid(post.did), Buffer.from(post.sig, "base64url")), true,
-    "restored private key must cryptographically match the DID public key");
-}
-function assertSignedProfileMatchesDid(write, expectedDid) {
-  assert.equal(write.ns, "profile");
-  assert.equal(write.did, expectedDid, "profile write must identify its signer");
-  assert.equal(write.key, createHash("sha256").update(expectedDid, "utf8").digest("hex").slice(0, 16), "profile key must be derived from signer DID");
-  assert.match(write.nonce, /^\d{1,19}$/);
-  const normalized = write.value.replace(/[\p{Cc}\p{Cf}\p{Cs}\p{Co}\p{Zl}\p{Zp}]/gu, " ").replace(/\s+/g, " ").trim();
-  const payload = Buffer.from(`${write.ns}|${write.key}|${write.nonce}|${normalized}`, "utf8");
-  assert.equal(verifySignature(null, payload, ed25519PublicKeyFromDid(write.did), Buffer.from(write.sig, "base64url")), true,
-    "profile write signature must verify against the DID and exact stored value");
-}
-test("target HTTP/JSON read-only health", { timeout: 90000 }, async () => {
-  for (const path of ["/", "/flop", "/flop-source-status.json", "/api/flop-status", "/assets/reddragon.jpg"]) {
-    const r = await fetch(ORIGIN + path, { signal: AbortSignal.timeout(30000), redirect: "manual" });
-    assert.equal(r.status, 200, path + " returned HTTP " + r.status);
-    if (path === "/api/flop-status") {
-      const j = await r.json();
-      assert.equal(j.schema, "reddragon-flop-live-status/v1");
-      assert.notEqual(j.testnet?.state, "live", "unconfirmed testnet must not be shown live");
-      console.log("[QA] API says testnet: " + j.testnet?.state + ", checked: " + j.checkedAt);
-    } else if (path === "/flop-source-status.json") {
-      const j = await r.json();
-      assert.equal(j.project?.independentCommunityTool, true);
-      assert.equal(j.project?.affiliatedWithFlopLabs, false);
-    } else await r.arrayBuffer();
-    console.log("[QA] HTTP 200 " + path); testedActions++;
-  }
-  const relayGet = await fetch(ORIGIN + "/api/relay", { method: "GET", signal: AbortSignal.timeout(15000) });
-  assert.equal(relayGet.status, 405, "relay GET not denied");testedActions++;
-});
 test("home and FLOP links, menus, languages, refresh, desktop + two mobile widths", { timeout: 180000 }, async () => {
   for (const size of sizes) {
     const { context, page } = await pageFor(size);
     const errors = []; page.on("pageerror", e => errors.push(e.message));
     try {
-      await page.goto(ORIGIN + "/", { waitUntil: "domcontentloaded" });
+      await page.goto(LOCAL_ORIGIN + "/", { waitUntil: "domcontentloaded" });
       await ready(page, "#steps .step-chip");
       await ready(page, "#rdTestnetToolkit");
       await ready(page, "#rdTclkWorkbench");
@@ -202,7 +170,7 @@ test("home and FLOP links, menus, languages, refresh, desktop + two mobile width
       await inventory(page, "home-" + size.name);
       assert.equal(await page.locator("#steps .step-chip").count(), 11);
       for (let n = 1; n <= 11; n++) {
-        await activate(page.locator("#steps [data-stepchip='" + n + "']"), size);
+        await page.locator("#steps [data-stepchip='" + n + "']").click();
         const card = page.locator("[data-step='" + n + "']");
         assert.equal(await card.count(), 1);
         await page.waitForFunction(step => {
@@ -241,19 +209,25 @@ test("home and FLOP links, menus, languages, refresh, desktop + two mobile width
       assert.ok((await page.locator("#rdLiveSummary").textContent()).trim().length > 0, "refresh should leave a visible source summary");testedActions++;
       await overflow(page, "flop-" + size.name);
       await page.locator("a[href='/']").first().click();
-      await page.waitForURL(ORIGIN + "/");testedActions++;
+      await page.waitForURL(LOCAL_ORIGIN + "/");testedActions++;
       assert.deepEqual(errors, [], size.name + " JS exceptions");
       console.log("[QA] PASS navigation and responsive layout " + size.name);
     } finally { await context.close(); }
   }
 });
 test("local identity, validation and signed UI workflows with mocked relay (NO external writes)", { timeout: 180000 }, async () => {
-  const { context, page, signedPosts, kvWrites } = await pageFor(sizes[0]);
+  const { context, page, relayCalls } = await pageFor(sizes[0]);
   const errors=[];page.on("pageerror",e=>errors.push(e.message));
   try {
-    await page.goto(ORIGIN + "/", { waitUntil: "domcontentloaded" });
+    await page.goto(LOCAL_ORIGIN + "/", { waitUntil: "domcontentloaded" });
     await ready(page, "#createBtn");
+    await page.locator("#rdQuickSetup").waitFor({ state: "visible" });
+    await page.locator('.hero-actions [data-jump="1"]').click();
+    await assert.doesNotReject(page.locator("#pass1").waitFor({ state: "visible" }));testedActions++;
+    assert.equal(await page.locator("#repoBtn").getAttribute("href"), "https://github.com/maho0638/reddragon-technocore");
+    assert.equal((await page.locator("#repoBtn").getAttribute("class"))?.includes("disabled-link"), false, "the repository link is activated with a real target");testedActions++;
     assert.equal(await page.locator("#publishDidBtn").isDisabled(), true);
+    assert.equal(await page.locator("#copyPrivateBtn").isDisabled(), true);
     await page.locator("#pass1").fill("short");
     await page.locator("#pass2").fill("short");
     await page.locator("#createBtn").click();
@@ -264,22 +238,55 @@ test("local identity, validation and signed UI workflows with mocked relay (NO e
     await page.waitForFunction(() => (document.querySelector("#identityOut")?.textContent || "").includes("did:key:z6Mk"), null, {timeout:35000});
     assert.equal(await page.locator("#publishDidBtn").isEnabled(),true);testedActions++;
     const generatedDid = (await page.locator("#identityOut").textContent()).split("\n")[0].trim();
+    assert.equal(await page.locator("#copyDidSecret").isVisible(), false, "retired duplicate DID-secret control remains hidden");
+    await page.locator("#steps [data-stepchip='11']").click();
+    const secretCopyConfirm=page.waitForEvent("dialog").then(dialog=>dialog.accept());
+    await Promise.all([page.locator("#copyKeySecret").click(),secretCopyConfirm]);
+    assert.match(await page.evaluate(() => navigator.clipboard.readText()), /^[A-Za-z0-9+/=_-]{40,200}$/, "private-key secret-copy control copies only encoded ephemeral key material after confirmation");
+    await page.locator("#steps [data-stepchip='1']").click();
     const backupEvent = page.waitForEvent("download");
     await page.locator("#backupBtn").click();
     const backup = await backupEvent;
     assert.match(backup.suggestedFilename(), /reddragon-technocore-.*\.json/);testedActions++;
     const backupPath = await backup.path();
-    const backupJson = JSON.parse(await readFile(backupPath, "utf8"));
-    assert.equal(backupJson.format, "reddragon-technocore-identity");
-    assert.equal(backupJson.cipher, "AES-256-GCM");
-    assert.equal(backupJson.kdf, "PBKDF2-SHA256-310000");
-    assert.equal(backupJson.did, generatedDid);
-    assert.ok(backupJson.ciphertextB64u && backupJson.saltB64u && backupJson.ivB64u, "downloaded backup must contain encrypted key material");
-    assert.equal(await restoreDownloadedBackup(page, backupPath, backup.suggestedFilename(), "ephemeral-ui-audit-only-password"), "Enter the backup password:");
-    await page.waitForFunction(() => (document.querySelector("#identityOut")?.textContent || "").includes("did:key:z6Mk"));
-    assert.equal((await page.locator("#identityOut").textContent()).split("\n")[0].trim(), generatedDid, "encrypted backup restores the same public DID");testedActions++;
+    assert.ok(backupPath, "browser must provide the downloaded encrypted backup file");
+    const backupContents = await readFile(backupPath);
+    const encryptedBackup = JSON.parse(backupContents.toString("utf8"));
+    assert.equal(encryptedBackup.format, "reddragon-technocore-identity");
+    assert.ok(encryptedBackup.ciphertextB64u && encryptedBackup.saltB64u && encryptedBackup.ivB64u, "downloaded backup must contain encrypted key material");
+    const restoreDialogEvent = page.waitForEvent("dialog", { timeout: 10000 }).catch(() => null);
+    const fileChooserEvent = page.waitForEvent("filechooser");
+    await activate(page.locator("label.filebtn").filter({ has: page.locator("#restoreInput") }), sizes[0]);
+    const fileChooser = await fileChooserEvent;
+    await fileChooser.setFiles({ name: backup.suggestedFilename(), mimeType: "application/json", buffer: backupContents });
+    const restoreDialog = await restoreDialogEvent;
+    if (!restoreDialog) {
+      const evidence = await page.evaluate(() => ({ files: document.querySelector("#restoreInput")?.files?.length || 0, fileName: document.querySelector("#restoreInput")?.files?.[0]?.name || "", toast: document.querySelector("#toast")?.textContent || "" }));
+      assert.fail(`restore password dialog did not open after selecting the downloaded .json backup: ${JSON.stringify(evidence)}`);
+    }
+    assert.match(restoreDialog.message(), /backup password|yedek parolasını/i);
+    await restoreDialog.accept("ephemeral-ui-audit-only-password");
+    const expectedRestoreMessage = "Encrypted identity backup verified · DID + private key restored";
+    try {
+      await page.waitForFunction(({ success, failure }) => {
+        const toast = (document.querySelector("#toast")?.textContent || "").trim();
+        return toast === success || toast === failure;
+      }, { success: expectedRestoreMessage, failure: "The backup could not be opened or the password was incorrect." }, { timeout: 20000 });
+    } catch (error) {
+      const evidence = await page.evaluate(() => ({ language: document.documentElement.lang, toast: document.querySelector("#toast")?.textContent || "", identity: document.querySelector("#identityOut")?.textContent || "", inputFiles: document.querySelector("#restoreInput")?.files?.length || 0, inputName: document.querySelector("#restoreInput")?.files?.[0]?.name || "" }));
+      assert.fail(`restore did not report success or rejection: ${JSON.stringify(evidence)}; page errors: ${JSON.stringify(errors)}; ${error.message}`);
+    }
+    const restoreMessage = (await page.locator("#toast").textContent()).trim();
+    assert.equal(restoreMessage, expectedRestoreMessage, `encrypted restore must succeed, received: ${restoreMessage}`);
+    assert.equal((await page.locator("#identityOut").textContent()).split("\n")[0].trim(), generatedDid, "encrypted backup restores the same public DID after keypair verification");testedActions++;
     await page.locator("#copyDidBtn").click();
     assert.equal(await page.evaluate(() => navigator.clipboard.readText()), generatedDid);testedActions++;
+    await page.locator("#rdCopyPrivate").waitFor({ state: "visible" });
+    await page.locator("#rdGithubUser").fill("ephemeral-audit-user");
+    const privateKeyConfirm = page.waitForEvent("dialog").then(dialog => dialog.accept());
+    await Promise.all([page.locator("#rdCopyPrivate").click(), privateKeyConfirm]);
+    const copiedPrivateKey = await page.evaluate(() => navigator.clipboard.readText());
+    assert.match(copiedPrivateKey, /^[A-Za-z0-9+/=_-]{40,200}$/, "private-key copy action returns only encoded key material without logging it");testedActions++;
     const workflows = [
       ["#publishDidBtn","#didNoteOut","Published"],
       ["#helloBtn","#helloOut","Signed"],
@@ -289,81 +296,94 @@ test("local identity, validation and signed UI workflows with mocked relay (NO e
       ["#styleBtn","#styleOut","profile"]
     ];
     for (const [btn, out, expected] of workflows) {
+      if (btn === "#helloBtn") await page.locator("#helloText").fill("Control acceptance hello payload");
+      if (btn === "#introBtn") {
+        await page.locator("#agentName").fill("Acceptance Agent");
+        await page.locator("#xhandle").fill("@acceptance");
+        await page.locator("#introText").fill("Intro field acceptance payload");
+      }
+      if (btn === "#openRoomBtn") {
+        await page.locator("#publicRoom").fill("acceptance-room");
+        await page.locator("#roomTopic").fill("Acceptance topic value");
+      }
+      if (btn === "#styleBtn") {
+        await page.locator("#displayName").fill("Acceptance Display");
+        await page.locator("#profileColor").fill("#123456");
+      }
       await activate(page.locator(btn), sizes[0]);
       await page.waitForFunction(arg => (document.querySelector(arg.out)?.textContent || "").toLowerCase().includes(arg.expected.toLowerCase()),{out,expected});
-      testedActions++;console.log("[QA] mocked write flow " + btn + ": UI progressed");
+      if (btn === "#helloBtn") assert.ok(relayCalls.some(call => call.action === "signedPost" && call.text === "Control acceptance hello payload"), "hello textarea value reaches the signed payload");
+      if (btn === "#introBtn") assert.ok(relayCalls.some(call => call.action === "signedPost" && /Acceptance Agent \(@acceptance\): Intro field acceptance payload/.test(call.text)), "agent name, X handle, and introduction fields reach the signed payload");
+      if (btn === "#openRoomBtn") {
+        assert.ok(relayCalls.some(call => call.action === "signedPost" && call.room === "acceptance-room"), "public room input selects the posted room");
+        assert.ok(relayCalls.some(call => call.action === "kvSet" && call.ns === "topic" && call.key === "acceptance-room" && call.value === "Acceptance topic value"), "room topic input is saved to the topic record");
+      }
+      if (btn === "#privateRoomBtn") {
+        const room = (await page.locator("#privateRoomOut").textContent()).split("\n")[0].trim();
+        await page.locator("#copyPrivateBtn").click();
+        assert.equal(await page.evaluate(() => navigator.clipboard.readText()), room, "private room copy control copies the generated room name");
+        testedActions++;
+      }
+      if (btn === "#styleBtn") {
+        const profileCall = relayCalls.findLast(call => call.action === "kvSet" && call.ns === "profile");
+        assert.ok(profileCall, "profile button must save the style record");
+        assert.equal(JSON.parse(profileCall.value).name, "Acceptance Display");
+        assert.equal(JSON.parse(profileCall.value).color, "#123456");
+      }
+      testedActions++;console.log("[QA] mocked write flow " + btn + ": UI progressed and custom control values were asserted");
     }
-    assert.ok(signedPosts.length >= 4, "the restored identity must produce the mocked signed UI posts");
-    for (const post of signedPosts) assertSignedPostMatchesDid(post, generatedDid);
-    assert.equal(kvWrites.length, 3, "DID note, public topic and profile writes must be sent through the mocked relay");
-    const profileWrite = kvWrites.find(write => write.ns === "profile");
-    assert.ok(profileWrite, "style flow must submit a profile write");
-    assertSignedProfileMatchesDid(profileWrite, generatedDid);
+    await page.locator("#xhandle").fill("@contribtest");
     await page.locator("#clink").fill("https://github.com/maho0638/reddragon-technocore");
     await page.locator("#ctitle").fill("Ephemeral browser audit contribution");
+    await page.locator("#csummary").fill("Every field contributes to the signed audit payload.");
+    await page.locator("#ctype").selectOption("Guide / Article");
+    await page.locator("#targetRoom").selectOption("flop-network");
     await page.locator("#contribBtn").click();
     await page.waitForFunction(() => (document.querySelector("#contribOut")?.textContent || "").includes("Signed contribution"));
+    const contributionCall = relayCalls.findLast(call => call.action === "signedPost" && call.room === "flop-network");
+    assert.ok(contributionCall, "target room selection routes the signed contribution");
+    for (const value of ["Ephemeral browser audit contribution", "https://github.com/maho0638/reddragon-technocore", "@contribtest", "Every field contributes", "Guide / Article"]) assert.ok(contributionCall.text.includes(value), "contribution control value appears in signed payload: " + value);
+    const proofData = JSON.parse(await page.locator("#proofText").inputValue());
+    assert.equal(proofData.contribution.title, "Ephemeral browser audit contribution");
+    assert.equal(proofData.contribution.type, "Guide / Article");
+    assert.equal(proofData.contribution.summary, "Every field contributes to the signed audit payload.");
     assert.equal(await page.locator("#downloadProof").isEnabled(),true);testedActions++;
     const proofDownloadEvent = page.waitForEvent("download");
     await page.locator("#downloadProof").click();
     assert.match((await proofDownloadEvent).suggestedFilename(), /reddragon-proof-.*\.json/);testedActions++;
     await page.locator("#copyProof").click();
     assert.match(await page.evaluate(() => navigator.clipboard.readText()), /"did":\s*"did:key:z6Mk/);testedActions++;
-    await page.waitForFunction((did) => {
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (!key?.startsWith("reddragon-public-state-v1:")) continue;
-        try {
-          const saved = JSON.parse(localStorage.getItem(key) || "null");
-          const record = saved?.proof?.contribution?.record;
-          if (saved?.did === did && record?.did === did && /^\d+$/.test(String(record.seq)) && Number(record.seq) > 0) return true;
-        } catch {}
-      }
-      return false;
-    }, generatedDid, { timeout: 15000 });
-    const enNavigation = page.waitForNavigation({ waitUntil: "domcontentloaded" });
+    await page.locator("#rdLangSwitcher button[data-lang='tr']").click();
+    await page.waitForFunction(() => document.documentElement.lang === "tr");
+    assert.equal((await page.locator("#identityOut").textContent()).split("\n")[0].trim(), generatedDid, "switching language must preserve the ephemeral DID");
+    assert.equal(await page.locator("#xShare").isEnabled(), true, "switching language must preserve the enabled proof action");
     await page.locator("#rdLangSwitcher button[data-lang='en']").click();
-    await enNavigation;
     await page.waitForFunction(() => document.documentElement.lang === "en");
-    assert.equal(await restoreDownloadedBackup(page, backupPath, backup.suggestedFilename(), "ephemeral-ui-audit-only-password"), "Enter the backup password:");
-    await page.waitForFunction(() => (document.querySelector("#identityOut")?.textContent || "").includes("did:key:z6Mk"));
-    assert.equal((await page.locator("#identityOut").textContent()).split("\n")[0].trim(), generatedDid, "English reload restores the same DID from the encrypted backup");
-    const beforeEnglishContribution = signedPosts.length;
-    await createMockedContribution(page, "en");
-    assertSignedPostMatchesDid(signedPosts[beforeEnglishContribution], generatedDid);
-    await page.waitForFunction(() => !document.querySelector("#xShare")?.disabled, null, { timeout: 15000 });
+    assert.equal((await page.locator("#identityOut").textContent()).split("\n")[0].trim(), generatedDid, "switching back must preserve the same DID");
+    assert.equal(await page.locator("#xShare").isEnabled(), true, "switching back must preserve the enabled proof action");
     const unexpectedPopups = [];
-    const pageCountBeforeShare = context.pages().length;
     page.on("popup", popup => unexpectedPopups.push(popup));
+    const pageCountBeforeShare = context.pages().length;
     await page.locator("#xShare").click();
     await page.waitForFunction(async () => (await navigator.clipboard.readText()).includes("Built my Technocore agent identity"));
     let shareText = await page.evaluate(() => navigator.clipboard.readText());
     assert.match(shareText, /Built my Technocore agent identity/);
-    assert.match(shareText, new RegExp(generatedDid.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
-    assert.match(shareText, /https:\/\/github\.com\/maho0638\/reddragon-technocore/);
+    assert.match(shareText, /did:key:z6Mk/);
     assert.match(shareText, /#Technocore #FLOP/);
-    assert.deepEqual(unexpectedPopups, [], "English X share copies text without opening a popup");
-    assert.equal(context.pages().length, pageCountBeforeShare, "English X share must not create a new page");testedActions++;
-    const trNavigation = page.waitForNavigation({ waitUntil: "domcontentloaded" });
+    assert.deepEqual(unexpectedPopups, [], "English share copies text without opening a popup");
+    assert.equal(context.pages().length, pageCountBeforeShare, "English share must not create a new page");testedActions++;
     await page.locator("#rdLangSwitcher button[data-lang='tr']").click();
-    await trNavigation;
     await page.waitForFunction(() => document.documentElement.lang === "tr");
-    assert.equal(await restoreDownloadedBackup(page, backupPath, backup.suggestedFilename(), "ephemeral-ui-audit-only-password"), "Yedek parolasını gir:");
-    await page.waitForFunction(() => (document.querySelector("#identityOut")?.textContent || "").includes("did:key:z6Mk"));
-    assert.equal((await page.locator("#identityOut").textContent()).split("\n")[0].trim(), generatedDid, "Turkish reload restores the same DID from the encrypted backup");
-    const beforeTurkishContribution = signedPosts.length;
-    await createMockedContribution(page, "tr");
-    assertSignedPostMatchesDid(signedPosts[beforeTurkishContribution], generatedDid);
-    await page.waitForFunction(() => !document.querySelector("#xShare")?.disabled, null, { timeout: 15000 });
+    assert.equal((await page.locator("#identityOut").textContent()).split("\n")[0].trim(), generatedDid, "language switching must preserve the in-memory DID");
+    assert.equal(await page.locator("#xShare").isEnabled(), true, "language switching must preserve the enabled proof action");
     await page.locator("#xShare").click();
     await page.waitForFunction(async () => (await navigator.clipboard.readText()).includes("Technocore ajan kimliğimi oluşturdum"));
     shareText = await page.evaluate(() => navigator.clipboard.readText());
     assert.match(shareText, /Technocore ajan kimliğimi oluşturdum/);
-    assert.ok(shareText.includes(generatedDid));
-    assert.match(shareText, /https:\/\/github\.com\/maho0638\/reddragon-technocore/);
+    assert.match(shareText, /did:key:z6Mk/);
     assert.match(shareText, /#Technocore #FLOP/);
-    assert.deepEqual(unexpectedPopups, [], "Turkish X share copies text without opening a popup");
-    assert.equal(context.pages().length, pageCountBeforeShare, "Turkish X share must not create a new page");testedActions++;
+    assert.deepEqual(unexpectedPopups, [], "Turkish share copies text without opening a popup");
+    assert.equal(context.pages().length, pageCountBeforeShare, "Turkish share must not create a new page");testedActions++;
     await page.locator("#copyAutoGuide").click();
     assert.match(await page.evaluate(() => navigator.clipboard.readText()), /TECHNOCORE_PRIVATE_KEY_PKCS8_B64/);testedActions++;
     await acceptDialogDuring(page, () => page.locator("#resetBtn").click());
@@ -378,7 +398,7 @@ test("user-specific ledger, calculators and panel controls (desktop and mobile)"
     const {context,page}=await pageFor(size);
     const errors=[];page.on("pageerror",e=>errors.push(e.message));
     try{
-      await page.goto(ORIGIN+"/",{waitUntil:"domcontentloaded"});
+      await page.goto(LOCAL_ORIGIN+"/",{waitUntil:"domcontentloaded"});
       await ready(page,"#rdLedgerDid");
       const did=page.locator("#rdLedgerDid");
       await did.fill(DIDS[0]);

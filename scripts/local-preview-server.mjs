@@ -3,13 +3,13 @@ import path from "node:path";
 import { readFile, realpath } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import flopStatus from "../api/flop-status.js";
+import adminApi from "../api/admin.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../public");
 const rootReal = await realpath(root);
-const contentSecurityPolicy = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'; upgrade-insecure-requests";
 const mime = new Map([
   [".css", "text/css; charset=utf-8"], [".html", "text/html; charset=utf-8"],
-  [".js", "text/javascript; charset=utf-8"], [".json", "application/json; charset=utf-8"],
+  [".js", "text/javascript; charset=utf-8"], [".mjs", "text/javascript; charset=utf-8"], [".json", "application/json; charset=utf-8"],
   [".jpg", "image/jpeg"], [".jpeg", "image/jpeg"], [".png", "image/png"],
   [".svg", "image/svg+xml"], [".txt", "text/plain; charset=utf-8"], [".xml", "application/xml; charset=utf-8"]
 ]);
@@ -18,7 +18,6 @@ function send(res, status, body, contentType = "application/json; charset=utf-8"
   res.writeHead(status, {
     "content-type": contentType,
     "cache-control": "no-store",
-    "content-security-policy": contentSecurityPolicy,
     "x-content-type-options": "nosniff",
     "referrer-policy": "no-referrer"
   });
@@ -41,6 +40,18 @@ function apiResponse(res) {
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url || "/", "http://127.0.0.1");
+  if (url.pathname === "/api/admin") {
+    let body = {};
+    if (req.method === "POST") {
+      const chunks = []; let size = 0;
+      for await (const chunk of req) { size += chunk.length; if (size > 16 * 1024) { send(res, 413, JSON.stringify({ error: "Request too large" })); return; } chunks.push(chunk); }
+      try { body = JSON.parse(Buffer.concat(chunks).toString("utf8")); } catch { send(res, 400, JSON.stringify({ error: "Invalid JSON" })); return; }
+    }
+    const apiRes = apiResponse(res);
+    try { await adminApi({ method: req.method, url: req.url, headers: req.headers, socket: req.socket, body }, apiRes); }
+    catch { if (!res.headersSent) send(res, 500, JSON.stringify({ error: "Admin request failed" })); }
+    return;
+  }
   if (url.pathname === "/api/flop-status") {
     const apiRes = apiResponse(res);
     try { await flopStatus({ method: req.method, headers: req.headers }, apiRes); }
@@ -48,10 +59,6 @@ const server = http.createServer(async (req, res) => {
     return;
   }
   if (url.pathname === "/api/relay") {
-    if (req.method !== "POST") {
-      res.setHeader("allow", "POST");
-      return send(res, 405, JSON.stringify({ error: "Relay requires POST" }));
-    }
     return send(res, 503, JSON.stringify({ error: "Relay is disabled in the local preview; no external writes are allowed" }));
   }
   if (req.method !== "GET" && req.method !== "HEAD") {
@@ -73,13 +80,18 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(200, {
       "content-type": mime.get(path.extname(targetReal).toLowerCase()) || "application/octet-stream",
       "cache-control": "no-store",
-      "content-security-policy": contentSecurityPolicy,
       "x-content-type-options": "nosniff",
       "referrer-policy": "no-referrer"
     });
     res.end(req.method === "HEAD" ? undefined : body);
   } catch {
-    send(res, 404, JSON.stringify({ error: "Not found" }));
+    try {
+      const notFound = await readFile(path.join(rootReal, "404.html"));
+      res.writeHead(404, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "x-content-type-options": "nosniff", "referrer-policy": "no-referrer" });
+      res.end(req.method === "HEAD" ? undefined : notFound);
+    } catch {
+      send(res, 404, JSON.stringify({ error: "Not found" }));
+    }
   }
 });
 

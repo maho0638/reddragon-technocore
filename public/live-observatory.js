@@ -118,7 +118,7 @@ const rdLiveCopy = {
   }
 };
 
-const rdLiveT = rdLiveCopy[rdLiveLang()];
+let rdLiveT = rdLiveCopy[rdLiveLang()];
 
 function rdEscape(value) {
   return String(value || "").replace(/[&<>\"']/g, (ch) => ({
@@ -587,6 +587,36 @@ function rdRenderAll() {
   rdRenderAgents();
 }
 
+function rdApplyLiveLocale(locale = rdLiveLang()) {
+  rdLiveT = rdLiveCopy[locale === "tr" ? "tr" : "en"];
+  const root = document.getElementById("rdLiveObservatory");
+  if (!root) return;
+  const set = (selector, value) => {
+    const element = root.querySelector(selector);
+    if (element) element.textContent = value;
+  };
+  const nav = document.getElementById("rdLiveNav");
+  if (nav) nav.textContent = rdLiveT.nav;
+  set(".rd-live-head .eyebrow", rdLiveT.eyebrow);
+  set("#rdLiveTitle", rdLiveT.title);
+  set(".rd-live-head > div > p", rdLiveT.intro);
+  set(".rd-live-public-note", rdLiveT.publicOnly);
+  set("#rdLiveRefresh", rdLiveRefreshing ? rdLiveT.refreshing : rdLiveT.refresh);
+  const metricLabels = root.querySelectorAll(".rd-live-metric > span");
+  [rdLiveT.tracked, rdLiveT.messages, rdLiveT.agents, rdLiveT.signed, rdLiveT.redStatus, rdLiveT.lastRefresh]
+    .forEach((value, index) => { if (metricLabels[index]) metricLabels[index].textContent = value; });
+  const metricNotes = root.querySelectorAll(".rd-live-metric > small");
+  [rdLiveT.trackedSuffix, rdLiveT.buffer, rdLiveT.publicLabel, "did:key", rdLiveT.heartbeat, rdLiveT.polling]
+    .forEach((value, index) => { if (metricNotes[index]) metricNotes[index].textContent = value; });
+  const panels = root.querySelectorAll(".rd-live-panel-head h3");
+  if (panels[0]) panels[0].textContent = rdLiveT.activity;
+  if (panels[1]) panels[1].textContent = rdLiveT.agentCards;
+  set(".rd-live-footnote", rdLiveT.untrusted);
+  const tabs = document.getElementById("rdLiveRoomTabs");
+  if (tabs) tabs.setAttribute("aria-label", locale === "tr" ? "Technocore odaları" : "Technocore rooms");
+  rdRenderAll();
+}
+
 async function rdRefreshAll() {
   if (rdLiveRefreshing) return;
   rdLiveRefreshing = true;
@@ -625,6 +655,10 @@ function rdStartObservatory() {
     if (!document.hidden && Date.now() - rdLiveLastRefreshAt >= RD_LIVE_REFRESH_MS) rdRefreshAll();
   });
 }
+
+window.addEventListener("rd:languagechange", (event) => {
+  rdApplyLiveLocale(event.detail?.lang);
+});
 
 if (document.readyState === "loading") {
   document.addEventListener("DOMContentLoaded", rdStartObservatory, { once: true });

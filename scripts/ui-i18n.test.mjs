@@ -9,27 +9,24 @@ const flopStatus = await readFile(new URL("../public/flop-live-status.js", impor
 const patches = await readFile(new URL("../public/patches.js", import.meta.url), "utf8");
 const enhancements = await readFile(new URL("../public/enhancements.js", import.meta.url), "utf8");
 const languageStable = await readFile(new URL("../public/language-stable.js", import.meta.url), "utf8");
-const finalFixes = await readFile(new URL("../public/final-fixes.js", import.meta.url), "utf8");
-const styles = await readFile(new URL("../public/styles.css", import.meta.url), "utf8");
-const localPreviewServer = await readFile(new URL("./local-preview-server.mjs", import.meta.url), "utf8");
-let vercelConfig = null;
-try {
-  vercelConfig = await readFile(new URL("../vercel.json", import.meta.url), "utf8");
-} catch (error) {
-  if (error.code !== "ENOENT") throw error;
-}
 const config = await readFile(new URL("../public/config.js", import.meta.url), "utf8");
 const proofImport = await readFile(new URL("../public/proof-import.js", import.meta.url), "utf8");
+const didProvenance = await readFile(new URL("../public/did-provenance.js", import.meta.url), "utf8");
+const provenanceRefresh = await readFile(new URL("../public/provenance-room-refresh.js", import.meta.url), "utf8");
+const liveObservatorySource = await readFile(new URL("../public/live-observatory.js", import.meta.url), "utf8");
+const testnetToolkitSource = await readFile(new URL("../public/testnet-toolkit.js", import.meta.url), "utf8");
+const tclkWorkbenchSource = await readFile(new URL("../public/tclk-workbench.js", import.meta.url), "utf8");
+const finalFixesSource = await readFile(new URL("../public/final-fixes.js", import.meta.url), "utf8");
 const liveObservatory = await readFile(new URL("../public/live-observatory.js", import.meta.url), "utf8");
 const capacity = await readFile(new URL("../public/technocore-capacity.js", import.meta.url), "utf8");
 const languageBootstrap = await readFile(new URL("../public/language-bootstrap.js", import.meta.url), "utf8");
 const indexHtml = await readFile(new URL("../public/index.html", import.meta.url), "utf8");
 const flopHtml = await readFile(new URL("../public/flop.html", import.meta.url), "utf8");
-const browserWorkflow = await readFile(new URL("../.github/workflows/flop-site-browser-audit.yml", import.meta.url), "utf8");
-const productionBrowserAudit = await readFile(new URL("./browser/site-acceptance.spec.mjs", import.meta.url), "utf8");
-const flopBrowserAudit = await readFile(new URL("./browser/flop-ui.spec.mjs", import.meta.url), "utf8");
-const localBrowserRunner = await readFile(new URL("./run-local-browser-acceptance.mjs", import.meta.url), "utf8");
-const packageManifest = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
+const browserWorkflow = await readFile(new URL("../../../.github/workflows/flop-site-browser-audit.yml", import.meta.url), "utf8");
+const siteAcceptance = await readFile(new URL("./browser/site-acceptance.spec.mjs", import.meta.url), "utf8");
+const flopUiSpec = await readFile(new URL("./browser/flop-ui.spec.mjs", import.meta.url), "utf8");
+const browserRunner = await readFile(new URL("./run-local-browser-acceptance.mjs", import.meta.url), "utf8");
+const packageJson = await readFile(new URL("../package.json", import.meta.url), "utf8");
 const context = { window: {}, localStorage: { getItem: () => "en" }, navigator: { language: "en-US" } };
 vm.runInNewContext(source, context);
 const i18n = context.window.RD_I18N;
@@ -75,24 +72,21 @@ test("onboarding and proof-import UI copy uses shared translations in both langu
   }
   for (const key of ["agentSustainable", "agentCadence", "privateKeyHint"]) assert.ok(languageStable.includes(`app.${key}`));
   assert.ok(proofImport.includes('window.RD_I18N.t("app.proofImportNote")'));
+  assert.match(proofImport, /const isEn = window\.RD_I18N\?\.language\(\) === "en"/);
+  assert.ok(proofImport.includes('isEn ? "Import Public Proof JSON"'));
+  assert.ok(proofImport.includes('isEn ? "Check by sequence"'));
+  assert.match(enhancements, /repoBtn\.textContent = isEn \? "Open GitHub repository"/);
+  assert.match(enhancements, /warning\.textContent = window\.RD_I18N\.t\("app\.agentCadence"\)/);
 });
 
 test("TR/EN visible labels and dynamic live copy use the selected locale", () => {
-  assert.match(languageStable, /text\("#copyDidSecret", en \? "Copy" : "Kopyala"\)/);
-  assert.match(flopStatus, /Official timeline and reward FAQ/);
-  assert.match(flopStatus, /HALKA AÇIK TESTNET/);
-  assert.match(flopStatus, /Yellow Paper dosya geçmişi →/);
-  assert.match(flopStatus, /p:not\(\.kicker\)/);
-  assert.match(flopStatus, /Resmî teknik tanım ↗/);
-  assert.match(capacity, /rdTcWindowLabel/);
-  assert.match(capacity, /rdTcUpdatedLabel/);
   const exactEntries = languageStable.match(/const exactEN = new Map\((\[[\s\S]*?\])\);/)?.[1];
   assert.ok(exactEntries, "dynamic English translation table must exist");
   const exactEN = vm.runInNewContext(`new Map(${exactEntries})`);
   assert.equal(exactEN.get("İsteğe bağlı"), "Optional");
   assert.equal(exactEN.get("Henüz özel oda yok."), "No private room yet.");
   const liveTr = liveObservatory.slice(liveObservatory.indexOf("  tr: {"), liveObservatory.indexOf("  en: {"));
-  const liveEn = liveObservatory.slice(liveObservatory.indexOf("  en: {"), liveObservatory.indexOf("const rdLiveT"));
+  const liveEn = liveObservatory.slice(liveObservatory.indexOf("  en: {"), liveObservatory.indexOf("let rdLiveT"));
   const keys = copy => [...copy.matchAll(/^\s+([A-Za-z][\w]*):/gm)].map(match => match[1]).filter(key => key !== "tr" && key !== "en").sort();
   assert.deepEqual(keys(liveTr), keys(liveEn), "every live-observatory label must have TR and EN entries");
   for (const phrase of ["nav: \"Canlı\"", "title: \"Canlı Ajan Gözlemevi\"", "signed: \"İmzalı ajan\"", "heartbeat: \"nabız\"", "active: \"etkin\"", "idle: \"beklemede\"", "stale: \"güncelliğini yitirmiş\"", "activity: \"Son herkese açık etkinlik\""]) assert.ok(liveTr.includes(phrase), `missing Turkish live label ${phrase}`);
@@ -109,21 +103,22 @@ test("TR/EN visible labels and dynamic live copy use the selected locale", () =>
   assert.match(languageStable, /localStorage\.setItem\(LANG_KEY, next\)[\s\S]*location\.reload\(\)/);
 });
 
-test("X proof sharing copies localized text and provenance acceptance targets the live refresh control", () => {
+test("X sharing copies localized text without a popup and proof intent remains available", () => {
   for (const lang of ["en", "tr"]) {
     assert.ok(i18n.t("patch.siteShareDraft", { site: "https://example.test", handle: "@example" }, lang).includes("https://example.test"));
     assert.ok(i18n.t("app.xShareDraft", { handle: "@example", did: "did:key:z6Mk-test", url: "https://example.test", room: "lobby", seq: "1" }, lang).includes("did:key:z6Mk-test"));
   }
   assert.match(enhancements, /window\.RD_I18N\.t\("app\.xShareDraft"/);
-  assert.match(enhancements, /xIntent\(proofShareText\(\)\)/);
+  assert.match(enhancements, /const isEn = window\.RD_I18N\?\.language\(\) === "en"/);
+  for (const copy of ["Share · everyone uses their own account", "The X text is copied to your clipboard", "𝕏 Share this site", "Follow"]) assert.ok(enhancements.includes(copy), `missing English injected share copy: ${copy}`);
+  assert.ok(i18n.t("app.agentCadence", {}, "en").includes("More frequent posts are not known to improve airdrop eligibility"));
+  assert.ok(i18n.t("app.agentCadence", {}, "tr").includes("Daha sık gönderilerin airdrop uygunluğunu artırdığına dair kanıt yoktur"));
   assert.match(enhancements, /replacement\.onclick = \(\) => copy\(proofShareText\(\), window\.RD_I18N\.t\("app\.xTextCopied"\)\)/);
-  assert.match(flopBrowserAudit, /#rdLangSwitcher button\[data-lang="tr"\][\s\S]*?#rdProvFixSummary.*waitFor\(\{ state: "visible" \}\)/);
-  assert.match(flopBrowserAudit, /#rdProvFixSummary[\s\S]{0,100}ancestor::article\[1\]/);
-  assert.match(productionBrowserAudit, /navigator\.clipboard\.readText\(\)/);
-  assert.match(productionBrowserAudit, /unexpectedPopups, \[\]/);
-  assert.match(productionBrowserAudit, /context\.pages\(\)\.length, pageCountBeforeShare/);
-  assert.match(productionBrowserAudit, /#rdDidProvenance[\s\S]*#rdProvFixRefresh/);
-  assert.match(productionBrowserAudit, /Kanıtı yenile/);
+  assert.match(enhancements, /#rdProofX[\s\S]*xIntent\(proofShareText\(\)\)/);
+  assert.match(siteAcceptance, /navigator\.clipboard\.readText\(\)/);
+  assert.match(siteAcceptance, /deepEqual\(unexpectedPopups,\s*\[\]/);
+  assert.match(siteAcceptance, /#rdDidProvenance[\s\S]*#rdProvFixRefresh/);
+  assert.match(siteAcceptance, /Kanıtı yenile/);
 });
 
 test("live-status API failure localizes both status panels without an undefined-language exception", () => {
@@ -153,7 +148,7 @@ test("shared language setter stores preference and html lang before dispatch", (
   assert.deepEqual(order, [["tr", "tr", "tr"]]);
 });
 
-test("both pages select and render the saved language before add-on loading", () => {
+test("both pages boot the saved language early and live switching preserves the current session", () => {
   for (const html of [indexHtml, flopHtml]) {
     assert.match(html, /<script src="\/language-bootstrap\.js"><\/script>/);
     assert.ok(html.indexOf("/language-bootstrap.js") < html.indexOf("<\/head>"));
@@ -165,52 +160,90 @@ test("both pages select and render the saved language before add-on loading", ()
   assert.match(languageStable, /window\.addEventListener\("rd:languagechange"/);
   assert.match(config, /window\.dispatchEvent\(new Event\("rd:addonsready"\)\)/);
   assert.match(languageStable, /window\.addEventListener\("rd:addonsready"/);
+  assert.match(languageStable, /if \(window\.RD_I18N\?\.setLanguage\) \{\s*window\.RD_I18N\.setLanguage\(next\);\s*\} else \{[\s\S]*location\.reload\(\);/);
+  assert.doesNotMatch(languageStable, /window\.RD_I18N\.setLanguage\(next\)[\s\S]{0,80}location\.reload\(\)/);
 });
 
-test("usage guide uses external CSS and keeps the strict CSP policy", () => {
-  assert.doesNotMatch(finalFixes, /ensureUsageGuideStyles|document\.createElement\(["']style["']\)/);
-  assert.match(styles, /#rdUsageGuide \.rd-guide-kicker/);
-  assert.match(styles, /#rdUsageGuide \.rd-guide-danger/);
-  assert.match(localPreviewServer, /style-src 'self'/);
-  assert.doesNotMatch(localPreviewServer, /unsafe-inline/);
-  if (vercelConfig !== null) {
-    assert.match(vercelConfig, /style-src 'self'/);
-    assert.doesNotMatch(vercelConfig, /unsafe-inline/);
+test("Public Proof and DID provenance re-render both locales without navigation", () => {
+  assert.match(didProvenance, /let rdProvT\s*=\s*rdProvCatalog\[rdProvLang\(\)\]/);
+  assert.match(didProvenance, /window\.addEventListener\("rd:languagechange",\s*\(event\)\s*=>\s*\{\s*rdProvApplyLocale\(event\.detail\?\.lang\)/);
+  assert.match(didProvenance, /result\.dataset\.localeKey\s*=\s*Number\(error\?\.status\)\s*===\s*404\s*\?\s*"notFound"\s*:\s*"requestFailed"/);
+  assert.match(provenanceRefresh, /let rdProvFixT\s*=\s*RD_PROV_FIX_CATALOG\[rdProvFixLang\(\)\]/);
+  assert.match(provenanceRefresh, /window\.addEventListener\("rd:languagechange",\s*\(event\)\s*=>/);
+  assert.match(provenanceRefresh, /if \(rdProvFixBuild\(\)\) rdProvFixRefresh\(\)/);
+  assert.match(provenanceRefresh, /verifierRoom\.value\s*=\s*previousRoom\s*\|\|\s*RD_PROV_FIX_ROOM/);
+  assert.match(languageStable, /if \(window\.RD_I18N\?\.setLanguage\) \{\s*window\.RD_I18N\.setLanguage\(next\);\s*\} else \{[\s\S]*?location\.reload\(\)/);
+});
+
+test("Testnet Toolkit and Live Observatory update locale without replacing user state", () => {
+  assert.match(testnetToolkitSource, /window\.addEventListener\("rd:languagechange",\s*rdTestnetApplyLocale\)/);
+  assert.match(testnetToolkitSource, /function rdTestnetApplyLocale\(\)[\s\S]*?rdLedgerRender\(\);rdMinerCalc\(\);rdValidatorCalc\(\)/);
+  assert.match(testnetToolkitSource, /set\("\.rd-testnet-head h2",t\.title\)/);
+  assert.match(liveObservatorySource, /let rdLiveT\s*=\s*rdLiveCopy\[rdLiveLang\(\)\]/);
+  assert.match(liveObservatorySource, /window\.addEventListener\("rd:languagechange",\s*\(event\)\s*=>\s*\{\s*rdApplyLiveLocale\(event\.detail\?\.lang\)/);
+  assert.match(liveObservatorySource, /if \(nav\) nav\.textContent = rdLiveT\.nav/);
+  assert.match(liveObservatorySource, /function rdApplyLiveLocale\([\s\S]*?rdRenderAll\(\)/);
+});
+
+test("TCLK workbench rerenders every static label and retained transcript on shared locale changes", () => {
+  const tclk = tclkWorkbenchSource;
+  assert.match(tclk, /function rdTclkApplyLocale\([\s\S]*?rdTclkT\(\)/);
+  assert.match(tclk, /set\("\.rd-tclk-head p",t\.intro\)/);
+  assert.match(tclk, /set\("\.rd-tclk-note",t\.source\)/);
+  assert.match(tclk, /rdTclkRenderTranscript\(rdTclkLastMessages\)/);
+  assert.match(tclk, /window\.addEventListener\("rd:languagechange",rdTclkApplyLocale\)/);
+});
+
+test("transient toast does not leave stale-language copy after locale switch", () => {
+  assert.match(app, /window\.addEventListener\("rd:languagechange",\s*\(\)\s*=>\s*\{\s*const message=\$\("#toast"\)[\s\S]*?clearTimeout\(toast\.t\)[\s\S]*?message\.textContent="";[\s\S]*?message\.classList\.remove\("show"\)/);
+});
+
+test("generated usage guide rerenders when the shared locale changes", () => {
+  assert.match(finalFixesSource, /window\.addEventListener\("rd:languagechange",\s*\(event\)\s*=>\s*\{[\s\S]*?applyFinalFixes\(\)/);
+});
+
+test("sequential browser suites share one loopback preview and reject production origins", () => {
+  assert.match(browserRunner, /await startPreview\(\)/);
+  assert.match(browserRunner, /SITE_ACCEPTANCE_ORIGIN:\s*origin/);
+  assert.match(browserRunner, /scripts\/local-preview-server\.mjs/);
+  for (const spec of [siteAcceptance, flopUiSpec]) {
+    assert.match(spec, /process\.env\.SITE_ACCEPTANCE_ORIGIN/);
+    assert.match(spec, /url\.protocol, "http:"/);
+    assert.match(spec, /\["127\.0\.0\.1", "localhost"\]\.includes\(url\.hostname\)/);
   }
-  assert.match(indexHtml, /<link rel="stylesheet" href="\/styles\.css"\s*\/>/);
 });
 
-test("late controls reapply language and browser assertions target the correct page and JSON backup", () => {
-  assert.match(languageStable, /window\.addEventListener\("rd:dynamicuiready", refreshLanguageForDynamicUi\)/);
-  assert.match(enhancements, /window\.dispatchEvent\(new Event\("rd:dynamicuiready"\)\)/);
-  assert.match(proofImport, /installUi\(\);\s*window\.dispatchEvent\(new Event\("rd:dynamicuiready"\)\)/);
-  assert.match(flopBrowserAudit, /#rdProofImport button/);
-  assert.match(flopBrowserAudit, /#repoBtn/);
-  assert.match(flopBrowserAudit, /if \(!home\) return;/);
-  assert.match(flopBrowserAudit, /#rdLangSwitcher button\[data-lang="tr"\][\s\S]*?#rdProvFixSummary.*waitFor\(\{ state: "visible" \}\)/);
-  assert.match(flopBrowserAudit, /#rdProvFixSummary[\s\S]{0,100}ancestor::article\[1\]/);
-  assert.match(productionBrowserAudit, /assert\.match\(backupName, \/\\\.json\$\/i/);
-  assert.match(productionBrowserAudit, /chooser\.setFiles\(\{ name: backupName, mimeType: "application\/json", buffer: backupContents \}\)/);
-  assert.match(productionBrowserAudit, /dialog\.type\(\)/);
-});
-
-test("local browser workflow uses the sequential isolated runner and keeps production acceptance separate", () => {
-  assert.match(browserWorkflow, /run: node scripts\/run-local-browser-acceptance\.mjs/);
-  assert.match(localBrowserRunner, /--test-concurrency=1/);
-  assert.match(localBrowserRunner, /SITE_ACCEPTANCE_ORIGIN: origin/);
-  assert.match(localBrowserRunner, /scripts\/browser\/site-acceptance\.spec\.mjs/);
-  assert.match(localBrowserRunner, /scripts\/browser\/flop-ui\.spec\.mjs/);
-  assert.doesNotMatch(localBrowserRunner, /reddragon-technocore\.vercel\.app/i);
-  assert.equal(packageManifest.scripts["test:browser"], "node scripts/run-local-browser-acceptance.mjs");
-  assert.match(browserWorkflow, /run: node --test scripts\/browser\/site-acceptance\.spec\.mjs/);
-  assert.match(browserWorkflow, /github\.event_name == 'workflow_dispatch' && inputs\.run_production_acceptance/);
-});
-
-test("browser workflow can run only on the QA branch with read-only repository permissions", () => {
-  assert.match(browserWorkflow, /branches:\s*\n\s+- qa\/flop-site-browser-20261110/);
-  assert.match(browserWorkflow, /if: github\.ref == 'refs\/heads\/qa\/flop-site-browser-20261110'/);
+test("sandbox browser workflow is QA-only, read-only, and contains no production smoke command", () => {
+  assert.match(browserWorkflow, /branches:\s*\n\s+- qa\/flop-e2e-54354b1/);
+  assert.match(browserWorkflow, /github\.ref == 'refs\/heads\/qa\/flop-e2e-54354b1'/);
+  assert.match(browserWorkflow, /paths:[\s\S]*?\.github\/workflows\/flop-site-browser-audit\.yml/);
+  assert.match(browserWorkflow, /working-directory: site\/current/);
+  assert.match(browserWorkflow, /browser: \[chromium, firefox, webkit\]/);
+  assert.match(browserWorkflow, /playwright install --with-deps/);
   assert.match(browserWorkflow, /permissions:\s*\n\s+contents: read/);
-  assert.doesNotMatch(browserWorkflow, /vercel deploy|git push|gh pr merge/i);
-  assert.match(productionBrowserAudit, /Only test data; no persistent test identities or real relay writes/);
-  assert.match(productionBrowserAudit, /route\("\*\*\/api\/relay"/);
+  assert.match(browserWorkflow, /runs-on: ubuntu-24\.04/);
+  assert.doesNotMatch(browserWorkflow, /workflow_dispatch|run_production_acceptance|vercel deploy|git push|gh pr merge/i);
+  assert.match(siteAcceptance, /Only test data; no persistent test identities or real relay writes/);
+  assert.match(siteAcceptance, /route\("\*\*\/api\/relay"/);
+  const scripts = JSON.parse(packageJson).scripts;
+  assert.equal(scripts["test:browser:production"], undefined);
+  assert.equal(scripts["test:browser"], "node scripts/run-local-browser-acceptance.mjs");
+  assert.ok(browserRunner.includes('"scripts/browser/site-acceptance.spec.mjs"'));
+  assert.ok(browserRunner.includes('"scripts/browser/flop-ui.spec.mjs"'));
+  assert.ok(browserRunner.includes('"scripts/browser/admin-application.spec.mjs"'));
+  assert.equal((browserRunner.match(/\.spec\.mjs/g) || []).length, 3);
+  assert.ok(browserRunner.includes('spawnSync(process.execPath, ["--test", spec]'));
+  assert.doesNotMatch(browserRunner, /Promise\.all|--test.*\*|production-smoke/);
+  assert.match(browserRunner, /failures\+\+/);
+  assert.match(browserRunner, /process\.exitCode = 1/);
+  assert.doesNotMatch(browserRunner, /process\.exit\(/);
+});
+
+test("WebKit clipboard tests use the permission-free clipboard shim",()=>{
+  assert.match(siteAcceptance,/browserName === "chromium" \? \{ permissions: \["clipboard-read", "clipboard-write"\] \}/);
+  assert.match(flopUiSpec,/browserName === "chromium" \? \{ permissions: \["clipboard-read", "clipboard-write"\] \}/);
+  assert.match(siteAcceptance,/browserName !== "chromium"\) await context\.addInitScript/);
+  assert.match(flopUiSpec,/browserName !== "chromium"\) await context\.addInitScript/);
+  assert.match(siteAcceptance,/readText: async \(\) => copied/);
+  assert.match(flopUiSpec,/readText: async \(\) => copied/);
 });

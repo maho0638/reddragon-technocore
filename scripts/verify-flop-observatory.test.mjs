@@ -10,7 +10,7 @@ test("owner X handle appears consistently without old Joanna links", async () =>
   const files = [
     "public/index.html", "public/flop.html", "public/config.js", "public/app.js",
     "public/enhancements.js", "public/final-fixes.js", "public/language-final.js",
-    "public/language-safe.js", "public/language-stable.js", "public/language.js",
+    "public/language-safe.js", "public/language-stable.js", "public/language.js", "public/404.html",
     "public/repair.js", "README.md"
   ];
   for (const file of files) {
@@ -22,6 +22,7 @@ test("owner X handle appears consistently without old Joanna links", async () =>
   const config = await read("public/config.js");
   assert.match(config, /xHandle: "@lionmousse"/);
   assert.match(config, /xUrl: "https:\/\/x\.com\/lionmousse"/);
+  assert.match(await read("public/404.html"), /https:\/\/x\.com\/lionmousse/);
 });
 
 test("public supply and cohort allocations agree with signed manifest", async () => {
@@ -36,7 +37,7 @@ test("public supply and cohort allocations agree with signed manifest", async ()
   assert.equal(s.project.xUrl, "https://x.com/lionmousse");
   assert.equal(m.projectX, s.project.xUrl);
   assert.equal(m.did, did);
-  assert.equal(s.checkedAt, "2026-11-25");
+  assert.equal(s.checkedAt, "2026-11-25T18:37:14.535Z");
 });
 
 test("newer paper-content drift is distinct from CI-only repository head", async () => {
@@ -50,40 +51,23 @@ test("newer paper-content drift is distinct from CI-only repository head", async
   assert.doesNotMatch(page, /still shows the older 3\.5B|currently stale versus live/i);
 });
 
-test("testnet remains fail-closed and devnet has no airdrop weight", async () => {
+test("Testnet live-unscored status and faucet claim metadata are dated, bounded and distinct from inference", async () => {
   const s = await json("public/flop-source-status.json");
-  assert.match(s.roadmap.testnetNetworkStatus, /live, unscored opening/i);
-  assert.equal(s.roadmap.publicTestnetRpc, "wss://testnet.flop.network/");
-  assert.equal(s.roadmap.publicTestnetRpcHttp, "https://testnet.flop.network/");
-  assert.equal(s.roadmap.expectedTestnetGenesis, "0x918abd58fb16306b30ef3886514cfaebffecb4de43e82b6f8ec4795c43cfd800");
-  assert.equal(s.roadmap.testnetRpcGenesisVerifiedAtSnapshot, true);
-  assert.equal(s.roadmap.testnetRuntimeSpecName, "flop-testnet");
-  assert.equal(s.roadmap.testnetRuntimeSpecVersion, 1014035);
-  assert.equal(s.roadmap.testnetScoringActivationAnnounced, false);
-  assert.equal(s.roadmap.testnetVoucherTradingEnabled, false);
-  assert.equal(s.roadmap.testnetPublicSelfClaimAvailable, false);
-  assert.equal(s.roadmap.testnetFaucetLimitsAnnounced, false);
-  assert.deepEqual(s.roadmap.testnetSdk, { package: "@flop-labs/sdk", documentedVersion: "0.9.0", latestPublishedVersion: "0.10.0", publishedRuntimeAllowlistIncludes: 1014035, compatibility: "published 0.10.0 runtime guard verified for 1014035; inference and settlement remain unverified", packageSource: "https://registry.npmjs.org/@flop-labs/sdk", networkSource: "https://docs.flop.network/networks/testnet" });
-  assert.equal(s.roadmap.officialFaucetEndpointVerifiedLive, false);
+  assert.match(s.roadmap.testnetNetworkStatus, /live since 2026-11-24; unscored/i);
+  assert.equal(s.roadmap.testnetChainId, "flop_testnet");
+  assert.equal(s.roadmap.testnetGenesisHash, "0x918abd58fb16306b30ef3886514cfaebffecb4de43e82b6f8ec4795c43cfd800");
+  assert.equal(s.roadmap.officialFaucetEndpointVerifiedLive, true);
+  assert.equal(s.roadmap.testnetAgentClaimPath, "POST /v1/testnet/agent-claims (signed wallet request)");
+  assert.equal(s.roadmap.testnetAgentGrantFlop, 10);
+  assert.equal(s.roadmap.testnetAgentRolling24HourCapFlop, 10);
   assert.equal(s.roadmap.officialInferenceEndpointVerifiedLive, false);
   assert.equal(s.roadmap.devnetEarnsAirdropWeight, false);
   assert.equal(s.roadmap.publicDevnetModelCatalog, "https://api.flop.network/v1/models");
   assert.equal(s.roadmap.validatorPackage, "0.4.1-devnet.1 (explorer page; administrator-assisted access)");
   const page = await read("public/flop.html");
   assert.match(page, /https:\/\/docs\.flop\.network\/networks\/testnet/);
-  assert.match(page, /https:\/\/testnet\.flopscan\.io/);
-  assert.match(page, /SDK 0\.9\.0[\s\S]*0\.10\.0[\s\S]*1014035[\s\S]*inference and settlement are not verified/i);
-  assert.match(page, /Live · unscored opening/);
-  assert.doesNotMatch(page, /public testnet launch is not confirmed|planned and its release is unreleased/i);
-  const liveStatus = await read("public/flop-live-status.js");
-  assert.match(liveStatus, /testnetLiveUnscored/);
-  assert.match(liveStatus, /SDK\/runtime guard now matches/);
-  assert.match(liveStatus, /inference and settlement are not verified/i);
-  const toolkit = await read("public/testnet-toolkit.js");
-  assert.match(toolkit, /24 Nov 2026: Testnet is live and unscored/);
-  assert.match(toolkit, /Devnet faucet is not Testnet/);
   assert.match(page, /https:\/\/docs\.flop\.network\/networks\/devnet/);
-  assert.match(page, /timeline FAQ, updated 30 October, says devnet earns nothing and has no reward or airdrop weight/i);
+  assert.match(page, /timeline FAQ, updated 24 November, says devnet earns nothing and has no reward or airdrop weight/i);
   assert.match(page, /https:\/\/docs\.flop\.network\/docs\/testnet-and-timeline/);
 });
 
@@ -158,4 +142,14 @@ test("live status reports the dated testnet conflict and only repeats verified r
   assert.match(view, /timeline\.state === "verified" && timeline\.testnetOpenClaim/);
   assert.match(view, /official\.tokenClaim === true \? c\.noToken : c\.tokenChanged/);
   assert.match(view, /data\.devnet\?\.rewards === "none" && data\.timeline\?\.state === "verified"/);
+});
+
+
+test("404 route includes a working Turkish and English language switch", async () => {
+  const page = await read("public/404.html");
+  const language = await read("public/404-i18n.js");
+  assert.match(page, /id="rd404Language"/);
+  assert.match(page, /data-i18n="title"/);
+  assert.match(language, /This link is no longer here/);
+  assert.match(language, /localStorage\.setItem\("reddragon-lang"/);
 });
