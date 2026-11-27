@@ -4,7 +4,11 @@ import { mkdtemp, chmod, readFile, stat, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { checkSigner, ADDRESS } from './flop-testnet-first-claim.mjs';
+const ADDRESS='5HBqG8RN2WMPKhwq4AfGEPRBGsn82JQc28JU5pKCYW2QZFtW';
+const DID='did:key:z6MkuhrsP4tDZjWYdZLPxaur19WvrF1yuLGsGB2S8Q1gwS6K';
+const B58='123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+function b58(bytes){let n=BigInt('0x'+bytes.toString('hex')),s='';while(n){s=B58[Number(n%58n)]+s;n/=58n;}for(const b of bytes){if(b)break;s='1'+s;}return s;}
+function identity(key){const pub= createPublicKey(key).export({format:'der',type:'spki'}).subarray(12);const body=Buffer.concat([Buffer.from([42]),pub]);const checksum=createHash('blake2b512').update('SS58PRE').update(body).digest().subarray(0,2);const did=b58(Buffer.concat([Buffer.from([0xed,1]),pub]));return {address:b58(Buffer.concat([body,checksum])),did};}
 
 function run(file,args,env){
   const r=spawnSync(file,args,{env,encoding:'utf8',timeout:30000,maxBuffer:1024*1024,stdio:['ignore','pipe','pipe']});
@@ -18,7 +22,8 @@ try{
   const encoded=process.env.TECHNOCORE_PRIVATE_KEY_PKCS8_B64??'';
   if(!encoded||!/^[A-Za-z0-9+/]+=*$/.test(encoded))throw new Error('Existing Actions signer unavailable or malformed');
   const key=createPrivateKey({key:Buffer.from(encoded,'base64'),format:'der',type:'pkcs8'});
-  checkSigner(key);
+  const actual=identity(key);
+  if(actual.address!==ADDRESS||actual.did!==DID||key.type!=='private')throw new Error('Existing signer identity mismatch');
   const jwk=key.export({format:'jwk'}),seed=Buffer.from(jwk.d??'','base64url');
   if(key.asymmetricKeyType!=='ed25519'||seed.length!==32)throw new Error('Expected existing Ed25519 PKCS8 signer');
   const message=Buffer.from('reddragon-flop-keystore-check/v1');
