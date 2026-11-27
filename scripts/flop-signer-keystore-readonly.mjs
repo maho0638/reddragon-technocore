@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { createPrivateKey, createPublicKey, sign, verify, randomBytes } from 'node:crypto';
+import { createPrivateKey, createPublicKey, createHash, sign, verify, randomBytes } from 'node:crypto';
 import { mkdtemp, chmod, readFile, stat, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
