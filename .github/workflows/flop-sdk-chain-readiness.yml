@@ -38,7 +38,9 @@ jobs:
           node --input-type=module <<'NODE'
           import { ApiPromise,WsProvider } from '@polkadot/api';
           import * as sdk from '@flop-labs/sdk';
-          import {fetchSessionInfoProof} from './node_modules/@flop-labs/sdk/dist/miner-admission.js';
+          import {fetchSessionInfoProof,verifySessionInfoProof,modelIdentityHash} from './node_modules/@flop-labs/sdk/dist/miner-admission.js';
+          import {createDirectSessionRuntime} from './node_modules/@flop-labs/sdk/dist/compute-channel/direct-session-chain.js';
+          import {hexToU8a,u8aToHex} from '@polkadot/util';
           import { randomBytes } from 'node:crypto';
           import {decodeAddress,cryptoWaitReady} from '@polkadot/util-crypto';
           const genesis='0x918abd58fb16306b30ef3886514cfaebffecb4de43e82b6f8ec4795c43cfd800',address='5HBqG8RN2WMPKhwq4AfGEPRBGsn82JQc28JU5pKCYW2QZFtW',miner='5Cm99adrc7guxVoT6YnC7LxUmmVgPamRsw9nVifRA9NUwDmd',channel='0xe58f3f1026a23f4f023255eb85dfae6b56fb0b6d3317f889fbb15c463e95da7f';
@@ -67,7 +69,18 @@ jobs:
               feeEstimate=(await tx.paymentInfo(address)).partialFee.toString();
             } catch(e) { feeEstimateError=String(e.message).slice(0,180); }
             console.log('FINALIZED_READ='+JSON.stringify({hash:hash.toHex(),block:finalizedBlock,runtime:api.runtimeVersion.specVersion.toString(),account:account.toJSON(),miner:minerData.toJSON(),cap:cap.toJSON(),calibrationLeaseBlocks:lease?.toString()??null,calibratedUntil,calibrationCurrent:calibratedUntil===null?null:finalizedBlock<calibratedUntil,oldChannel:old.toJSON(),rate:rate.toString(),tariff:fee.toString(),forceFloorRaw:floor.toString(),escrowRaw:escrow.toString(),escrowCoversFloor:escrow>=floor,forceOpenFeeEstimateRaw:feeEstimate,forceOpenFeeEstimateError:feeEstimateError,existential:api.consts.balances.existentialDeposit.toString()}));
-            const proof=await fetchSessionInfoProof('https://m14.floptest.xyz',randomBytes(32));
-            console.log('SDK_PROOF_READY='+JSON.stringify({ready:proof.ready,genesis:proof.genesis_hash,account:proof.account_id,key:proof.enclave_key,identity:proof.model_identity}));
+            const challenge=randomBytes(32);
+            const proof=await fetchSessionInfoProof('https://m14.floptest.xyz',challenge);
+            const runtime=await createDirectSessionRuntime({api,signer:{address,signer:{signPayload(){throw Error('READ_ONLY')},signRaw(){throw Error('READ_ONLY')}}},miner,model:'qwen/qwen3-8b',endpoint:'https://m14.floptest.xyz',via:'force',maxDurationSeconds:1200,maxFlop:5000000000000000n});
+            const registry=await runtime.resolveIdentity();
+            if(await runtime.minerCalibrated()!==true)throw Error('miner calibration not current');
+            const m=proof.model_identity,eq=(a,b)=>String(a).replace(/^0x/,'').toLowerCase()===String(b).replace(/^0x/,'').toLowerCase();
+            if(m.requested_slug!=='qwen/qwen3-8b'||!eq(m.model_hash,u8aToHex(registry.modelHash))||!eq(m.measured_root,u8aToHex(registry.measuredRoot))||!eq(m.decode_policy_hash,u8aToHex(registry.decodePolicyHash))||m.precision!==registry.precision||m.registry_model!==registry.registryModel||m.registry_version!==registry.registryVersion)throw Error('proof model differs from finalized registry');
+            if(!eq(proof.enclave_key,old.unwrap().enclaveKey.toHex()))throw Error('proof enclave key differs from finalized miner channel');
+            const identity={requestedSlug:m.requested_slug,registryModel:m.registry_model,registryVersion:m.registry_version,backendModelName:m.backend_model_name,modelHash:hexToU8a('0x'+m.model_hash),measuredRoot:hexToU8a('0x'+m.measured_root),decodePolicyHash:hexToU8a('0x'+m.decode_policy_hash),precision:m.precision};
+            const expected={challenge,genesisHash:hexToU8a(genesis),account:decodeAddress(miner),enclaveKey:hexToU8a(old.unwrap().enclaveKey.toHex()),modelIdentityHash:modelIdentityHash(identity)};
+            const verified=verifySessionInfoProof(proof,expected);
+            if(!verified)throw Error('fresh signed endpoint proof failed verification');
+            console.log('SDK_PROOF_VERIFIED='+JSON.stringify({ready:proof.ready,signatureVerified:true,genesis:proof.genesis_hash,miner:proof.account_id,enclaveKey:proof.enclave_key,model:proof.model_identity.requested_slug,modelHash:proof.model_identity.model_hash,registryVersion:registry.registryVersion}));
           }catch(e){console.log('FINALIZED_READ_ERROR='+String(e.message).slice(0,240));process.exitCode=1;}finally{await api?.disconnect();}
           NODE
