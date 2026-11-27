@@ -1,0 +1,45 @@
+name: FLOP direct miner signed proof and payer read-only validation
+on:
+  push:
+    branches: ['prep/flop-testnet-did-20261107']
+    paths: ['.github/workflows/flop-direct-readiness.yml']
+permissions: {}
+jobs:
+  readiness:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - name: Inspect verified package and perform public reads only
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$(mktemp -d)"
+          npm pack @flop-labs/sdk@0.13.1 --ignore-scripts --silent
+          test "$(openssl dgst -sha512 -binary flop-labs-sdk-0.13.1.tgz | openssl base64 -A)" = 'L2dhuXIabTqAH9a76jnO6Zzr5eDDcX4HRsrJX9r8O9rKRC7gpSfLUdfi6dVfH51AVuQAu5EBMm4xEebG2BoAgg=='
+          tar -xzf flop-labs-sdk-0.13.1.tgz
+          echo "=== verified proof contract ==="
+          sed -n '80,170p' package/dist/miner-admission.d.ts
+          grep -A65 'export async function .*InfoProof' package/dist/miner-admission.js | head -80 || true
+          echo "=== signer contract ==="
+          cat package/dist/transaction-signer.d.ts
+          echo "=== SDK chain submission contract ==="
+          grep -A25 'forceOpen(' package/dist/compute-channel/chain.d.ts | head -30
+          echo "=== official payer account via finalized public RPC and fresh public challenge ==="
+          node --input-type=module <<'NODE'
+          import {randomBytes} from 'node:crypto';
+          const addr='5HBqG8RN2WMPKhwq4AfGEPRBGsn82JQc28JU5pKCYW2QZFtW';
+          const endpoints=[['m14','https://m14.floptest.xyz','5Cm99adrc7guxVoT6YnC7LxUmmVgPamRsw9nVifRA9NUwDmd'],['antju2','https://antju2.5-am.fr','5E7UL5m78rSv2wkbijywrbCL94sE1NswpVCTtYT4dRZZtEA5']];
+          for (const [name,url,miner] of endpoints){
+            try{
+              const challenge='0x'+randomBytes(32).toString('hex');
+              const r=await fetch(url+'/session/info-proof',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({challenge}),redirect:'error',credentials:'omit',signal:AbortSignal.timeout(12000)});
+              const raw=await r.text();let data={};try{data=JSON.parse(raw)}catch{}
+              const proof=data.proof??data;const select={};
+              for(const k of ['ready','is_ready','network','genesisHash','genesis_hash','miner','miner_account','enclave_key','enclaveKey','model_hash','modelHash','challenge'])if(typeof proof[k]==='string'||typeof proof[k]==='boolean')select[k]=typeof proof[k]==='string'?proof[k].slice(0,140):proof[k];
+              console.log('PUBLIC_PROOF='+JSON.stringify({name,miner,http:r.status,challenge,fields:Object.keys(data).slice(0,30),proofFields:Object.keys(proof).slice(0,40),selected:select}));
+            }catch(e){console.log('PUBLIC_PROOF_ERROR='+JSON.stringify({name,error:e.name,code:e.cause?.code??null}));}
+          }
+          for(const [name,url] of [['account','https://testnet.flopscan.io/api/accounts/'+addr],['inference','https://testnet.flopscan.io/api/inference-spend']]){
+            try{const r=await fetch(url,{redirect:'error',credentials:'omit',signal:AbortSignal.timeout(10000)});let data={};try{data=await r.json()}catch{};const row=data.data??data;const select={};if(name==='account')for(const k of ['address','free','freeBalance','balance','totalBalance','reserved','reservedBalance','availableBalance','transferableBalance'])if(typeof row[k]==='string'||typeof row[k]==='number')select[k]=row[k];console.log('PUBLIC_CHAIN_READ='+JSON.stringify({name,http:r.status,fields:Object.keys(row).slice(0,25),selected:select}));}catch(e){console.log('PUBLIC_CHAIN_READ_ERROR='+JSON.stringify({name,error:e.name}));}
+          }
+          NODE
