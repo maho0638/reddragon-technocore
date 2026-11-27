@@ -39,9 +39,9 @@ export function classifySettlement(result, { channelId, root, gn, output, miner 
     paid: settlement.minerPaid.toString(), faucetEligibility: 'unconfirmed' };
 }
 
-// Use a pre-existing private, durable directory shared by all runners for this payer.
+// Use a private durable directory, or await durable metadata writes on an ephemeral runner.
 // A stuck or incomplete journal blocks a replay until the original channel is reconciled.
-export async function spendOnce({ directory, approvedRuntime, prompt, runtime, runSession, candidate = { miner: MINER, model: MODEL, endpoint: ENDPOINT } }) {
+export async function spendOnce({ directory, approvedRuntime, prompt, runtime, runSession, persistMetadata, candidate = { miner: MINER, model: MODEL, endpoint: ENDPOINT } }) {
   require(runtime.genesisHash === GENESIS && runtime.payer === PAYER &&
     Number.isSafeInteger(approvedRuntime) && approvedRuntime > 0 &&
     runtime.specVersion === approvedRuntime, 'RUNTIME_OR_PAYER_UNAPPROVED');
@@ -55,6 +55,7 @@ export async function spendOnce({ directory, approvedRuntime, prompt, runtime, r
     await journal.writeFile(JSON.stringify(value, (_, field) => typeof field === 'bigint'
       ? field.toString() : field instanceof Uint8Array ? hex(field) : field) + '\n');
     await journal.sync();
+    await persistMetadata?.(value);
   };
   let intent, verified, submittedHash, openFinalized;
   let preparing = false, persistingSubmission = false, submitted = false, finalizing = false;
@@ -79,7 +80,7 @@ export async function spendOnce({ directory, approvedRuntime, prompt, runtime, r
           receipt.gN === claim.aggregateGn && receipt.output.length > 0, 'RECEIPT_MISMATCH');
         verified = { channelId: intent.channelId, root: hex(receipt.runningRoot),
           gn: receipt.gN, miner, output: hex(receipt.output) };
-        await record({ status: 'verified', receipt, claim });
+        await record({ status: 'verified', ...verified, receipt, claim });
       },
     }, async signed => {
       require(intent && !persistingSubmission && signed.signer === PAYER && HASH.test(signed.txHash) &&

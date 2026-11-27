@@ -2,6 +2,10 @@ name: FLOP one-shot approved Testnet inference
 on:
   workflow_dispatch:
     inputs:
+      commit:
+        description: Full SHA of the reviewed development revision
+        required: true
+        type: string
       miner:
         description: Miner ID from fresh read-only readiness
         required: true
@@ -11,38 +15,54 @@ on:
         required: true
         type: string
       approval:
-        description: Type one-testnet-inference to authorize this single operation
+        description: Type one-testnet-inference to request this single operation
         required: true
         type: string
-permissions:
-  contents: read
+permissions: {}
 concurrency:
   group: reddragon-flop-testnet-payer
   cancel-in-progress: false
 jobs:
   spend:
-    if: inputs.approval == 'one-testnet-inference'
+    if: github.ref == 'refs/heads/main' && github.repository == 'maho0638/reddragon-technocore' && github.run_attempt == '1' && inputs.approval == 'one-testnet-inference'
     environment: flop-inference-approved
-    runs-on: [self-hosted, flop-inference-authorized]
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
+    permissions:
+      contents: write
     env:
-      FLOP_EXPECTED_MINER: ${{ inputs.miner }}
-      FLOP_EXPECTED_RUNTIME: ${{ inputs.runtime }}
-      FLOP_RUN_APPROVAL: ${{ inputs.approval }}
-      FLOP_STATE_DIRECTORY: ${{ vars.FLOP_STATE_DIRECTORY }}
-      FLOP_EXISTING_SIGNER_FILE: ${{ vars.FLOP_EXISTING_SIGNER_FILE }}
-      FLOP_TRUSTED_MODULES: ${{ vars.FLOP_TRUSTED_MODULES }}
+      FLOP_REVIEWED_COMMIT: ${{ vars.FLOP_REVIEWED_COMMIT }}
     steps:
+      - name: Validate reviewed revision
+        env:
+          FLOP_REQUESTED_COMMIT: ${{ inputs.commit }}
+        shell: bash
+        run: |
+          [[ "$FLOP_REVIEWED_COMMIT" =~ ^[a-f0-9]{40}$ && "$FLOP_REQUESTED_COMMIT" == "$FLOP_REVIEWED_COMMIT" ]]
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
+          ref: ${{ env.FLOP_REVIEWED_COMMIT }}
           persist-credentials: false
-      - name: Execute one approved Testnet inference
+      - name: Verify and stage the reviewed implementation
         shell: bash
         run: |
           set -euo pipefail
-          [[ "$FLOP_TRUSTED_MODULES" == /* && -d "$FLOP_TRUSTED_MODULES" ]]
+          test "$(git rev-parse HEAD)" = "$FLOP_REVIEWED_COMMIT"
+          node --test scripts/flop-agent-preflight.test.mjs scripts/flop-spend.test.mjs scripts/flop-github-journal.test.mjs
           stage="$(mktemp -d)"
-          trap 'rm -rf -- "$stage"' EXIT
-          cp scripts/{flop-external-runner,flop-spend-sdk,flop-spend,flop-miner-readiness,flop-miner-proof,flop-miners}.mjs "$stage/"
-          ln -s -- "$FLOP_TRUSTED_MODULES" "$stage/node_modules"
-          node "$stage/flop-external-runner.mjs"
+          cp scripts/{flop-external-runner,flop-github-journal,flop-spend-sdk,flop-spend,flop-miner-readiness,flop-miner-proof,flop-miners}.mjs "$stage/"
+          cp scripts/flop-sdk/package{,-lock}.json "$stage/"
+          cd "$stage"
+          node -e "if (require('./package-lock.json').packages['node_modules/@flop-labs/sdk'].integrity !== 'sha512-L2dhuXIabTqAH9a76jnO6Zzr5eDDcX4HRsrJX9r8O9rKRC7gpSfLUdfi6dVfH51AVuQAu5EBMm4xEebG2BoAgg==') process.exit(1)"
+          npm ci --ignore-scripts --no-audit --no-fund
+          node --input-type=module -e "await import('./flop-external-runner.mjs')"
+          printf 'FLOP_STAGE=%s\n' "$stage" >> "$GITHUB_ENV"
+      - name: Execute one approved Testnet inference
+        env:
+          FLOP_EXPECTED_MINER: ${{ inputs.miner }}
+          FLOP_EXPECTED_RUNTIME: ${{ inputs.runtime }}
+          FLOP_RUN_APPROVAL: ${{ inputs.approval }}
+          TECHNOCORE_PRIVATE_KEY_PKCS8_B64: ${{ secrets.TECHNOCORE_PRIVATE_KEY_PKCS8_B64 }}
+          FLOP_JOURNAL_TOKEN: ${{ github.token }}
+        shell: bash
+        run: node "$FLOP_STAGE/flop-external-runner.mjs"

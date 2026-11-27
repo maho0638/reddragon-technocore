@@ -9,7 +9,7 @@ import { selectMiner } from './flop-miners.mjs';
 import { checkBudget, DURATION, ESCROW, GENESIS, MAX_BLOCKS, PAYER, spendOnce } from './flop-spend.mjs';
 
 // Call from the authorized runner with the existing signer and registry-bound miner proof check.
-export async function spendWithSdk({ api, signer, directory, approvedRuntime, approvedMiner, prompt }) {
+export async function spendWithSdk({ api, signer, directory, approvedRuntime, approvedMiner, prompt, persistMetadata }) {
   assert.equal(signer.address, PAYER);
   assert.equal(signer.type, 'ed25519', 'PAYER_KEYTYPE_MISMATCH');
   assert.equal(api.genesisHash.toHex(), GENESIS);
@@ -78,7 +78,7 @@ export async function spendWithSdk({ api, signer, directory, approvedRuntime, ap
     },
   });
   return spendOnce({
-    directory, approvedRuntime, prompt, candidate,
+    directory, approvedRuntime, prompt, candidate, persistMetadata,
     runtime: { genesisHash: GENESIS, payer: signer.address, specVersion: specVersion() },
     runSession: (options, persistSubmission, persistFinalized) => {
       recordSubmission = persistSubmission;

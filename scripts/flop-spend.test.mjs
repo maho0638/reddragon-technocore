@@ -145,3 +145,20 @@ test('receipt cannot advance the journal before the opening finalizes', async t 
   assert.doesNotMatch(await read(), /"status":"verified"/);
   await assert.rejects(spendOnce(options), { code: 'EEXIST' });
 });
+
+test('failed durable submission write blocks broadcast and subsequent retry', async t => {
+  let broadcast = false;
+  const { options } = await fixture(t, {
+    persistMetadata: async entry => {
+      if (entry.status === 'submission-prepared') throw new Error('durable state unavailable');
+    },
+    runSession: async (opts, persist) => {
+      await opts.onPrepared(intent);
+      await persist({ signer: PAYER, txHash, accountNonce: 0n, eraBirth: 42n, eraPeriod: 64n });
+      broadcast = true;
+    },
+  });
+  await assert.rejects(spendOnce(options), /durable state unavailable/);
+  assert.equal(broadcast, false);
+  await assert.rejects(spendOnce(options), { code: 'EEXIST' });
+});

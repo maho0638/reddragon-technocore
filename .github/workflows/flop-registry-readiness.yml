@@ -11,6 +11,10 @@ on:
       - 'scripts/flop-spend.mjs'
       - 'scripts/flop-spend-sdk.mjs'
       - 'scripts/flop-spend.test.mjs'
+      - 'scripts/flop-github-journal*.mjs'
+      - 'scripts/flop-external-runner.mjs'
+      - 'scripts/flop-sdk/package*.json'
+      - '.github/workflows/flop-inference-approved.yml'
 permissions:
   contents: read
 jobs:
@@ -22,17 +26,16 @@ jobs:
         with:
           persist-credentials: false
       - name: Run unsigned and mock regression tests
-        run: node --test scripts/flop-agent-preflight.test.mjs scripts/flop-spend.test.mjs
+        run: node --test scripts/flop-agent-preflight.test.mjs scripts/flop-spend.test.mjs scripts/flop-github-journal.test.mjs
       - name: Verify exact SDK and run read-only readiness integration
         shell: bash
         run: |
           set -euo pipefail
           cd "$(mktemp -d)"
-          cp "$GITHUB_WORKSPACE"/scripts/{flop-registry-readiness,flop-miner-proof,flop-miner-readiness,flop-miners,flop-spend,flop-spend-sdk}.mjs .
-          npm pack @flop-labs/sdk@0.13.1 --ignore-scripts --silent
-          test "$(openssl dgst -sha512 -binary flop-labs-sdk-0.13.1.tgz | openssl base64 -A)" = 'L2dhuXIabTqAH9a76jnO6Zzr5eDDcX4HRsrJX9r8O9rKRC7gpSfLUdfi6dVfH51AVuQAu5EBMm4xEebG2BoAgg=='
-          npm init -y >/dev/null
-          npm install --ignore-scripts --no-audit --no-fund --save-exact ./flop-labs-sdk-0.13.1.tgz >/dev/null
-          node --input-type=module -e "await import('./flop-spend-sdk.mjs')"
+          cp "$GITHUB_WORKSPACE"/scripts/{flop-registry-readiness,flop-miner-proof,flop-miner-readiness,flop-miners,flop-spend,flop-spend-sdk,flop-external-runner,flop-github-journal}.mjs .
+          cp "$GITHUB_WORKSPACE"/scripts/flop-sdk/package{,-lock}.json .
+          node -e "if (require('./package-lock.json').packages['node_modules/@flop-labs/sdk'].integrity !== 'sha512-L2dhuXIabTqAH9a76jnO6Zzr5eDDcX4HRsrJX9r8O9rKRC7gpSfLUdfi6dVfH51AVuQAu5EBMm4xEebG2BoAgg==') process.exit(1)"
+          npm ci --ignore-scripts --no-audit --no-fund
+          node --input-type=module -e "await import('./flop-external-runner.mjs')"
           node --check flop-registry-readiness.mjs
           node flop-registry-readiness.mjs
