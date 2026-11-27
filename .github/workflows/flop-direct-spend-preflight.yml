@@ -1,0 +1,48 @@
+name: FLOP Testnet direct spend public preflight
+on:
+  push:
+    branches: ['prep/flop-testnet-did-20261107']
+    paths: ['.github/workflows/flop-direct-spend-preflight.yml']
+permissions: {}
+jobs:
+  public-probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - name: Public reads only - no signer or credentials
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          const genesis='0x918abd58fb16306b30ef3886514cfaebffecb4de43e82b6f8ec4795c43cfd800';
+          const checks=[
+            ['gateway_health','https://gateway.testnet.flop.network/health'],
+            ['gateway_models','https://gateway.testnet.flop.network/v1/models'],
+            ['wallet_enrollment','https://gateway.testnet.flop.network/v1/enroll/wallet/challenge'],
+            ['official_mailbox_offers','https://mailbox.testnet.flop.network/api/session-offers'],
+            ['faucet_limits','https://faucet.flop.network/limits'],
+            ['miner_m14','https://m14.floptest.xyz/session/info'],
+            ['miner_antju2','https://antju2.5-am.fr/session/info'],
+            ['rpc_genesis','https://testnet.flop.network/',{jsonrpc:'2.0',id:1,method:'chain_getBlockHash',params:[0]}],
+            ['rpc_finalized','https://testnet.flop.network/',{jsonrpc:'2.0',id:2,method:'chain_getFinalizedHead',params:[]}]
+          ];
+          const results=await Promise.all(checks.map(async ([name,url,payload])=>{
+            try {
+              const response=await fetch(url,{redirect:'error',credentials:'omit',cache:'no-store',signal:AbortSignal.timeout(12000),...(payload?{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload)}:{})});
+              let size=0;const chunks=[];
+              for await (const chunk of response.body??[]) {size+=chunk.length;if(size>1048576)throw Error('body limit');chunks.push(chunk)}
+              let data={};try{data=JSON.parse(Buffer.concat(chunks).toString())}catch{}
+              const result={name,http:response.status};
+              if(name==='rpc_genesis')result.genesisMatches=data.result===genesis;
+              if(name==='rpc_finalized'&&/^0x[0-9a-f]{64}$/i.test(data.result??''))result.finalizedHead=data.result;
+              if(name==='gateway_health'){result.status=typeof data.status==='string'?data.status.slice(0,32):null;result.network=typeof data.network==='string'?data.network.slice(0,32):null;result.genesisMatches=(data.genesisHash??data.genesis_hash)===genesis;}
+              if(name==='gateway_models'){const rows=Array.isArray(data.data)?data.data:[];result.models=rows.slice(0,20).map(x=>typeof x.id==='string'?x.id.slice(0,120):null);}
+              if(name==='official_mailbox_offers'){result.count=Array.isArray(data)?data.length:Array.isArray(data.offers)?data.offers.length:Array.isArray(data.data)?data.data.length:null;result.shape=Object.keys(data).slice(0,12);}
+              if(name==='faucet_limits'){result.asOf=data.asOf;result.stale=data.stale;result.agent=data.faucet?.agent;result.status=data.faucet?.status;result.balanceFlop=data.faucet?.balanceFlop;}
+              if(name.startsWith('miner_'))result.ready=data.is_ready??data.ready??null;
+              return result;
+            }catch(e){return {name,error:e.name,code:e.cause?.code??null};}
+          }));
+          console.log('FLOP_PUBLIC_PREFLIGHT='+JSON.stringify({at:new Date().toISOString(),results}));
+          NODE
+      - name: Verify SDK public registry metadata (do not execute package)
+        run: npm view @flop-labs/sdk@0.13.1 version dist.integrity --json
