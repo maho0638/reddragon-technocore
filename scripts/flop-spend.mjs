@@ -9,6 +9,7 @@ export const ENDPOINT = 'https://m14.floptest.xyz';
 export const ESCROW = 5_000_000_000_000_000n;
 export const MAX_FEE = 10_000_000_000_000_000n;
 export const DURATION = 1200;
+export const MAX_BLOCKS = 1200;
 const HASH = /^0x[0-9a-f]{64}$/;
 const hex = bytes => '0x' + Buffer.from(bytes).toString('hex');
 const require = (condition, code) => { if (!condition) throw new Error(code); };
@@ -20,12 +21,12 @@ export function checkBudget({ fee, available, reserve, floor }) {
   require(available >= ESCROW + fee + reserve && reserve > 0n, 'INSUFFICIENT_SPENDABLE_BALANCE');
 }
 
-export function classifySettlement(result, { channelId, root, gn, output }) {
-  const settlement = result.settlement;
+export function classifySettlement(result, { channelId, root, gn, output, miner = MINER }) {
+  const settlement = result.settlement ?? {};
   require(result.receipts?.length === 1 && result.reply?.trim() &&
     hex(result.receipts[0].runningRoot) === root && hex(result.receipts[0].output) === output &&
     result.receipts[0].gN === gn && hex(result.channelId) === channelId &&
-    result.miner === MINER && hex(settlement.channelId) === channelId &&
+    result.miner === miner && hex(settlement.channelId ?? []) === channelId &&
     HASH.test(settlement.txHash) && settlement.txHash === result.settleTx &&
     settlement.aggregateGn === gn, 'SETTLEMENT_MISMATCH');
 
@@ -40,13 +41,14 @@ export function classifySettlement(result, { channelId, root, gn, output }) {
 
 // Use a pre-existing private, durable directory shared by all runners for this payer.
 // A stuck or incomplete journal blocks a replay until the original channel is reconciled.
-export async function spendOnce({ directory, approvedRuntime, prompt, runtime, runSession }) {
+export async function spendOnce({ directory, approvedRuntime, prompt, runtime, runSession, candidate = { miner: MINER, model: MODEL, endpoint: ENDPOINT } }) {
   require(runtime.genesisHash === GENESIS && runtime.payer === PAYER &&
     Number.isSafeInteger(approvedRuntime) && approvedRuntime > 0 &&
     runtime.specVersion === approvedRuntime, 'RUNTIME_OR_PAYER_UNAPPROVED');
   require(typeof prompt === 'string' && prompt.trim() && Buffer.byteLength(prompt) <= 4096, 'WORKLOAD_REQUIRED');
+  const { miner, model, endpoint } = candidate;
   const permissions = await lstat(directory);
-  require(permissions.isDirectory() && (permissions.mode & 0o077) === 0, 'PRIVATE_STATE_DIRECTORY_REQUIRED');
+  require(permissions.isDirectory() && permissions.uid === process.getuid() && (permissions.mode & 0o077) === 0, 'PRIVATE_STATE_DIRECTORY_REQUIRED');
   const filename = join(directory, 'reddragon-flop-spend.jsonl');
   const journal = await open(filename, 'ax', 0o600);
   const record = async value => {
@@ -54,34 +56,46 @@ export async function spendOnce({ directory, approvedRuntime, prompt, runtime, r
       ? field.toString() : field instanceof Uint8Array ? hex(field) : field) + '\n');
     await journal.sync();
   };
-  let intent, verified, submitted;
+  let intent, verified, submittedHash, openFinalized;
+  let preparing = false, persistingSubmission = false, submitted = false, finalizing = false;
   try {
-    await record({ status: 'reserved', payer: PAYER, runtime: approvedRuntime });
+    await record({ status: 'reserved', payer: PAYER, runtime: approvedRuntime, genesis: GENESIS, miner, model, endpoint });
     const parent = await open(directory, 'r');
     try { await parent.sync(); } finally { await parent.close(); }
     const result = await runSession({
-      miner: MINER, model: MODEL, endpoint: ENDPOINT, via: 'force',
+      miner, model, endpoint, via: 'force',
       prompt, maxTokens: 64, maxDurationSeconds: DURATION, maxFlop: ESCROW,
       onPrepared: async candidate => {
-        require(!intent && candidate.genesisHash === GENESIS && candidate.agent === PAYER &&
-          candidate.miner === MINER && candidate.model === MODEL && HASH.test(candidate.channelId) &&
+        require(!preparing && candidate.genesisHash === GENESIS && candidate.agent === PAYER &&
+          candidate.miner === miner && candidate.model === model && HASH.test(candidate.channelId) &&
           HASH.test(candidate.sessionSeed) && candidate.escrow === ESCROW.toString(), 'INTENT_MISMATCH');
+        preparing = true;
         await record({ status: 'prepared', intent: candidate });
         intent = candidate;
       },
       onVerified: async (receipt, claim) => {
-        require(submitted && !verified && hex(claim.channelId) === intent.channelId &&
+        require(openFinalized && !verified && hex(claim.channelId) === intent.channelId &&
           hex(claim.finalRoot) === hex(receipt.runningRoot) && receipt.gN > 0n &&
           receipt.gN === claim.aggregateGn && receipt.output.length > 0, 'RECEIPT_MISMATCH');
         verified = { channelId: intent.channelId, root: hex(receipt.runningRoot),
-          gn: receipt.gN, output: hex(receipt.output) };
+          gn: receipt.gN, miner, output: hex(receipt.output) };
         await record({ status: 'verified', receipt, claim });
       },
     }, async signed => {
-      require(intent && !submitted && signed.signer === PAYER && HASH.test(signed.txHash) &&
-        signed.accountNonce >= 0n && signed.eraBirth >= 0n && signed.eraPeriod > 0n, 'SIGNED_INTENT_MISMATCH');
+      require(intent && !persistingSubmission && signed.signer === PAYER && HASH.test(signed.txHash) &&
+        typeof signed.accountNonce === 'bigint' && signed.accountNonce >= 0n &&
+        typeof signed.eraBirth === 'bigint' && signed.eraBirth >= 0n &&
+        typeof signed.eraPeriod === 'bigint' && signed.eraPeriod > 0n, 'SIGNED_INTENT_MISMATCH');
+      persistingSubmission = true;
       await record({ status: 'submission-prepared', channelId: intent.channelId, ...signed });
+      submittedHash = signed.txHash;
       submitted = true;
+    }, async finalized => {
+      require(submitted && !finalizing && HASH.test(finalized.blockHash) && finalized.txHash === submittedHash,
+        'FINALIZED_OPEN_MISMATCH');
+      finalizing = true;
+      await record({ status: 'open-finalized', channelId: intent.channelId, ...finalized });
+      openFinalized = true;
     });
     require(verified, 'MISSING_VERIFIED_RECEIPT');
     const verdict = classifySettlement(result, verified);

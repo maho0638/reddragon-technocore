@@ -22,11 +22,12 @@ async function fixture(t, overrides = {}) {
   t.after(() => rm(directory, { recursive: true, force: true }));
   const read = () => readFile(join(directory, 'reddragon-flop-spend.jsonl'), 'utf8');
   const options = { directory, runtime, approvedRuntime: 123, prompt: 'Summarize this public text.',
-    runSession: async (opts, persistSubmission) => {
+    runSession: async (opts, persistSubmission, persistFinalized) => {
       await opts.onPrepared(intent);
       assert.match(await read(), /"status":"prepared"/);
       await persistSubmission({ signer: PAYER, txHash, accountNonce: 0n, eraBirth: 42n, eraPeriod: 64n });
       assert.match(await read(), /"status":"submission-prepared"/);
+      await persistFinalized({ txHash, blockHash: txHash });
       await opts.onVerified(receipt, claim);
       assert.match(await read(), /"status":"verified"/);
       return result;
@@ -94,5 +95,53 @@ test('ambiguous submission preserves the original intent and blocks a retry', as
   });
   await assert.rejects(spendOnce(options), /timeout/);
   assert.match(await read(), new RegExp(intent.channelId));
+  await assert.rejects(spendOnce(options), { code: 'EEXIST' });
+});
+
+test('selected miner is recorded and finalized open cannot refer to a different transaction', async t => {
+  const candidate = { miner: PAYER, model: MODEL, endpoint: 'https://example.invalid' };
+  const { options, read } = await fixture(t, { candidate,
+    runSession: async (opts, persist, finalize) => {
+      assert.equal(opts.miner, candidate.miner);
+      await opts.onPrepared({ ...intent, miner: candidate.miner });
+      await persist({ signer: PAYER, txHash, accountNonce: 0n, eraBirth: 42n, eraPeriod: 64n });
+      await finalize({ txHash, blockHash: txHash });
+      await assert.rejects(finalize({ txHash: intent.channelId, blockHash: txHash }), /FINALIZED_OPEN_MISMATCH/);
+      await opts.onVerified(receipt, claim);
+      return { ...result, miner: candidate.miner };
+    },
+  });
+  assert.equal((await spendOnce(options)).status, 'paid-finalized');
+  const records = (await read()).trim().split('\n').map(JSON.parse);
+  assert.deepEqual(records.map(row => row.status),
+    ['reserved', 'prepared', 'submission-prepared', 'open-finalized', 'verified', 'paid-finalized']);
+  assert.equal(records[0].miner, candidate.miner);
+  assert.equal(records[3].txHash, txHash);
+});
+
+test('miner selection rejects unanchored, over-budget and unpaid candidates before ranking', async () => {
+  const { selectMiner } = await import('./flop-miners.mjs');
+  const valid = { id: 'm11', verified: true, budgetOk: true, paidChannel: intent.channelId, total: 5n };
+  assert.equal(selectMiner([
+    { ...valid, id: 'm2', total: 1n, verified: false },
+    { ...valid, id: 'm4', total: 2n, budgetOk: false },
+    { ...valid, id: 'm5', total: 3n, paidChannel: undefined },
+    { ...valid, id: 'm6', total: 6n },
+    valid,
+  ]), valid);
+  assert.equal(selectMiner([{ ...valid, total: undefined }]), undefined);
+});
+
+test('receipt cannot advance the journal before the opening finalizes', async t => {
+  const { options, read } = await fixture(t, {
+    runSession: async (opts, persist) => {
+      await opts.onPrepared(intent);
+      await persist({ signer: PAYER, txHash, accountNonce: 0n, eraBirth: 42n, eraPeriod: 64n });
+      await opts.onVerified(receipt, claim);
+    },
+  });
+  await assert.rejects(spendOnce(options), /RECEIPT_MISMATCH/);
+  assert.match(await read(), /submission-prepared/);
+  assert.doesNotMatch(await read(), /"status":"verified"/);
   await assert.rejects(spendOnce(options), { code: 'EEXIST' });
 });

@@ -1,0 +1,48 @@
+name: FLOP one-shot approved Testnet inference
+on:
+  workflow_dispatch:
+    inputs:
+      miner:
+        description: Miner ID from fresh read-only readiness
+        required: true
+        type: string
+      runtime:
+        description: Runtime specVersion from fresh read-only readiness
+        required: true
+        type: string
+      approval:
+        description: Type one-testnet-inference to authorize this single operation
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: reddragon-flop-testnet-payer
+  cancel-in-progress: false
+jobs:
+  spend:
+    if: inputs.approval == 'one-testnet-inference'
+    environment: flop-inference-approved
+    runs-on: [self-hosted, flop-inference-authorized]
+    timeout-minutes: 30
+    env:
+      FLOP_EXPECTED_MINER: ${{ inputs.miner }}
+      FLOP_EXPECTED_RUNTIME: ${{ inputs.runtime }}
+      FLOP_RUN_APPROVAL: ${{ inputs.approval }}
+      FLOP_STATE_DIRECTORY: ${{ vars.FLOP_STATE_DIRECTORY }}
+      FLOP_EXISTING_SIGNER_FILE: ${{ vars.FLOP_EXISTING_SIGNER_FILE }}
+      FLOP_TRUSTED_MODULES: ${{ vars.FLOP_TRUSTED_MODULES }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Execute one approved Testnet inference
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$FLOP_TRUSTED_MODULES" == /* && -d "$FLOP_TRUSTED_MODULES" ]]
+          stage="$(mktemp -d)"
+          trap 'rm -rf -- "$stage"' EXIT
+          cp scripts/{flop-external-runner,flop-spend-sdk,flop-spend,flop-miner-readiness,flop-miner-proof,flop-miners}.mjs "$stage/"
+          ln -s -- "$FLOP_TRUSTED_MODULES" "$stage/node_modules"
+          node "$stage/flop-external-runner.mjs"

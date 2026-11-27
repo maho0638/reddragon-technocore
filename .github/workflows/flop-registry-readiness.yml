@@ -6,6 +6,8 @@ on:
       - '.github/workflows/flop-registry-readiness.yml'
       - 'scripts/flop-registry-readiness.mjs'
       - 'scripts/flop-miner-proof.mjs'
+      - 'scripts/flop-miner-readiness.mjs'
+      - 'scripts/flop-miners.mjs'
       - 'scripts/flop-spend.mjs'
       - 'scripts/flop-spend-sdk.mjs'
       - 'scripts/flop-spend.test.mjs'
@@ -26,7 +28,7 @@ jobs:
         run: |
           set -euo pipefail
           cd "$(mktemp -d)"
-          cp "$GITHUB_WORKSPACE"/scripts/{flop-registry-readiness,flop-miner-proof,flop-spend,flop-spend-sdk}.mjs .
+          cp "$GITHUB_WORKSPACE"/scripts/{flop-registry-readiness,flop-miner-proof,flop-miner-readiness,flop-miners,flop-spend,flop-spend-sdk}.mjs .
           npm pack @flop-labs/sdk@0.13.1 --ignore-scripts --silent
           test "$(openssl dgst -sha512 -binary flop-labs-sdk-0.13.1.tgz | openssl base64 -A)" = 'L2dhuXIabTqAH9a76jnO6Zzr5eDDcX4HRsrJX9r8O9rKRC7gpSfLUdfi6dVfH51AVuQAu5EBMm4xEebG2BoAgg=='
           npm init -y >/dev/null
