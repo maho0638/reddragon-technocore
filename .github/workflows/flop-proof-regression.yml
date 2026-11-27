@@ -36,14 +36,9 @@ jobs:
           console.log('EXPORT_REGRESSION=PASS');
           const source=readFileSync('./node_modules/@flop-labs/sdk/dist/miner-admission.js','utf8');
           console.log('PROOF_IMPORTS='+source.split('\n').filter(l=>l.startsWith('import ')).join(' '));
-          // Test-only access to the exact package's local canonical identity helpers.
-          // No verifier behavior is changed; no signer or write operation exists in this job.
-          const {writeFileSync}=await import('node:fs');
-          assert.match(source,/function modelIdentityHash\(/);
-          assert.match(source,/function modelIdentityFromWire\(/);
-          writeFileSync('./node_modules/@flop-labs/sdk/dist/miner-admission.test-only.js',source+'\nexport { modelIdentityHash, modelIdentityFromWire };\n');
-          const identity=await import('./node_modules/@flop-labs/sdk/dist/miner-admission.test-only.js');
-          const wire=identity;
+          // The package submodule already exports both helpers. Do not rewrite SDK code.
+          const identity=admission,wire=admission;
+          console.log('ADMISSION_EXPORTS='+JSON.stringify(Object.keys(admission)));
           assert.equal(typeof identity.modelIdentityHash,'function');
           assert.equal(typeof wire.modelIdentityFromWire,'function');
           await cryptoWaitReady();
