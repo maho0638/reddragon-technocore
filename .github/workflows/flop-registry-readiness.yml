@@ -2,7 +2,13 @@ name: FLOP registry-bound read-only readiness
 on:
   push:
     branches: ['prep/flop-testnet-did-20261107']
-    paths: ['.github/workflows/flop-registry-readiness.yml']
+    paths:
+      - '.github/workflows/flop-registry-readiness.yml'
+      - 'scripts/flop-registry-readiness.mjs'
+      - 'scripts/flop-miner-proof.mjs'
+      - 'scripts/flop-spend.mjs'
+      - 'scripts/flop-spend-sdk.mjs'
+      - 'scripts/flop-spend.test.mjs'
 permissions:
   contents: read
 jobs:
@@ -13,15 +19,18 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
+      - name: Run unsigned and mock regression tests
+        run: node --test scripts/flop-agent-preflight.test.mjs scripts/flop-spend.test.mjs
       - name: Verify exact SDK and run read-only readiness integration
         shell: bash
         run: |
           set -euo pipefail
           cd "$(mktemp -d)"
-          cp "$GITHUB_WORKSPACE/scripts/flop-registry-readiness.mjs" .
+          cp "$GITHUB_WORKSPACE"/scripts/{flop-registry-readiness,flop-miner-proof,flop-spend,flop-spend-sdk}.mjs .
           npm pack @flop-labs/sdk@0.13.1 --ignore-scripts --silent
           test "$(openssl dgst -sha512 -binary flop-labs-sdk-0.13.1.tgz | openssl base64 -A)" = 'L2dhuXIabTqAH9a76jnO6Zzr5eDDcX4HRsrJX9r8O9rKRC7gpSfLUdfi6dVfH51AVuQAu5EBMm4xEebG2BoAgg=='
           npm init -y >/dev/null
           npm install --ignore-scripts --no-audit --no-fund --save-exact ./flop-labs-sdk-0.13.1.tgz >/dev/null
+          node --input-type=module -e "await import('./flop-spend-sdk.mjs')"
           node --check flop-registry-readiness.mjs
           node flop-registry-readiness.mjs
