@@ -23,7 +23,7 @@ try{
   if(!encoded||!/^[A-Za-z0-9+/]+=*$/.test(encoded))throw new Error('Existing Actions signer unavailable or malformed');
   const key=createPrivateKey({key:Buffer.from(encoded,'base64'),format:'der',type:'pkcs8'});
   const actual=identity(key);
-  if(actual.address!==ADDRESS||actual.did!==DID||key.type!=='private')throw new Error('Existing signer identity mismatch');
+  if(actual.address!==ADDRESS||actual.did!==DID||key.type!=='private')throw new Error('Existing signer identity mismatch: address='+ (actual.address===ADDRESS)+', did='+(actual.did===DID)+', private='+(key.type==='private'));
   const jwk=key.export({format:'jwk'}),seed=Buffer.from(jwk.d??'','base64url');
   if(key.asymmetricKeyType!=='ed25519'||seed.length!==32)throw new Error('Expected existing Ed25519 PKCS8 signer');
   const message=Buffer.from('reddragon-flop-keystore-check/v1');
