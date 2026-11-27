@@ -1,0 +1,27 @@
+name: FLOP registry-bound read-only readiness
+on:
+  push:
+    branches: ['prep/flop-testnet-did-20261107']
+    paths: ['.github/workflows/flop-registry-readiness.yml']
+permissions:
+  contents: read
+jobs:
+  readiness:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Verify exact SDK and run read-only readiness integration
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$(mktemp -d)"
+          cp "$GITHUB_WORKSPACE/scripts/flop-registry-readiness.mjs" .
+          npm pack @flop-labs/sdk@0.13.1 --ignore-scripts --silent
+          test "$(openssl dgst -sha512 -binary flop-labs-sdk-0.13.1.tgz | openssl base64 -A)" = 'L2dhuXIabTqAH9a76jnO6Zzr5eDDcX4HRsrJX9r8O9rKRC7gpSfLUdfi6dVfH51AVuQAu5EBMm4xEebG2BoAgg=='
+          npm init -y >/dev/null
+          npm install --ignore-scripts --no-audit --no-fund --save-exact ./flop-labs-sdk-0.13.1.tgz >/dev/null
+          node --check flop-registry-readiness.mjs
+          node flop-registry-readiness.mjs
