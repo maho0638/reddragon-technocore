@@ -55,7 +55,18 @@ jobs:
             const old=await at.query.computeChannel.channels(channel);
             const rate=await at.query.computeChannel.minerCapacityReservationRate(miner);
             const fee=api.consts.computeChannel.unconsentedReservationTariff;
-            console.log('FINALIZED_READ='+JSON.stringify({hash:hash.toHex(),runtime:api.runtimeVersion.specVersion.toString(),account:account.toJSON(),miner:minerData.toJSON(),cap:cap.toJSON(),oldChannel:old.toJSON(),rate:rate.toJSON(),tariff:fee.toString(),existential:api.consts.balances.existentialDeposit.toString()}));
+            const finalizedBlock=(await api.rpc.chain.getHeader(hash)).number.toNumber();
+            const lease=api.consts.hwCalibration.calibrationLeaseBlocks?.toBigInt?.()??null;
+            const acceptedAt=cap.unwrap().acceptedAt.toNumber();
+            const calibratedUntil=lease===null?null:acceptedAt+Number(lease);
+            const escrow=5000000000000000n;
+            const floor=BigInt(rate.toString())*1200n*BigInt(fee.toString());
+            let feeEstimate=null,feeEstimateError=null;
+            try {
+              const tx=api.tx.computeChannel.forceOpen(miner,'0x2dc476dabd39fb86d216e04f3c50313a22fa9e5bfa65f8e236557c30ddfaba55','0x2dc476dabd39fb86d216e04f3c50313a22fa9e5bfa65f8e236557c30ddfaba55','0xe991156ea50360c72a72245ce48f13dda2b4fb5a3abf146872abe93b2c0587a9','BF16',decodeAddress(address),{maxTurns:1,maxDuration:1200,reattestEvery:1},escrow,0n);
+              feeEstimate=(await tx.paymentInfo(address)).partialFee.toString();
+            } catch(e) { feeEstimateError=String(e.message).slice(0,180); }
+            console.log('FINALIZED_READ='+JSON.stringify({hash:hash.toHex(),block:finalizedBlock,runtime:api.runtimeVersion.specVersion.toString(),account:account.toJSON(),miner:minerData.toJSON(),cap:cap.toJSON(),calibrationLeaseBlocks:lease?.toString()??null,calibratedUntil,calibrationCurrent:calibratedUntil===null?null:finalizedBlock<calibratedUntil,oldChannel:old.toJSON(),rate:rate.toString(),tariff:fee.toString(),forceFloorRaw:floor.toString(),escrowRaw:escrow.toString(),escrowCoversFloor:escrow>=floor,forceOpenFeeEstimateRaw:feeEstimate,forceOpenFeeEstimateError:feeEstimateError,existential:api.consts.balances.existentialDeposit.toString()}));
             const proof=await fetchSessionInfoProof('https://m14.floptest.xyz',randomBytes(32));
             console.log('SDK_PROOF_READY='+JSON.stringify({ready:proof.ready,genesis:proof.genesis_hash,account:proof.account_id,key:proof.enclave_key,identity:proof.model_identity}));
           }catch(e){console.log('FINALIZED_READ_ERROR='+String(e.message).slice(0,240));process.exitCode=1;}finally{await api?.disconnect();}
