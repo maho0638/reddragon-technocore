@@ -1,0 +1,70 @@
+name: FLOP SDK proof verification regression
+on:
+  push:
+    branches: ['prep/flop-testnet-did-20261107']
+    paths: ['.github/workflows/flop-proof-regression.yml']
+permissions: {}
+jobs:
+  proof:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Verify actual package exports and miner proof without signing or spending
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$(mktemp -d)"
+          npm pack @flop-labs/sdk@0.13.1 --ignore-scripts --silent
+          test "$(openssl dgst -sha512 -binary flop-labs-sdk-0.13.1.tgz | openssl base64 -A)" = 'L2dhuXIabTqAH9a76jnO6Zzr5eDDcX4HRsrJX9r8O9rKRC7gpSfLUdfi6dVfH51AVuQAu5EBMm4xEebG2BoAgg=='
+          npm init -y >/dev/null
+          npm install --ignore-scripts --no-audit --no-fund --save-exact ./flop-labs-sdk-0.13.1.tgz >/dev/null
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { randomBytes } from 'node:crypto';
+          import { ApiPromise, WsProvider } from '@polkadot/api';
+          import { cryptoWaitReady, decodeAddress } from '@polkadot/util-crypto';
+          import { hexToU8a } from '@polkadot/util';
+          import * as root from '@flop-labs/sdk';
+          import * as admission from './node_modules/@flop-labs/sdk/dist/miner-admission.js';
+          import { readFileSync } from 'node:fs';
+          const genesis='0x918abd58fb16306b30ef3886514cfaebffecb4de43e82b6f8ec4795c43cfd800';
+          const miner='5Cm99adrc7guxVoT6YnC7LxUmmVgPamRsw9nVifRA9NUwDmd';
+          const oldId='0xe58f3f1026a23f4f023255eb85dfae6b56fb0b6d3317f889fbb15c463e95da7f';
+          assert.equal(typeof root.fetchSessionInfoProof,'undefined');
+          assert.equal(typeof admission.fetchSessionInfoProof,'function');
+          assert.equal(typeof admission.verifySessionInfoProof,'function');
+          console.log('EXPORT_REGRESSION=PASS');
+          const source=readFileSync('./node_modules/@flop-labs/sdk/dist/miner-admission.js','utf8');
+          console.log('PROOF_IMPORTS='+source.split('\n').filter(l=>l.startsWith('import ')).join(' '));
+          const path=source.match(/import\s*\{[^}]*\bmodelIdentityHash\b[^}]*\}\s*from\s*["']([^"']+)["']/s)?.[1];
+          assert.ok(path?.startsWith('./'),'identity hash module missing');
+          const identity=await import(new URL(path,new URL('./node_modules/@flop-labs/sdk/dist/miner-admission.js',import.meta.url)));
+          const wirePath=source.match(/import\s*\{[^}]*\bmodelIdentityFromWire\b[^}]*\}\s*from\s*["']([^"']+)["']/s)?.[1];
+          const wire=wirePath?await import(new URL(wirePath,new URL('./node_modules/@flop-labs/sdk/dist/miner-admission.js',import.meta.url))):identity;
+          assert.equal(typeof identity.modelIdentityHash,'function');
+          assert.equal(typeof wire.modelIdentityFromWire,'function');
+          await cryptoWaitReady();
+          let api;
+          try{
+            api=await ApiPromise.create({provider:new WsProvider('wss://testnet.flop.network/'),noInitWarn:true});
+            assert.equal(api.genesisHash.toHex(),genesis);
+            const head=await api.rpc.chain.getFinalizedHead(),at=await api.at(head);
+            const old=(await at.query.computeChannel.channels(oldId)).unwrap().toJSON();
+            assert.equal(old.miner,miner);
+            assert.ok(Object.hasOwn(old.state,'closed'));
+            const challenge=randomBytes(32),proof=await admission.fetchSessionInfoProof('https://m14.floptest.xyz',challenge);
+            assert.equal(proof.ready,true);
+            const m=proof.model_identity;
+            const bare=x=>x.replace(/^0x/,'').toLowerCase();
+            assert.equal(bare(old.modelHash),bare(m.model_hash));
+            assert.equal(bare(old.measuredRoot),bare(m.measured_root));
+            assert.equal(bare(old.enclaveKey),bare(proof.enclave_key));
+            assert.equal(m.requested_slug,'qwen/qwen3-8b');
+            const parsed=wire.modelIdentityFromWire(m);
+            assert.ok(parsed);
+            const expected={challenge,genesisHash:hexToU8a(genesis),account:decodeAddress(miner),enclaveKey:hexToU8a(old.enclaveKey),modelIdentityHash:identity.modelIdentityHash(parsed)};
+            assert.ok(admission.verifySessionInfoProof(proof,expected),'signed proof invalid');
+            assert.equal(admission.verifySessionInfoProof(proof,{...expected,challenge:randomBytes(32)}),undefined);
+            console.log('SIGNED_PROOF_REGRESSION=PASS '+JSON.stringify({miner,finalized:head.toHex(),model:m.requested_slug,signatureVerified:true,wrongChallengeRejected:true,oldChannelModelAndKeyMatched:true,registryFullIdentityIndependentlyVerified:false}));
+          }finally{await api?.disconnect();}
+          NODE
