@@ -1,7 +1,7 @@
 name: FLOP registry-bound read-only readiness
 on:
   push:
-    branches: ['prep/flop-testnet-did-20261107']
+    branches: ['prep/flop-testnet-did-20261107', 'work/flop-inference']
     paths:
       - '.github/workflows/flop-registry-readiness.yml'
       - 'scripts/flop-registry-readiness.mjs'
