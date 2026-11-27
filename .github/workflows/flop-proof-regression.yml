@@ -36,11 +36,17 @@ jobs:
           console.log('EXPORT_REGRESSION=PASS');
           const source=readFileSync('./node_modules/@flop-labs/sdk/dist/miner-admission.js','utf8');
           console.log('PROOF_IMPORTS='+source.split('\n').filter(l=>l.startsWith('import ')).join(' '));
-          // The package submodule already exports both helpers. Do not rewrite SDK code.
-          const identity=admission,wire=admission;
-          console.log('ADMISSION_EXPORTS='+JSON.stringify(Object.keys(admission)));
-          assert.equal(typeof identity.modelIdentityHash,'function');
+          // Public hash helper is exported; the wire parser is internal.
+          // Expose only the internal parser in a temporary test copy, not in the installed module.
+          const {writeFileSync}=await import('node:fs');
+          assert.equal(typeof admission.modelIdentityHash,'function');
+          assert.equal(typeof admission.modelIdentityFromWire,'undefined');
+          assert.match(source,/function modelIdentityFromWire\(/);
+          writeFileSync('./node_modules/@flop-labs/sdk/dist/miner-admission.test-only.js',source+'\nexport { modelIdentityFromWire };\n');
+          const identity=admission;
+          const wire=await import('./node_modules/@flop-labs/sdk/dist/miner-admission.test-only.js');
           assert.equal(typeof wire.modelIdentityFromWire,'function');
+          console.log('WIRE_PARSER_SOURCE='+wire.modelIdentityFromWire.toString());
           await cryptoWaitReady();
           let api;
           try{
