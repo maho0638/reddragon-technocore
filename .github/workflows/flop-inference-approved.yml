@@ -15,7 +15,7 @@ on:
         required: true
         type: string
       approval:
-        description: Type probe-no-spend to test approval or one-testnet-inference to request execution
+        description: Use probe-no-spend, probe-journal, or one-testnet-inference
         required: true
         type: string
 permissions: {}
@@ -32,6 +32,35 @@ jobs:
     steps:
       - name: Confirm the approval gate released this job
         run: printf '%s\n' 'Approval probe completed without signing or network writes.'
+  journal-probe:
+    if: github.ref == 'refs/heads/main' && github.repository == 'maho0638/reddragon-technocore' && github.run_attempt == '1' && inputs.approval == 'probe-journal'
+    environment: flop-inference-approved
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    permissions:
+      contents: write
+    steps:
+      - name: Verify live journal writes with a dummy file
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_RUN_ID" =~ ^[0-9]+$ ]]
+          api="repos/$GITHUB_REPOSITORY/contents/probes/journal-${GITHUB_RUN_ID}.json"
+          # Keep probe markers separate from the real one-shot reservation.
+          create="$(printf '%s' '{"probe":true,"stage":"reserved"}' | base64 -w0)"
+          append="$(printf '%s' '{"probe":true,"stage":"updated"}' | base64 -w0)"
+          sha="$(gh api --method PUT "$api" -f branch=flop-inference-state -f message='Reserve unsigned journal probe' -f content="$create" --jq .content.sha)"
+          [[ "$sha" =~ ^[a-f0-9]{40}$ ]]
+          if duplicate="$(gh api --method PUT "$api" -f branch=flop-inference-state -f message='Check unsigned reservation conflict' -f content="$create" 2>&1)"; then
+            echo 'Duplicate reservation unexpectedly succeeded.'
+            exit 1
+          fi
+          [[ "$duplicate" =~ HTTP\ (409|422) ]]
+          updated="$(gh api --method PUT "$api" -f branch=flop-inference-state -f message='Advance unsigned journal probe' -f content="$append" -f sha="$sha" --jq .content.sha)"
+          [[ "$updated" =~ ^[a-f0-9]{40}$ && "$updated" != "$sha" ]]
+          [[ "$(gh api "$api" -f ref=flop-inference-state --method GET --jq .sha)" == "$updated" ]]
   spend:
     if: github.ref == 'refs/heads/main' && github.repository == 'maho0638/reddragon-technocore' && github.run_attempt == '1' && inputs.approval == 'one-testnet-inference'
     environment: flop-inference-approved
@@ -71,7 +100,9 @@ jobs:
           FLOP_EXPECTED_MINER: ${{ inputs.miner }}
           FLOP_EXPECTED_RUNTIME: ${{ inputs.runtime }}
           FLOP_RUN_APPROVAL: ${{ inputs.approval }}
-          TECHNOCORE_PRIVATE_KEY_PKCS8_B64: ${{ secrets.TECHNOCORE_PRIVATE_KEY_PKCS8_B64 }}
+          TECHNOCORE_PRIVATE_KEY_PKCS8_B64: ${{ secrets.FLOP_INFERENCE_SIGNER_PKCS8_B64 }}
           FLOP_JOURNAL_TOKEN: ${{ github.token }}
         shell: bash
-        run: node "$FLOP_STAGE/flop-external-runner.mjs"
+        run: |
+          : "${TECHNOCORE_PRIVATE_KEY_PKCS8_B64:?Missing dedicated inference environment signer}"
+          node "$FLOP_STAGE/flop-external-runner.mjs"
