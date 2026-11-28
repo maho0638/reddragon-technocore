@@ -15,7 +15,7 @@ on:
         required: true
         type: string
       approval:
-        description: Type one-testnet-inference to request this single operation
+        description: Type probe-no-spend to test approval or one-testnet-inference to request execution
         required: true
         type: string
 permissions: {}
@@ -23,6 +23,15 @@ concurrency:
   group: reddragon-flop-testnet-payer
   cancel-in-progress: false
 jobs:
+  approval-probe:
+    if: github.ref == 'refs/heads/main' && github.repository == 'maho0638/reddragon-technocore' && github.run_attempt == '1' && inputs.approval == 'probe-no-spend'
+    environment: flop-inference-approved
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    permissions: {}
+    steps:
+      - name: Confirm the approval gate released this job
+        run: printf '%s\n' 'Approval probe completed without signing or network writes.'
   spend:
     if: github.ref == 'refs/heads/main' && github.repository == 'maho0638/reddragon-technocore' && github.run_attempt == '1' && inputs.approval == 'one-testnet-inference'
     environment: flop-inference-approved
