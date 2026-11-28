@@ -1,0 +1,18 @@
+name: FLOP unsigned approval probe
+on:
+  workflow_dispatch:
+    inputs:
+      approval:
+        description: Enter probe-no-spend
+        required: true
+        type: string
+permissions: {}
+jobs:
+  approval-probe:
+    if: github.ref == 'refs/heads/main' && github.repository == 'maho0638/reddragon-technocore' && github.run_attempt == '1' && inputs.approval == 'probe-no-spend'
+    environment: flop-inference-approved
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Confirm the approval gate released this job
+        run: printf '%s\n' 'Approval probe completed without signing or network writes.'
